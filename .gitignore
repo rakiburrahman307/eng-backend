@@ -1,0 +1,9 @@
+node_modules
+uploads
+/winston
+/logs
+/dist
+
+.cache
+.DS_Store
+.env 
