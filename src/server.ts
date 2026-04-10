@@ -23,13 +23,14 @@ async function main() {
         // remove cluster fromt his code
         // create super admin
         // seedSuperAdmin();
+        console.log(colors.green('🚀 Starting application...'));
 
         mongoose.connect(config.database_url as string);
         logger.info(colors.green('🚀 Database connected successfully'));
 
         const port = typeof config.port === 'number' ? config.port : Number(config.port);
 
-        server = app.listen(port, config.ip_address as string, () => {
+        server = app.listen(port,"0.0.0.0", () => {
             logger.info(colors.yellow(`♻️  Application listening on port:${config.port}`));
         });
         //socket

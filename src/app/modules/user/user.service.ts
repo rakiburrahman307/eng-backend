@@ -8,6 +8,7 @@ import generateOTP from "../../../util/generateOTP";
 import { emailTemplate } from "../../../shared/emailTemplate";
 import { emailHelper } from "../../../helpers/emailHelper";
 import unlinkFile from "../../../shared/unlinkFile";
+import { UserDetails } from "./userDetails.model";
 
 const createAdminToDB = async (payload: any): Promise<IUser> => {
 
@@ -38,7 +39,7 @@ const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
     //send email
     const otp = generateOTP();
     const values = {
-        name: createUser.name,
+        name: createUser.userName,
         otp: otp,
         email: createUser.email!
     };
@@ -60,12 +61,25 @@ const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
     return createUser;
 };
 
-const getUserProfileFromDB = async (user: JwtPayload): Promise<Partial<IUser>> => {
-    const { id } = user;
-    const isExistUser: any = await User.isExistUserById(id);
-    if (!isExistUser) {
-        throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+const getUserProfileFromDB = async (user: JwtPayload) => {
+    console.log("🧠 SERVICE CALLED WITH USER:", user);
+
+    const id = user?.id;
+
+    if (!id) {
+        console.log("❌ No ID in token");
+        return null;
     }
+
+    console.log("🔎 Searching user by ID:", id);
+
+    const isExistUser = await User.isExistUserById(id);
+
+    if (!isExistUser) {
+        console.log("❌ USER NOT FOUND IN DB");
+        return null;
+    }
+
     return isExistUser;
 };
 
@@ -89,9 +103,44 @@ const updateProfileToDB = async (user: JwtPayload, payload: Partial<IUser>): Pro
     return updateDoc;
 };
 
+const createPlayerToDB = async (payload: any) => {
+  const result = await UserDetails.create(payload);
+
+  if (!result) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create player");
+  }
+
+  return result;
+};
+
+
+const updatePlayerByUserId = async (
+  userId: string,
+  payload: any
+) => {
+  const isExist = await UserDetails.findOne({ userId });
+
+  if (!isExist) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Player not found");
+  }
+
+  const result = await UserDetails.findOneAndUpdate(
+    { userId },
+    payload,
+    {
+      new: true,
+      runValidators: true,
+    }
+  );
+
+  return result;
+};
+
 export const UserService = {
     createUserToDB,
     getUserProfileFromDB,
     updateProfileToDB,
-    createAdminToDB
+    createAdminToDB,
+    createPlayerToDB,
+    updatePlayerByUserId
 };

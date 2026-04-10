@@ -1,12 +1,52 @@
 import { z } from 'zod';
 
 const createAdminZodSchema = z.object({
-    body: z.object({
-        name: z.string({ required_error: 'Name is required' }),
-        email: z.string({ required_error: 'Email is required' }).email({ message: 'Invalid email address' }),
-        password: z.string({ required_error: 'Password is required' }),
-        role: z.string({ required_error: 'Role is required' })
-    })
+  body: z.object({
+    userName: z.string().min(1, "Name is required"),
+    email: z
+      .string()
+      .min(1, "Email is required")
+      .email("Invalid email address"),
+    password: z.string().min(1, "Password is required"),
+    role: z.string().min(1, "Role is required"),
+  }),
+});
+const createUserZodSchema = z.object({
+  body: z.object({
+    userName: z.string().min(1, "Name is required"),
+    email: z
+      .string()
+      .min(1, "Email is required")
+      .email("Invalid email address"),
+    password: z.string().min(1, "Password is required"),
+    role: z.string().min(1, "Role is required"),
+  }),
 });
 
-export const UserValidation = { createAdminZodSchema };  
+const createPlayerZodSchema = z.object({
+  body: z.object({
+    firstName: z.string().min(1, "First name is required"),
+
+    lastName: z.string().min(1, "Last name is required"),
+
+    dateOfBirth: z.string().min(1, "Date of birth is required"),
+
+    ageGroup: z.enum(["U16", "U18", "U21", "SENIOR"]),
+
+    selectGroup: z.enum(["A", "B", "C"]),
+
+    position: z.string().optional(),
+
+    document: z.string().optional(),
+  }).refine((data) => {
+    return data.ageGroup && data.selectGroup;
+  }, {
+    message: "Age group and Select group are required",
+  }),
+});
+
+export const UserValidation = {
+  createAdminZodSchema,
+  createUserZodSchema,
+  createPlayerZodSchema,
+};  
