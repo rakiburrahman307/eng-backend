@@ -20,11 +20,11 @@ export type IUserDetails = {
   lastName: string;
   dateOfBirth: Date;
 
-  ageGroup: AGE_GROUP;
-  selectGroup: SELECT_GROUP;
+  ageGroup?: AGE_GROUP;
+  selectGroup?: SELECT_GROUP;
 
   position?: string;   // optional
-  document?: string;   // optional
+  document?: string[]; // optional
 
   phone?: string;
 

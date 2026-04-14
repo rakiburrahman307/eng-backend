@@ -82,7 +82,13 @@ const fileUploadHandler = () => {
     // DOCUMENT validation
     else if (file.fieldname === 'document') {
       // allow pdf, doc, docx, etc
-      const allowed = [
+        const allowed = [
+          // images
+      "image/jpeg",
+      "image/png",
+      "image/jpg",
+            "image/webp",
+            // documents
         'application/pdf',
         'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'

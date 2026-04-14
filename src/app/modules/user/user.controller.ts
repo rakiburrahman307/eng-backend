@@ -106,12 +106,21 @@ const createPlayer = catchAsync(async (req: Request, res: Response) => {
     }
 
     const userId = user._id;
+    const role = user.role;
 
-    // 🚨 FILE
+    // 🚨 FILES (single field: document)
     const files = req.files as any;
-    const documentFile = files?.document?.[0]
-        ? `/documents/${files.document[0].filename}`
-        : null;
+
+    const documentFiles =
+        files?.document?.map((file: any) => {
+            // 🖼 image file
+            if (file.mimetype.startsWith("image/")) {
+                return `/images/${file.filename}`;
+            }
+
+            // 📄 document file (pdf/doc/etc)
+            return `/documents/${file.filename}`;
+        }) || [];
 
     // 🚨 BODY CHECK
     if (!req.body) {
@@ -130,12 +139,11 @@ const createPlayer = catchAsync(async (req: Request, res: Response) => {
         throw new ApiError(400, "Invalid JSON format in request body");
     }
 
-    // 🔥 REQUIRED FIELD CHECK (IMPORTANT)
+    // 🔥 REQUIRED FIELD CHECK
     const requiredFields = [
         "firstName",
         "lastName",
         "dateOfBirth",
-        "selectGroup",
     ];
 
     const missingFields = requiredFields.filter(
@@ -149,10 +157,26 @@ const createPlayer = catchAsync(async (req: Request, res: Response) => {
         );
     }
 
+    // 🚨 PLAYER ROLE SPECIFIC VALIDATION
+    if (role === "PLAYER") {
+        const playerRequiredFields = ["ageGroup", "selectGroup"];
+
+        const missingPlayerFields = playerRequiredFields.filter(
+            (field) => !parsedData?.[field]
+        );
+
+        if (missingPlayerFields.length > 0) {
+            throw new ApiError(
+                400,
+                `Player must provide: ${missingPlayerFields.join(", ")}`
+            );
+        }
+    }
+
     // 🚀 FINAL PAYLOAD
     const data = {
         userId,
-        document: documentFile,
+        document: documentFiles, // 👈 BOTH IMAGE + DOC IN ONE FIELD
         ...parsedData,
     };
 

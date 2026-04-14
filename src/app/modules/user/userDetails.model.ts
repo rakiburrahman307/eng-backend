@@ -30,13 +30,13 @@ const userDetailsSchema = new Schema<IUserDetails>(
     ageGroup: {
       type: String,
       enum: Object.values(AGE_GROUP),
-      required: true,
+      required: false,
     },
 
     selectGroup: {
       type: String,
       enum: Object.values(SELECT_GROUP),
-      required: true,
+      required: false,
     },
 
     position: {
@@ -45,9 +45,9 @@ const userDetailsSchema = new Schema<IUserDetails>(
     },
 
     document: {
-      type: String,
-      default: null,
-    },
+    type: [String],
+    default: []
+  },
 
     phone: {
       type: String,

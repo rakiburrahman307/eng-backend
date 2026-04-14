@@ -1,0 +1,130 @@
+import { StatusCodes } from 'http-status-codes';
+import ApiError from '../../../errors/ApiErrors';
+import { INews } from './news.interface';
+import { News } from './news.model';
+
+// CREATE NEWS
+const createNewsToDB = async (payload: INews, userId: string) => {
+  const result = await News.create({
+    ...payload,
+    createdBy: userId, // 🔥 THIS WAS MISSING OR NOT SAVING
+  });
+
+  return result;
+};
+
+// GET ALL NEWS (ROLE BASED)
+const getAllNewsFromDB = async (role: string) => {
+  if (role === 'ADMIN' || role === 'SUPER_ADMIN') {
+    return await News.find().sort({ createdAt: -1 });
+  }
+
+  const now = new Date();
+
+  return await News.find({
+    $or: [
+      { status: 'publish' },
+      {
+        status: 'schedule',
+        publishDateTime: { $lte: now },
+      },
+    ],
+  }).sort({ createdAt: -1 });
+};
+
+// GET SINGLE (NO PARAM ID VERSION -> optional, token based user flow if needed)
+const getMyNewsFromDB = async (userId: string) => {
+  return await News.find({ createdBy: userId }).sort({ createdAt: -1 });
+};
+
+
+// GET SINGLE (NO PARAM ID VERSION -> optional, token based user flow if needed)
+const getSingleNewsFromDB = async (newsId: string) => {
+    const news = await News.findById(newsId);
+
+    if (!news) {
+        throw new ApiError(StatusCodes.NOT_FOUND, 'News not found');
+    }
+    return news;
+};
+// UPDATE (ONLY OWNER VIA TOKEN)
+const updateNewsToDB = async (
+  newsId: string,
+  userId: string,
+  payload: Partial<INews>
+) => {
+  const news = await News.findById(newsId);
+
+  console.log("📰 NEWS FROM DB:", news);
+  console.log("👤 CREATED BY:", news?.createdBy);
+  console.log("🔐 USER ID:", userId);
+
+  if (!news) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'News not found');
+  }
+
+  const createdBy = news.createdBy ? news.createdBy.toString() : null;
+
+  console.log("🔎 COMPARE:");
+  console.log("DB:", createdBy);
+  console.log("USER:", userId);
+
+  if (!createdBy || createdBy !== userId.toString()) {
+    console.log("❌ NOT MATCHED → BLOCKED");
+    throw new ApiError(StatusCodes.FORBIDDEN, 'Not allowed');
+  }
+
+  const result = await News.findByIdAndUpdate(newsId, payload, {
+    new: true,
+  });
+
+  console.log("✅ UPDATED RESULT:", result);
+
+  return result;
+};
+
+// DELETE (ONLY OWNER VIA TOKEN)
+const deleteNewsFromDB = async (newsId: string, userId: string) => {
+  const news = await News.findById(newsId);
+
+  if (!news) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'News not found');
+  }
+
+  if (!news.createdBy || news.createdBy.toString() !== userId) {
+    throw new ApiError(StatusCodes.FORBIDDEN, 'Not allowed');
+  }
+
+  return await News.findByIdAndDelete(newsId);
+};
+
+// TOGGLE STATUS (ONLY OWNER OR ADMIN)
+const toggleNewsStatusToDB = async (newsId: string, user: any) => {
+  const news = await News.findById(newsId);
+
+  if (!news) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'News not found');
+  }
+
+  if (
+    user.role !== 'ADMIN' &&
+    user.role !== 'SUPER_ADMIN' &&
+    (news as any).createdBy?.toString() !== user._id.toString()
+  ) {
+    throw new ApiError(StatusCodes.FORBIDDEN, 'Not allowed');
+  }
+
+  news.status = news.status === 'publish' ? 'draft' : 'publish';
+
+  return await news.save();
+};
+
+export const NewsService = {
+  createNewsToDB,
+  getAllNewsFromDB,
+  getMyNewsFromDB,
+  getSingleNewsFromDB,
+  updateNewsToDB,
+  deleteNewsFromDB,
+  toggleNewsStatusToDB,
+};

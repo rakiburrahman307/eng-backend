@@ -31,21 +31,6 @@ router
         UserController.updateProfile
 );
     
-// router
-//     .route('/manager')
-//     .post(
-//         auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-//         validateRequest(UserValidation.createUserZodSchema),
-//         UserController.createManager
-// );
-    
-// router
-//     .route('/clup-player')
-//     .post(
-//         auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-//         validateRequest(UserValidation.createUserZodSchema),
-//         UserController.createClubPlayer
-//     );
 router
     .route('/player')
     .post(
@@ -55,7 +40,38 @@ router
         UserController.createPlayer
     )
     .patch(
-    auth(USER_ROLES.PLAYER),
+    auth(USER_ROLES.PLAYER ,),
+    fileUploadHandler(),
+    UserController.updatePlayer
+);
+
+  // manager 
+router
+    .route('/manager')
+    .post(
+        auth(USER_ROLES.MANAGER),
+        // validateRequest(UserValidation.createPlayerZodSchema),
+        fileUploadHandler(),
+        UserController.createPlayer
+    )
+    .patch(
+    auth(USER_ROLES.MANAGER ,),
+    fileUploadHandler(),
+    UserController.updatePlayer
+);
+
+// other clubs
+
+router
+    .route('/other-clubs')
+    .post(
+        auth(USER_ROLES.OTHER_CLUBS),
+        // validateRequest(UserValidation.createPlayerZodSchema),
+        fileUploadHandler(),
+        UserController.createPlayer
+    )
+    .patch(
+    auth(USER_ROLES.OTHER_CLUBS ,),
     fileUploadHandler(),
     UserController.updatePlayer
   );
