@@ -37,15 +37,16 @@ const sendEmail = async (values: ISendEmail) => {
       messageId: info.messageId,
     });
 
-    return info;
+    return { success: true, info };
+
   } catch (error) {
     errorLogger.error("❌ Email send failed", error);
 
-    // 🔥 IMPORTANT
-    throw new ApiError(
-      StatusCodes.INTERNAL_SERVER_ERROR,
-      "Failed to send OTP email"
-    );
+    // ❌ DON'T throw error (prevents server crash)
+    return {
+      success: false,
+      error: "Email sending failed"
+    };
   }
 };
 

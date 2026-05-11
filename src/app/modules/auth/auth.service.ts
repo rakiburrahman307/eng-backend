@@ -84,34 +84,66 @@ const forgetPasswordToDB = async (email: string) => {
 const verifyEmailToDB = async (payload: IVerifyEmail) => {
 
     const { email, oneTimeCode } = payload;
+
     const isExistUser = await User.findOne({ email }).select('+authentication');
+
     if (!isExistUser) {
         throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
     }
-  
+
     if (!oneTimeCode) {
-        throw new ApiError( StatusCodes.BAD_REQUEST, 'Please give the otp, check your email we send a code');
+        throw new ApiError(StatusCodes.BAD_REQUEST, 'Please give the otp');
     }
-  
+
     if (isExistUser.authentication?.oneTimeCode !== oneTimeCode) {
-        throw new ApiError(StatusCodes.BAD_REQUEST, 'You provided wrong otp');
+        throw new ApiError(StatusCodes.BAD_REQUEST, 'Wrong OTP');
     }
-  
+
     const date = new Date();
     if (date > isExistUser.authentication?.expireAt) {
-        throw new ApiError( StatusCodes.BAD_REQUEST, 'Otp already expired, Please try again');
+        throw new ApiError(StatusCodes.BAD_REQUEST, 'OTP expired');
     }
-  
+
     let message;
     let data;
-  
+
+    const jwt = require("jsonwebtoken");
+
+    // =========================
+    // ✅ FIRST TIME EMAIL VERIFY → LOGIN TOKEN
+    // =========================
     if (!isExistUser.verified) {
+
         await User.findOneAndUpdate(
             { _id: isExistUser._id },
-            { verified: true, authentication: { oneTimeCode: null, expireAt: null } }
+            {
+                verified: true,
+                authentication: {
+                    oneTimeCode: null,
+                    expireAt: null,
+                }
+            }
         );
-        message = 'Email verify successfully';
-    } else {
+
+        // 🔥 SAME LOGIN TOKEN LIKE LOGIN API
+        data = jwt.sign(
+            {
+                _id: isExistUser._id,
+                email: isExistUser.email,
+                role: isExistUser.role,
+            },
+            process.env.JWT_SECRET as string,
+            { expiresIn: "7d" }
+        );
+
+        message = "Email verified successfully";
+    }
+
+    // =========================
+    // 🔁 FORGOT PASSWORD FLOW → DB TOKEN
+    // =========================
+    else {
+
         await User.findOneAndUpdate(
             { _id: isExistUser._id },
             {
@@ -122,17 +154,19 @@ const verifyEmailToDB = async (payload: IVerifyEmail) => {
                 }
             }
         );
-  
-        //create token ;
+
         const createToken = cryptoToken();
+
         await ResetToken.create({
             user: isExistUser._id,
             token: createToken,
             expireAt: new Date(Date.now() + 5 * 60000),
         });
-        message = 'Verification Successful: Please securely store and utilize this code for reset password';
+
+        message = "Verification Successful: Please use code for reset password";
         data = createToken;
     }
+
     return { data, message };
 };
   

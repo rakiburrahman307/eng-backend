@@ -33,10 +33,14 @@ const userDetailsSchema = new Schema<IUserDetails>(
       required: false,
     },
 
-    selectGroup: {
-      type: String,
-      enum: Object.values(SELECT_GROUP),
+    selectTeam: {
+      type: Schema.Types.ObjectId,
+      ref: "Team",
       required: false,
+    },
+    strongFoot: {
+      type: String,
+      default: false,
     },
 
     position: {

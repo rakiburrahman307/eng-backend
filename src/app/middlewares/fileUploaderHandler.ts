@@ -114,7 +114,7 @@ const fileUploadHandler = () => {
     },
   }).fields([
     { name: 'image', maxCount: 3 },
-    { name: 'document', maxCount: 1 },
+    { name: 'document', maxCount: 2 },
   ]);
 
   return upload;

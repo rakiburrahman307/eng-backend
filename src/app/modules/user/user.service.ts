@@ -64,7 +64,7 @@ const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
 const getUserProfileFromDB = async (user: JwtPayload) => {
     console.log("🧠 SERVICE CALLED WITH USER:", user);
 
-    const id = user?.id;
+    const id = user?._id;
 
     if (!id) {
         console.log("❌ No ID in token");
@@ -84,8 +84,8 @@ const getUserProfileFromDB = async (user: JwtPayload) => {
 };
 
 const updateProfileToDB = async (user: JwtPayload, payload: Partial<IUser>): Promise<Partial<IUser | null>> => {
-    const { id } = user;
-    const isExistUser = await User.isExistUserById(id);
+    const { _id } = user;
+    const isExistUser = await User.isExistUserById(_id);
     if (!isExistUser) {
         throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
     }
@@ -96,7 +96,7 @@ const updateProfileToDB = async (user: JwtPayload, payload: Partial<IUser>): Pro
     }
 
     const updateDoc = await User.findOneAndUpdate(
-        { _id: id },
+        { _id: _id },
         payload,
         { new: true }
     );

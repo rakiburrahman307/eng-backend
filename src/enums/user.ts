@@ -7,5 +7,6 @@ export enum USER_ROLES {
     PLAYER = 'PLAYER',
     MANAGER = 'MANAGER',
     OTHER_CLUBS = 'OTHER_CLUBS',
+    REFEREE = 'REFEREE'
 
 }

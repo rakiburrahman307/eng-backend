@@ -57,6 +57,14 @@ const resetPassword = catchAsync(async (req: Request, res: Response) => {
 const changePassword = catchAsync(async (req: Request, res: Response) => {
     const user = req.user;
     const { ...passwordData } = req.body;
+    if (!user) {
+        return sendResponse(res, {
+            success: false,
+            statusCode: 401,
+            message: "Unauthorized user - token invalid or missing",
+            data: null
+        });
+    }
     await AuthService.changePasswordToDB(user, passwordData);
 
     sendResponse(res, {
@@ -104,7 +112,16 @@ const resendVerificationEmail = catchAsync(async (req: Request, res: Response) =
 
 // delete user
 const deleteUser = catchAsync(async (req: Request, res: Response) => {
-    const result = await AuthService.deleteUserFromDB(req.user, req.body.password);
+    const user = req.user;
+    if (!user) {
+        return sendResponse(res, {
+            success: false,
+            statusCode: 401,
+            message: "Unauthorized user - token invalid or missing",
+            data: null
+        });
+    }
+    const result = await AuthService.deleteUserFromDB(user, req.body.password);
 
     sendResponse(res, {
         success: true,

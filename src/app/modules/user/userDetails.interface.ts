@@ -15,18 +15,14 @@ export enum SELECT_GROUP {
 
 export type IUserDetails = {
   userId: Types.ObjectId; 
-
   firstName: string;
   lastName: string;
   dateOfBirth: Date;
-
+  strongFoot?: string; // optional
   ageGroup?: AGE_GROUP;
-  selectGroup?: SELECT_GROUP;
-
+  selectTeam?: Types.ObjectId; // Reference to Team, optional
   position?: string;   // optional
   document?: string[]; // optional
-
   phone?: string;
-
   status: "PENDING" | "APPROVED" | "REJECTED";
 };

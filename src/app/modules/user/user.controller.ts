@@ -32,8 +32,7 @@ const createAdmin = catchAsync( async (req: Request, res: Response, next: NextFu
 
 // retrieved user profile
 const getUserProfile = catchAsync(async (req: Request, res: Response) => {
-    console.log("🔥 PROFILE API HIT");
-    console.log("📦 req.user:", req.user);
+   
 
     const user = req.user;
 
@@ -68,6 +67,11 @@ const getUserProfile = catchAsync(async (req: Request, res: Response) => {
 //update profile
 const updateProfile = catchAsync(async (req: Request, res: Response) => {
     const user = req.user;
+
+    // 🚨 AUTH CHECK
+    if (!user) {
+        throw new ApiError(401, "Unauthorized user - token invalid or missing");
+    }
 
     let profile;
 
@@ -144,6 +148,7 @@ const createPlayer = catchAsync(async (req: Request, res: Response) => {
         "firstName",
         "lastName",
         "dateOfBirth",
+        
     ];
 
     const missingFields = requiredFields.filter(
@@ -159,18 +164,18 @@ const createPlayer = catchAsync(async (req: Request, res: Response) => {
 
     // 🚨 PLAYER ROLE SPECIFIC VALIDATION
     if (role === "PLAYER") {
-        const playerRequiredFields = ["ageGroup", "selectGroup"];
+    const playerRequiredFields = ["ageGroup", "selectTeam"];
 
-        const missingPlayerFields = playerRequiredFields.filter(
-            (field) => !parsedData?.[field]
+    const missingPlayerFields = playerRequiredFields.filter(
+        (field) => !parsedData?.[field]
+    );
+
+    if (missingPlayerFields.length > 0) {
+        throw new ApiError(
+        400,
+        `Player must provide: ${missingPlayerFields.join(", ")}`
         );
-
-        if (missingPlayerFields.length > 0) {
-            throw new ApiError(
-                400,
-                `Player must provide: ${missingPlayerFields.join(", ")}`
-            );
-        }
+    }
     }
 
     // 🚀 FINAL PAYLOAD
@@ -195,44 +200,62 @@ const updatePlayer = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as any;
 
   // ✅ AUTH CHECK
-  if (!user || !user._id) {
-    throw new ApiError(401, "Unauthorized user - token invalid or missing");
+  if (!user?._id) {
+    throw new ApiError(
+      401,
+      "Unauthorized user - token invalid or missing"
+    );
   }
 
-  const userId = user._id; // 🔥 FROM TOKEN
+  const userId = user._id;
 
-  let documentFile: string | null = null;
-
+  // ✅ FILE HANDLE
   const files = req.files as any;
 
-  if (files?.document?.[0]) {
-    documentFile = `/documents/${files.document[0].filename}`;
+  let documentFiles: string[] = [];
+
+  if (files?.document?.length) {
+    documentFiles = files.document.map((file: any) => {
+      // 🖼 IMAGE
+      if (file.mimetype.startsWith("image/")) {
+        return `/images/${file.filename}`;
+      }
+
+      // 📄 DOCUMENT
+      return `/documents/${file.filename}`;
+    });
   }
 
   // ✅ SAFE JSON PARSE
   let parsedData: any = {};
 
-  if (req.body?.data) {
-    try {
-      parsedData =
-        typeof req.body.data === "string"
-          ? JSON.parse(req.body.data)
-          : req.body.data;
-    } catch (error) {
-      throw new ApiError(400, "Invalid JSON format in 'data' field");
-    }
+  try {
+    parsedData =
+      typeof req.body.data === "string"
+        ? JSON.parse(req.body.data)
+        : req.body.data || req.body;
+  } catch (error) {
+    throw new ApiError(
+      400,
+      "Invalid JSON format in request body"
+    );
   }
 
+  // ✅ UPDATE DATA
   const updateData: any = {
     ...parsedData,
   };
 
-  if (documentFile) {
-    updateData.document = documentFile;
+  // ✅ DOCUMENT ADD
+  if (documentFiles.length > 0) {
+    updateData.document = documentFiles;
   }
 
-  // 🔥 UPDATE BY TOKEN USER
-  const result = await UserService.updatePlayerByUserId(userId, updateData);
+  // 🔥 UPDATE PLAYER
+  const result = await UserService.updatePlayerByUserId(
+    userId,
+    updateData
+  );
 
   return sendResponse(res, {
     success: true,

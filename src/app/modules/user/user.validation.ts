@@ -33,15 +33,13 @@ const createPlayerZodSchema = z.object({
 
     ageGroup: z.enum(["U16", "U18", "U21", "SENIOR"]),
 
-    selectGroup: z.enum(["A", "B", "C"]),
-
     position: z.string().optional(),
 
     document: z.string().optional(),
   }).refine((data) => {
-    return data.ageGroup && data.selectGroup;
+    return data.ageGroup ;
   }, {
-    message: "Age group and Select group are required",
+    message: "Age group and Select team are required",
   }),
 });
 

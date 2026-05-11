@@ -2,6 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiErrors';
 import { INews } from './news.interface';
 import { News } from './news.model';
+import QueryBuilder from '../../../util/queryBilter';
 
 // CREATE NEWS
 const createNewsToDB = async (payload: INews, userId: string) => {
@@ -14,22 +15,47 @@ const createNewsToDB = async (payload: INews, userId: string) => {
 };
 
 // GET ALL NEWS (ROLE BASED)
-const getAllNewsFromDB = async (role: string) => {
-  if (role === 'ADMIN' || role === 'SUPER_ADMIN') {
-    return await News.find().sort({ createdAt: -1 });
-  }
-
+const getAllNewsFromDB = async (
+  role: string,
+  query: Record<string, any>
+) => {
   const now = new Date();
 
-  return await News.find({
-    $or: [
-      { status: 'publish' },
-      {
-        status: 'schedule',
-        publishDateTime: { $lte: now },
-      },
-    ],
-  }).sort({ createdAt: -1 });
+  let baseQuery = {};
+
+  // ADMIN can see all
+  if (role === 'ADMIN' || role === 'SUPER_ADMIN') {
+    baseQuery = {};
+  } else {
+    // Public users
+    baseQuery = {
+      $or: [
+        { status: 'publish' },
+        {
+          status: 'schedule',
+          publishDateTime: { $lte: now },
+        },
+      ],
+    };
+  }
+
+  const newsQuery = new QueryBuilder(
+    News.find(baseQuery),
+    query
+  )
+    .search(['title', 'description'])
+    .filter()
+    .sort()
+    .paginate()
+    .fields();
+
+  const result = await newsQuery.modelQuery;
+  const meta = await newsQuery.getPaginationInfo();
+
+  return {
+    meta,
+    result,
+  };
 };
 
 // GET SINGLE (NO PARAM ID VERSION -> optional, token based user flow if needed)

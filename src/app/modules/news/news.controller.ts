@@ -67,13 +67,17 @@ const createNews = catchAsync(async (req: Request, res: Response) => {
 const getAllNews = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as any;
 
-  const result = await NewsService.getAllNewsFromDB(user.role);
+  const result = await NewsService.getAllNewsFromDB(
+    user?.role,
+    req.query
+  );
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
     message: 'News retrieved successfully',
-    data: result,
+    pagination: result.meta,
+    data: result.result,
   });
 });
 

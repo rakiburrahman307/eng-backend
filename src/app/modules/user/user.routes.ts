@@ -9,7 +9,7 @@ const router = express.Router();
 
 router.get(
     '/profile',
-    auth(USER_ROLES.ADMIN,USER_ROLES.SUPER_ADMIN, USER_ROLES.PLAYER, USER_ROLES.MANAGER, USER_ROLES.OTHER_CLUBS),
+    auth(USER_ROLES.ADMIN,USER_ROLES.SUPER_ADMIN, USER_ROLES.PLAYER, USER_ROLES.MANAGER, USER_ROLES.OTHER_CLUBS, USER_ROLES.REFEREE),
     UserController.getUserProfile
 );
   
@@ -26,7 +26,7 @@ router
         UserController.createUser
     )
     .patch(
-        auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.PLAYER, USER_ROLES.MANAGER, USER_ROLES.OTHER_CLUBS),
+        auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.PLAYER, USER_ROLES.MANAGER, USER_ROLES.OTHER_CLUBS, USER_ROLES.REFEREE),
         fileUploadHandler(),
         UserController.updateProfile
 );
@@ -56,6 +56,20 @@ router
     )
     .patch(
     auth(USER_ROLES.MANAGER ,),
+    fileUploadHandler(),
+    UserController.updatePlayer
+);
+
+router
+    .route('/referee')
+    .post(
+        auth(USER_ROLES.REFEREE),
+        // validateRequest(UserValidation.createPlayerZodSchema),
+        fileUploadHandler(),
+        UserController.createPlayer
+    )
+    .patch(
+    auth(USER_ROLES.REFEREE ,),
     fileUploadHandler(),
     UserController.updatePlayer
 );

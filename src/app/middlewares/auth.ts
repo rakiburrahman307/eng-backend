@@ -5,7 +5,7 @@ import config from '../../config';
 import { jwtHelper } from '../../helpers/jwtHelper';
 import ApiError from '../../errors/ApiErrors';
 
-const auth = (...roles: string[]) => async (
+const auth = (...args: any[]) => async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -16,30 +16,72 @@ const auth = (...roles: string[]) => async (
     console.log("🔥 AUTH MIDDLEWARE HIT");
     console.log("📦 authHeader:", authHeader);
 
-    if (!authHeader) {
-      throw new ApiError(StatusCodes.UNAUTHORIZED, 'You are not authorized');
+    // ----------------------------------------
+    // 1️⃣ Parse options
+    // ----------------------------------------
+
+    let required = true;
+    let roles: string[] = [];
+
+    if (args.length === 1 && typeof args[0] === "boolean") {
+      required = args[0]; // auth(false)
+    } else {
+      roles = args; // auth("ADMIN", "USER")
     }
 
-    // ✅ Accept BOTH Bearer & raw token
-    const token = authHeader.startsWith('Bearer ')
-      ? authHeader.split(' ')[1]
+    // ----------------------------------------
+    // 2️⃣ No token case (Guest handling)
+    // ----------------------------------------
+
+    if (!authHeader) {
+      if (required) {
+        throw new ApiError(StatusCodes.UNAUTHORIZED, "You are not authorized");
+      }
+
+      req.user = null; // guest user
+      return next();
+    }
+
+    // ----------------------------------------
+    // 3️⃣ Token extract
+    // ----------------------------------------
+
+    const token = authHeader.startsWith("Bearer ")
+      ? authHeader.split(" ")[1]
       : authHeader;
 
     if (!token) {
-      throw new ApiError(StatusCodes.UNAUTHORIZED, 'Token not found');
+      if (required) {
+        throw new ApiError(StatusCodes.UNAUTHORIZED, "Token not found");
+      }
+
+      req.user = null;
+      return next();
     }
 
-    // verify token
-    const decoded = jwtHelper.verifyToken(
-      token,
-      config.jwt.jwt_secret as Secret
-    );
+    // ----------------------------------------
+    // 4️⃣ Verify token
+    // ----------------------------------------
 
-    if (!decoded) {
-      throw new ApiError(StatusCodes.UNAUTHORIZED, 'Invalid token');
+    let decoded;
+    try {
+      decoded = jwtHelper.verifyToken(
+        token,
+        config.jwt.jwt_secret as Secret
+      );
+    } catch (err) {
+      if (required) {
+        throw new ApiError(StatusCodes.UNAUTHORIZED, "Invalid token");
+      }
+
+      req.user = null;
+      return next();
     }
 
-    // ✅ IMPORTANT: normalize user object
+    // ----------------------------------------
+    // 5️⃣ Attach user
+    // ----------------------------------------
+
     req.user = {
       _id: decoded._id || decoded.id,
       email: decoded.email,
@@ -48,7 +90,10 @@ const auth = (...roles: string[]) => async (
 
     console.log("✅ USER ATTACHED:", req.user);
 
-    // role check
+    // ----------------------------------------
+    // 6️⃣ Role check (only if roles given)
+    // ----------------------------------------
+
     if (roles.length && !roles.includes(req.user.role)) {
       throw new ApiError(
         StatusCodes.FORBIDDEN,
@@ -63,3 +108,4 @@ const auth = (...roles: string[]) => async (
 };
 
 export default auth;
+
