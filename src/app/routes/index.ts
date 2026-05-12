@@ -7,7 +7,9 @@ import TermsAndConditionRoutes from '../modules/rule/rule.route';
 import NewsRoutes from '../modules/news/news.route';
 import EventRoutes from '../modules/event/event.route';
 import TeamRoutes from '../modules/team/team.route';
-
+import MatchRoutes from '../modules/match/match.route';
+import { MatchResult } from '../modules/matchResult/matchResult.model';
+import MatchResultRoute from '../modules/matchResult/matchResult.route';
 
 const router = express.Router();
 
@@ -19,7 +21,9 @@ const apiRoutes = [
     { path: "/", route: TermsAndConditionRoutes },
     { path: "/news", route: NewsRoutes },
     { path: "/event", route: EventRoutes },
-    { path: "/team", route: TeamRoutes }
+    { path: "/team", route: TeamRoutes },
+    { path: "/match", route: MatchRoutes },
+    { path: "/match-result", route: MatchResultRoute },
 ]
 
 apiRoutes.forEach(route => router.use(route.path, route.route));
