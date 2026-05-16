@@ -2,6 +2,12 @@ import { Schema, model } from 'mongoose';
 
 const matchResultSchema = new Schema(
   {
+
+    league: {
+      type: Schema.Types.ObjectId,
+      ref: 'League',
+      required: true,
+    },
     match: {
       type: Schema.Types.ObjectId,
       ref: 'Match',
@@ -36,6 +42,8 @@ const matchResultSchema = new Schema(
       type: Number,
       required: true,
     },
+
+    
 
     addedBy: {
       type: Schema.Types.ObjectId,

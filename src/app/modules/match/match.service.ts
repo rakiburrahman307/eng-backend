@@ -1,12 +1,79 @@
 import QueryBuilder from '../../../util/queryBilter';
 import { Match } from './match.model';
+import { LeagueTeam } from '../leagueTeam/leagueTeam.model';
+import { User } from '../user/user.model';
 
-// CREATE
 const createMatchToDB = async (payload: any) => {
-  if (payload.homeTeam === payload.awayTeam) {
+  const { league, homeTeam, awayTeam, matchDate, referee, venueName } = payload;
+
+  // 1️⃣ same team check
+  if (homeTeam === awayTeam) {
     throw new Error('Same team cannot play match');
   }
 
+  // 2️⃣ league team validation
+  const leagueTeams = await LeagueTeam.find({ league });
+
+  const teamIds = leagueTeams.map((t) => t.team.toString());
+
+  if (!teamIds.includes(homeTeam) || !teamIds.includes(awayTeam)) {
+    throw new Error('Both teams must belong to this league');
+  }
+
+  // 3️⃣ referee existence check
+  if (referee) {
+    const refereeExists = await User.findById(referee);
+    if (!refereeExists) {
+      throw new Error('Referee not found');
+    }
+  }
+
+  // 4️⃣ time setup
+  const matchTime = new Date(matchDate).getTime();
+  const twoHours = 2 * 60 * 60 * 1000;
+
+  const startWindow = new Date(matchTime - twoHours);
+  const endWindow = new Date(matchTime + twoHours);
+
+  // 5️⃣ TEAM conflict check (home + away overlap)
+  const teamConflict = await Match.findOne({
+    league,
+    matchDate: { $gte: startWindow, $lte: endWindow },
+    $or: [
+      { homeTeam },
+      { awayTeam },
+    ],
+  });
+
+  if (teamConflict) {
+    throw new Error('One of the teams already has a match in this time slot');
+  }
+
+  // 6️⃣ REFEREE conflict check
+  if (referee) {
+    const refereeConflict = await Match.findOne({
+      referee,
+      matchDate: { $gte: startWindow, $lte: endWindow },
+    });
+
+    if (refereeConflict) {
+      throw new Error('Referee already assigned in this time slot');
+    }
+  }
+
+  // 7️⃣ VENUE conflict check (important for real system)
+  if (venueName) {
+    const venueConflict = await Match.findOne({
+      venueName,
+      matchDate: { $gte: startWindow, $lte: endWindow },
+    });
+
+    if (venueConflict) {
+      throw new Error('Venue already booked in this time slot');
+    }
+  }
+
+  // 8️⃣ create match
   return await Match.create(payload);
 };
 
@@ -93,7 +160,7 @@ const toggleMatchStatusToDB = async (id: string) => {
   } else if (match.status === 'live') {
     match.status = 'finished';
   } else {
-    match.status = 'upcoming';
+    match.status = 'finished';
   }
 
   await match.save();

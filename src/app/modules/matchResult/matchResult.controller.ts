@@ -6,18 +6,18 @@ import { MatchResultService } from './matchResult.service';
 
 // CREATE
 const createMatchResult = catchAsync(async (req: Request, res: Response) => {
-  const user = req.user; 
+  const user = req.user;
 
   const payload = {
     ...req.body,
-    addedBy: user?._id, 
+    addedBy: user?._id,
   };
 
   const result = await MatchResultService.createMatchResultToDB(payload);
 
   sendResponse(res, {
     success: true,
-    statusCode: StatusCodes.OK,
+    statusCode: StatusCodes.CREATED,
     message: 'Match event created successfully',
     data: result,
   });
@@ -38,9 +38,9 @@ const getAllMatchResults = catchAsync(async (req: Request, res: Response) => {
 
 // SINGLE
 const getSingleMatchResult = catchAsync(async (req: Request, res: Response) => {
-  const id = req.params.id as string;
-
-  const result = await MatchResultService.getSingleMatchResultFromDB(id);
+  const result = await MatchResultService.getSingleMatchResultFromDB(
+    req.params.id as string
+  );
 
   sendResponse(res, {
     success: true,
@@ -52,9 +52,10 @@ const getSingleMatchResult = catchAsync(async (req: Request, res: Response) => {
 
 // UPDATE
 const updateMatchResult = catchAsync(async (req: Request, res: Response) => {
-  const id = req.params.id as string;
-
-  const result = await MatchResultService.updateMatchResultToDB(id, req.body);
+  const result = await MatchResultService.updateMatchResultToDB(
+    req.params.id as string,
+    req.body
+  );
 
   sendResponse(res, {
     success: true,
@@ -66,9 +67,9 @@ const updateMatchResult = catchAsync(async (req: Request, res: Response) => {
 
 // DELETE
 const deleteMatchResult = catchAsync(async (req: Request, res: Response) => {
-  const id = req.params.id as string;
-
-  const result = await MatchResultService.deleteMatchResultFromDB(id);
+  const result = await MatchResultService.deleteMatchResultFromDB(
+    req.params.id as string
+  );
 
   sendResponse(res, {
     success: true,
@@ -78,11 +79,11 @@ const deleteMatchResult = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-// MATCH WISE EVENTS
+// MATCH WISE
 const getMatchWiseResults = catchAsync(async (req: Request, res: Response) => {
-  const matchId = req.params.matchId as string;
-
-  const result = await MatchResultService.getMatchWiseResultsFromDB(matchId);
+  const result = await MatchResultService.getMatchWiseResultsFromDB(
+    req.params.matchId as string
+  );
 
   sendResponse(res, {
     success: true,

@@ -1,8 +1,7 @@
 import express from 'express';
-import auth from '../../middlewares/auth';
 import { USER_ROLES } from '../../../enums/user';
-import { TeamController } from './team.controller';
-import fileUploadHandler from '../../middlewares/fileUploaderHandler';
+import auth from '../../middlewares/auth';
+import { LeagueController } from './league.controller';
 
 const router = express.Router();
 
@@ -11,23 +10,21 @@ router
   .route('/')
   .post(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    fileUploadHandler(),
-    TeamController.createTeam
+    LeagueController.createLeague
   )
-  .get(TeamController.getAllTeams);
+  .get(auth(), LeagueController.getAllLeagues);
 
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')
-  .get(TeamController.getSingleTeam)
+  .get(auth(), LeagueController.getSingleLeague)
   .patch(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    fileUploadHandler(),
-    TeamController.updateTeam
+    LeagueController.updateLeague
   )
   .delete(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    TeamController.deleteTeam
+    LeagueController.deleteLeague
   );
 
 export default router;

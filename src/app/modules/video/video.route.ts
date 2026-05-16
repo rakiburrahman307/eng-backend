@@ -1,8 +1,8 @@
 import express from 'express';
 import auth from '../../middlewares/auth';
 import { USER_ROLES } from '../../../enums/user';
-import { TeamController } from './team.controller';
 import fileUploadHandler from '../../middlewares/fileUploaderHandler';
+import { VideoController } from './video.controller';
 
 const router = express.Router();
 
@@ -12,22 +12,30 @@ router
   .post(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
     fileUploadHandler(),
-    TeamController.createTeam
+    VideoController.createVideo
   )
-  .get(TeamController.getAllTeams);
+  .get(auth(), VideoController.getAllVideos);
 
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')
-  .get(TeamController.getSingleTeam)
+  .get(auth(), VideoController.getSingleVideo)
   .patch(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
     fileUploadHandler(),
-    TeamController.updateTeam
+    VideoController.updateVideo
   )
   .delete(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    TeamController.deleteTeam
+    VideoController.deleteVideo
+  );
+
+// TOGGLE STATUS
+router
+  .route('/:id/toggle-status')
+  .patch(
+    auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+    VideoController.toggleVideoStatus
   );
 
 export default router;

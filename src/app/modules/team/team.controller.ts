@@ -6,49 +6,28 @@ import { TeamService } from './team.service';
 
 // CREATE
 const createTeam = catchAsync(async (req: Request, res: Response) => {
+  const files = req.files as { image?: Express.Multer.File[] };
 
-  // 📂 FULL FILES CHECK
-  const files = req.files as {
-    image?: Express.Multer.File[];
-  };
-
-  // 🖼️ LOGO CHECK
   const logo = files?.image?.[0];
-  // 📦 RAW BODY
-  // 📦 JSON PARSE
-  let data = {};
+
+  let data: any = {};
 
   if (req.body?.data) {
     try {
       data = JSON.parse(req.body.data);
-    } catch (error) {
-      console.error("❌ JSON Parse Error:", error);
-    }
+    } catch {}
   } else {
-    console.log("⚠️ No req.body.data found");
+    data = req.body;
   }
 
-  // 🚀 FINAL PAYLOAD
-  const payload: any = {
-    ...data,
-  };
+  const payload: any = { ...data };
 
-
-  // 🖼️ LOGO ATTACH
   if (logo) {
-    payload.teamLogo  = logo.path
-      .replace(/\\/g, '/')
-      .split('uploads')[1];
-  } else {
-    console.log("⚠️ No logo uploaded");
+    payload.teamLogo = logo.path.replace(/\\/g, '/').split('uploads')[1];
   }
 
-
-  // 🧠 DB CALL
   const result = await TeamService.createTeamToDB(payload);
 
-
-  // 📤 RESPONSE
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
@@ -72,9 +51,7 @@ const getAllTeams = catchAsync(async (req: Request, res: Response) => {
 
 // SINGLE
 const getSingleTeam = catchAsync(async (req: Request, res: Response) => {
-  const id = req.params.id as string;
-
-  const result = await TeamService.getSingleTeamFromDB(id);
+  const result = await TeamService.getSingleTeamFromDB(req.params.id as string);
 
   sendResponse(res, {
     success: true,
@@ -86,41 +63,25 @@ const getSingleTeam = catchAsync(async (req: Request, res: Response) => {
 
 // UPDATE
 const updateTeam = catchAsync(async (req: Request, res: Response) => {
-  const id = req.params.id as string;
-
-  // 📂 FILES
-  const files = req.files as {
-    image?: Express.Multer.File[];
-  };
+  const files = req.files as { image?: Express.Multer.File[] };
 
   const logo = files?.image?.[0];
 
-  // 📦 BODY PARSE (same as create)
-  let data = {};
+  let data: any = req.body;
 
   if (req.body?.data) {
     try {
       data = JSON.parse(req.body.data);
-    } catch (error) {
-      console.error("❌ JSON Parse Error:", error);
-    }
-  } else {
-    data = req.body; // fallback for normal JSON request
+    } catch {}
   }
 
-  // 🚀 FINAL PAYLOAD
-  const payload: any = {
-    ...data,
-  };
+  const payload: any = { ...data };
 
-  // 🖼️ LOGO UPDATE
   if (logo) {
-    payload.teamLogo = logo.path
-      .replace(/\\/g, '/')
-      .split('uploads')[1];
+    payload.teamLogo = logo.path.replace(/\\/g, '/').split('uploads')[1];
   }
 
-  const result = await TeamService.updateTeamToDB(id, payload);
+  const result = await TeamService.updateTeamToDB(req.params.id as string, payload);
 
   sendResponse(res, {
     success: true,
@@ -132,9 +93,7 @@ const updateTeam = catchAsync(async (req: Request, res: Response) => {
 
 // DELETE
 const deleteTeam = catchAsync(async (req: Request, res: Response) => {
-  const id = req.params.id as string;
-
-  const result = await TeamService.deleteTeamFromDB(id);
+  const result = await TeamService.deleteTeamFromDB(req.params.id as string);
 
   sendResponse(res, {
     success: true,

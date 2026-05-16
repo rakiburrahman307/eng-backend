@@ -34,6 +34,9 @@ const fileUploadHandler = () => {
         case 'document':
           uploadDir = path.join(baseUploadDir, 'documents');
           break;
+        case 'video':
+          uploadDir = path.join(baseUploadDir, 'videos');
+          break;
 
         default:
           return cb(
@@ -80,14 +83,19 @@ const fileUploadHandler = () => {
     }
 
     // DOCUMENT validation
-    else if (file.fieldname === 'document') {
+    else if (file.fieldname === 'document' || file.fieldname === 'video') {
       // allow pdf, doc, docx, etc
         const allowed = [
           // images
       "image/jpeg",
       "image/png",
       "image/jpg",
-            "image/webp",
+          "image/webp",
+          "video/mp4",
+            "video/mpeg",
+            "video/quicktime",
+            "video/x-msvideo",
+            "video/x-ms-wmv",
             // documents
         'application/pdf',
         'application/msword',
@@ -110,11 +118,12 @@ const fileUploadHandler = () => {
     storage,
     fileFilter,
     limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB limit
+      fileSize: 1000 * 1024 * 1024, // 1000MB limit
     },
   }).fields([
     { name: 'image', maxCount: 3 },
     { name: 'document', maxCount: 2 },
+    { name: 'video', maxCount: 1 },
   ]);
 
   return upload;

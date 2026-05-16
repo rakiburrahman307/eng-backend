@@ -32,6 +32,10 @@ const userSchema = new Schema<IUser, UserModal>(
       select: 0,
       minlength: 8,
     },
+    rewardPoint: {
+      type: Number,
+      required:false
+    },
     location: {
       type: String,
       required: false,

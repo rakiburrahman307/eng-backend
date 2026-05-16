@@ -20,6 +20,7 @@ export type IUser = {
     role: USER_ROLES;
     email: string;
     password: string;
+    rewardPoint: number;
     location: string;
     profile: string;
     verified: boolean;

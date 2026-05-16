@@ -14,6 +14,12 @@ router
   )
   .get(MatchResultController.getAllMatchResults);
 
+
+ // MATCH WISE RESULT
+router.get(
+  '/match/:matchId',
+  MatchResultController.getMatchWiseResults
+);
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')
@@ -27,10 +33,6 @@ router
     MatchResultController.deleteMatchResult
   );
 
-// MATCH WISE RESULT
-router.get(
-  '/match/:matchId',
-  MatchResultController.getMatchWiseResults
-);
+
 
 export default router;
