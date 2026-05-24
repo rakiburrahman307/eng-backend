@@ -22,4 +22,13 @@ router
     .patch(auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN), PackageController.updatePackage)
     .delete(auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN), PackageController.deletePackage)
 
-export const PackageRoutes = router;
+    router.patch(
+    "/toggle/:id",
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN),
+    PackageController.togglePackageStatus
+    
+    );
+
+    router.get("/all", PackageController.getActivePackages)
+
+export default router;

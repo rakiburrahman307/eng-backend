@@ -1,5 +1,5 @@
 
-import QueryBuilder from '../../../util/queryBilter';
+import QueryBuilder from "../../../util/queryBuilder";
 import { IEvent } from './event.interface';
 import { Event } from './event.module';
 

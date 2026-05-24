@@ -16,11 +16,24 @@ import LeagueRoute from '../modules/league/league.route'
 import LeagueTeamRoute from '../modules/leagueTeam/leagueTeam.route'
 import RewardProductsRoute from '../modules/rewardProduct/rewardProduct.route'
 import RewardOrderRoute from '../modules/rewardOrder/rewardOrder.route'
+import TransferRoute from '../modules/transfer/transfer.route'
+import ManagerAssignRoute from "../modules/managerTeam/managerTeam.route"
+import TeamDashboard from "../modules/teamDashboard/teamDashboard.route"
+import PlayerDashboard from "../modules/playerDashboard/playerDashboard.route"
+import playerRoute from "../modules/playermanagement/player.route"
+import playerSelectionRoute from "../modules/matchPlayerSelection/matchPlayerSelection.route"
+import UserManagementRoute from "../modules/userManagement/userManagement.route"
+import NotificationRoute from "../modules/notification/notification.routes"
+import PackageRoute from "../modules/package/package.routes"
+import OverviewRoute from "../modules/overview/overview.route"
+import PushNotificationRoute from "../modules/pushNotification/pushNotification.route"
+import StatisticRoute from "../modules/statistic/statistic.route"
 
 const router = express.Router();
 
 const apiRoutes = [
     { path: "/user", route: UserRoutes },
+    { path: "/user-management", route: UserManagementRoute },
     { path: "/auth", route: AuthRoutes },
     { path: "/about", route: AboutRoutes },
     { path: "/", route: PrivacyPolicyRoutes },
@@ -35,7 +48,19 @@ const apiRoutes = [
     { path: "/video", route: VideoRoutes },
     { path: "/league", route: LeagueRoute },
     { path: "/league-team", route: LeagueTeamRoute },
-    { path: "/reward-products", route: RewardProductsRoute }
+    { path: "/reward-products", route: RewardProductsRoute },
+    { path: "/reward-order", route: RewardOrderRoute },
+    { path: "/transfers", route: TransferRoute },
+    { path: "/manager-team", route: ManagerAssignRoute},
+    { path: "/team-dashboard", route: TeamDashboard},
+    { path: "/player-dashboard", route: PlayerDashboard},
+    { path: "/player", route: playerRoute },
+    { path: "/player-selection", route: playerSelectionRoute },
+    { path: "/notification", route: NotificationRoute},
+    { path: "/package", route: PackageRoute},
+    { path: "/overview", route: OverviewRoute },
+    { path: "/push-notification", route: PushNotificationRoute },
+    { path: "/statistic", route: StatisticRoute }
 ]
 
 apiRoutes.forEach(route => router.use(route.path, route.route));

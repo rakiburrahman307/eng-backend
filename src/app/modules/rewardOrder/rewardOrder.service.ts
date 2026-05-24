@@ -1,7 +1,7 @@
 import { StatusCodes } from 'http-status-codes';
 import mongoose from 'mongoose';
 import ApiError from '../../../errors/ApiErrors';
-import QueryBuilder from '../../../util/queryBilter';
+import QueryBuilder from "../../../util/queryBuilder";
 import { User } from '../user/user.model';
 import { RewardProduct } from '../rewardProduct/rewardProduct.model';
 import { RewardOrder } from './rewardOrder.model';

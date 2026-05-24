@@ -31,6 +31,24 @@ const getAllMatches = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// GET MATCHES FOR REFEREE
+const getMatchesForReferee = catchAsync(async (req: Request, res: Response) => {
+  const refereeId = (req.user as any)?._id || (req.user as any)?.id;
+
+  const result = await MatchService.getMatchesByRefereeFromDB(
+    refereeId,
+    req.query
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Referee matches retrieved successfully',
+    pagination: result.meta,
+    data: result.result,
+  });
+});
+
 // SINGLE
 const getSingleMatch = catchAsync(async (req: Request, res: Response) => {
     const id = req.params.id as string;
@@ -91,6 +109,20 @@ const toggleMatchStatus = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+
+const addMatchReview = catchAsync(async (req: Request, res: Response) => {
+  const matchId = req.params.id as string;
+
+  const result = await MatchService.addMatchReviewToDB(matchId, req.body);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Match review added successfully',
+    data: result,
+  });
+});
+
 export const MatchController = {
   createMatch,
   getAllMatches,
@@ -98,4 +130,6 @@ export const MatchController = {
   updateMatch,
   deleteMatch,
   toggleMatchStatus,
+  getMatchesForReferee,
+  addMatchReview
 };

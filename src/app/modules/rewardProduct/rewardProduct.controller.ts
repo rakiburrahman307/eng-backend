@@ -63,6 +63,9 @@ const getAllRewardProducts = catchAsync(
   }
 );
 
+//getAdmin
+
+
 // GET SINGLE
 const getSingleRewardProduct = catchAsync(
   async (req: Request, res: Response) => {
@@ -159,5 +162,6 @@ export const RewardProductController = {
   getSingleRewardProduct,
   updateRewardProduct,
   deleteRewardProduct,
-  toggleRewardProductStatus,
+    toggleRewardProductStatus,
+
 };

@@ -78,8 +78,7 @@ const removeTeamFromLeagueToDB = async (
 
 
 const getTeamsByLeagueFromDB = async (leagueId: string) => {
-    const data = await LeagueTeam.find({ league: leagueId })
-    .populate('league') 
+  const data = await LeagueTeam.find({ league: leagueId })
     .populate('team');
 
   if (!data.length) {
@@ -114,10 +113,54 @@ const removeSingleTeamFromLeague = async (
   return deleted;
 };
 
+
+
+
+const getAllLeagueWithTeamsFromDB = async () => {
+  console.log("========== SERVICE START ==========");
+
+  const data = await LeagueTeam.find()
+    .populate("league")
+    .populate("team");
+
+  console.log("Raw records:", data.length);
+
+  const grouped = new Map<string, any>();
+
+  data.forEach((item) => {
+    const league = item.league as any;
+    const team = item.team as any;
+
+    if (!league?._id) return;
+
+    const leagueId = league._id.toString();
+
+    if (!grouped.has(leagueId)) {
+      grouped.set(leagueId, {
+        league,
+        teams: [],
+      });
+    }
+
+    grouped.get(leagueId).teams.push(team);
+  });
+
+  const result = Array.from(grouped.values());
+
+  console.log("Final grouped result:", JSON.stringify(result, null, 2));
+
+  console.log("========== SERVICE END ==========");
+
+  return result;
+};
+
+
+
 export const LeagueTeamService = {
   addTeamToLeagueToDB,
   getLeagueTeamsFromDB,
   removeTeamFromLeagueToDB,
   getTeamsByLeagueFromDB,
-  removeSingleTeamFromLeague
+    removeSingleTeamFromLeague,
+  getAllLeagueWithTeamsFromDB
 };

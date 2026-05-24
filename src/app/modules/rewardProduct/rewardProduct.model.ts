@@ -12,8 +12,12 @@ const rewardProductSchema = new Schema<IRewardProduct>(
       type: String,
       required: true,
       trim: true,
+        },
+    productType: {
+        type: String,
+        enum: ['nonCoffee', 'Coffee'],
+        default: "nonCoffee"
     },
-
     point: {
       type: Number,
       required: true,

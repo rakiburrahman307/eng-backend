@@ -20,6 +20,12 @@ export interface IMatch {
   awayScore: number;
 
   winnerTeam?: Types.ObjectId | null;
+  matchReview?: {
+    team?: Types.ObjectId;
+    rating?: number; // 1-10
+    coinImpact?: number;
+    createdAt?: Date;
+  }[];
 
   notes?: string | null;
 }

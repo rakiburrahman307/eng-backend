@@ -67,6 +67,27 @@ const matchSchema = new Schema(
       type: String,
       default: null,
     },
+     matchReview: [
+      {
+        team: {
+          type: Schema.Types.ObjectId,
+          ref: 'Team',
+        },
+        rating: {
+          type: Number,
+          min: 1,
+          max: 10,
+        },
+        coinImpact: {
+          type: Number,
+          default: 0,
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   {
     timestamps: true,

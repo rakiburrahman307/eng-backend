@@ -10,12 +10,12 @@ router.get("/",
 );
 
 router.get("/details", 
-    auth(USER_ROLES.USER), 
+    auth(USER_ROLES.PLAYER,USER_ROLES.REFEREE,USER_ROLES.MANAGER), 
     SubscriptionController.subscriptionDetails
 );
 
 router.get("/:id", 
-    auth(USER_ROLES.USER), 
+    auth(USER_ROLES.PLAYER,USER_ROLES.REFEREE,USER_ROLES.MANAGER), 
     SubscriptionController.companySubscriptionDetails
 )
 

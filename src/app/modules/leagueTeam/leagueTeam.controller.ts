@@ -88,11 +88,25 @@ const removeSingleTeamFromLeague = catchAsync(async (req, res) => {
 });
 
 
+const getAllLeagueWithTeams = catchAsync(async (req, res) => {
+  console.log("========== GET ALL LEAGUE TEAMS ==========");
+
+  const result = await LeagueTeamService.getAllLeagueWithTeamsFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "All leagues with teams retrieved successfully",
+    data: result,
+  });
+});
+
 
 export const LeagueTeamController = {
   addTeamToLeague,
   getLeagueTeams,
   removeTeamFromLeague,
   getTeamsByLeague,
-  removeSingleTeamFromLeague
+    removeSingleTeamFromLeague,
+  getAllLeagueWithTeams
 };

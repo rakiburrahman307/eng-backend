@@ -22,11 +22,11 @@ async function main() {
 
         // remove cluster fromt his code
         // create super admin
-        // seedSuperAdmin();
         console.log(colors.green('🚀 Starting application...'));
-
+        
         mongoose.connect(config.database_url as string);
         logger.info(colors.green('🚀 Database connected successfully'));
+        seedSuperAdmin();
 
         const port = typeof config.port === 'number' ? config.port : Number(config.port);
 

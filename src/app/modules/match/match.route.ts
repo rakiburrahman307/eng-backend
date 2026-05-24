@@ -14,6 +14,19 @@ router
   )
   .get(MatchController.getAllMatches);
 
+router.get(
+  "/my-matches",
+  auth(USER_ROLES.REFEREE),
+  MatchController.getMatchesForReferee,
+);
+
+
+router.patch(
+  '/review/:id',
+  auth(USER_ROLES.REFEREE),
+  MatchController.addMatchReview,
+);
+
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')

@@ -1,6 +1,6 @@
 import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiErrors';
-import QueryBuilder from '../../../util/queryBilter';
+import QueryBuilder from "../../../util/queryBuilder";
 import { ILeague } from './league.interface';
 import { League } from './league.model';
 import { getLeagueStatus } from './getLeagueStatus';

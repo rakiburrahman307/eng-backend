@@ -1,14 +1,22 @@
-import QueryBuilder from '../../../util/queryBilter';
-import { Match } from './match.model';
-import { LeagueTeam } from '../leagueTeam/leagueTeam.model';
-import { User } from '../user/user.model';
+import QueryBuilder from "../../../util/queryBuilder";
+import { Match } from "./match.model";
+import { LeagueTeam } from "../leagueTeam/leagueTeam.model";
+import { User } from "../user/user.model";
+import { Team } from "../team/team.model";
+import { getRatingCoin } from "../../../util/getRatingCoin";
+
+
+
+/* ---------------- RATING LOGIC ---------------- */
+
+
 
 const createMatchToDB = async (payload: any) => {
   const { league, homeTeam, awayTeam, matchDate, referee, venueName } = payload;
 
   // 1️⃣ same team check
   if (homeTeam === awayTeam) {
-    throw new Error('Same team cannot play match');
+    throw new Error("Same team cannot play match");
   }
 
   // 2️⃣ league team validation
@@ -17,14 +25,14 @@ const createMatchToDB = async (payload: any) => {
   const teamIds = leagueTeams.map((t) => t.team.toString());
 
   if (!teamIds.includes(homeTeam) || !teamIds.includes(awayTeam)) {
-    throw new Error('Both teams must belong to this league');
+    throw new Error("Both teams must belong to this league");
   }
 
   // 3️⃣ referee existence check
   if (referee) {
     const refereeExists = await User.findById(referee);
     if (!refereeExists) {
-      throw new Error('Referee not found');
+      throw new Error("Referee not found");
     }
   }
 
@@ -39,14 +47,11 @@ const createMatchToDB = async (payload: any) => {
   const teamConflict = await Match.findOne({
     league,
     matchDate: { $gte: startWindow, $lte: endWindow },
-    $or: [
-      { homeTeam },
-      { awayTeam },
-    ],
+    $or: [{ homeTeam }, { awayTeam }],
   });
 
   if (teamConflict) {
-    throw new Error('One of the teams already has a match in this time slot');
+    throw new Error("One of the teams already has a match in this time slot");
   }
 
   // 6️⃣ REFEREE conflict check
@@ -57,7 +62,7 @@ const createMatchToDB = async (payload: any) => {
     });
 
     if (refereeConflict) {
-      throw new Error('Referee already assigned in this time slot');
+      throw new Error("Referee already assigned in this time slot");
     }
   }
 
@@ -69,7 +74,7 @@ const createMatchToDB = async (payload: any) => {
     });
 
     if (venueConflict) {
-      throw new Error('Venue already booked in this time slot');
+      throw new Error("Venue already booked in this time slot");
     }
   }
 
@@ -86,10 +91,34 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     .fields();
 
   const result = await matchQuery.modelQuery
-    .populate('homeTeam')
-    .populate('awayTeam')
-    .populate('referee')
-    .populate('winnerTeam');
+    .populate("homeTeam")
+    .populate("awayTeam")
+    .populate("referee")
+    .populate("winnerTeam");
+
+  const meta = await matchQuery.getPaginationInfo();
+
+  return {
+    meta,
+    result,
+  };
+};
+
+const getMatchesByRefereeFromDB = async (
+  refereeId: string,
+  query: Record<string, any>,
+) => {
+  const matchQuery = new QueryBuilder(Match.find({ referee: refereeId }), query)
+    .filter()
+    .sort()
+    .paginate()
+    .fields();
+
+  const result = await matchQuery.modelQuery
+    .populate("homeTeam")
+    .populate("awayTeam")
+    .populate("referee")
+    .populate("winnerTeam");
 
   const meta = await matchQuery.getPaginationInfo();
 
@@ -102,13 +131,13 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
 // SINGLE
 const getSingleMatchFromDB = async (id: string) => {
   const match = await Match.findById(id)
-    .populate('homeTeam')
-    .populate('awayTeam')
-    .populate('referee')
-    .populate('winnerTeam');
+    .populate("homeTeam")
+    .populate("awayTeam")
+    .populate("referee")
+    .populate("winnerTeam");
 
   if (!match) {
-    throw new Error('Match not found');
+    throw new Error("Match not found");
   }
 
   return match;
@@ -119,7 +148,7 @@ const updateMatchToDB = async (id: string, payload: any) => {
   const match = await Match.findById(id);
 
   if (!match) {
-    throw new Error('Match not found');
+    throw new Error("Match not found");
   }
 
   if (
@@ -127,7 +156,7 @@ const updateMatchToDB = async (id: string, payload: any) => {
     payload.awayTeam &&
     payload.homeTeam === payload.awayTeam
   ) {
-    throw new Error('Same team cannot play match');
+    throw new Error("Same team cannot play match");
   }
 
   return await Match.findByIdAndUpdate(id, payload, {
@@ -141,7 +170,7 @@ const deleteMatchFromDB = async (id: string) => {
   const match = await Match.findById(id);
 
   if (!match) {
-    throw new Error('Match not found');
+    throw new Error("Match not found");
   }
 
   return await Match.findByIdAndDelete(id);
@@ -157,9 +186,18 @@ const toggleMatchStatusToDB = async (id: string) => {
 
   if (match.status === 'upcoming') {
     match.status = 'live';
-  } else if (match.status === 'live') {
+
+    //  LIVE HAPPENED → GIVE BOTH TEAM 1000 COIN
+    await Team.updateMany(
+      { _id: { $in: [match.homeTeam, match.awayTeam] } },
+      { $inc: { coin: 1000 } }
+    );
+
+  } 
+  else if (match.status === 'live') {
     match.status = 'finished';
-  } else {
+  } 
+  else {
     match.status = 'finished';
   }
 
@@ -168,6 +206,44 @@ const toggleMatchStatusToDB = async (id: string) => {
   return match;
 };
 
+
+const addMatchReviewToDB = async (
+  matchId: string,
+  payload: {
+    reviews: {
+      team: string;
+      rating: number;
+    }[];
+  },
+) => {
+  const match = await Match.findById(matchId);
+
+  if (!match) throw new Error('Match not found');
+
+  if (match.status !== 'finished') {
+    throw new Error('Only finished matches can be reviewed');
+  }
+
+  const reviewsWithCoin = payload.reviews.map((r) => ({
+    team: r.team,
+    rating: r.rating,
+    coinImpact: getRatingCoin(r.rating),
+  }));
+
+  match.matchReview.push(...reviewsWithCoin);
+
+  await match.save();
+
+  for (const r of reviewsWithCoin) {
+    await Team.findByIdAndUpdate(r.team, {
+      $inc: { coin: r.coinImpact },
+    });
+  }
+
+  return match;
+};
+
+
 export const MatchService = {
   createMatchToDB,
   getAllMatchesFromDB,
@@ -175,4 +251,6 @@ export const MatchService = {
   updateMatchToDB,
   deleteMatchFromDB,
   toggleMatchStatusToDB,
+  getMatchesByRefereeFromDB,
+  addMatchReviewToDB
 };

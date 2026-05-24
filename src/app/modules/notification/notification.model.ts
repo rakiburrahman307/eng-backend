@@ -1,41 +1,20 @@
-import { model, Schema } from 'mongoose';
-import { INotification, NotificationModel } from './notification.interface';
+import { Schema, model } from 'mongoose';
 
-const notificationSchema = new Schema<INotification, NotificationModel>(
-    {
-        text: {
-            type: String,
-            required: true
-        },
-        receiver: {
-            type: Schema.Types.ObjectId,
-            ref: 'User',
-            required: true
-        },
-        referenceId: {
-            type: String,
-            required: false
-        },
-        screen: {
-            type: String,
-            required: false
-        },
-        read: {
-            type: Boolean,
-            default: false
-        },
-        type: {
-            type: String,
-            enum: ['ADMIN'],
-            required: false
-        }
+const notificationSchema = new Schema(
+  {
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
     },
-    {
-        timestamps: true
-    }
+    title: String,
+    message: String,
+    read: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { timestamps: true }
 );
 
-export const Notification = model<INotification, NotificationModel>(
-    'Notification',
-    notificationSchema
-);
+export const Notification = model('Notification', notificationSchema);

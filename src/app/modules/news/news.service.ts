@@ -2,7 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiErrors';
 import { INews } from './news.interface';
 import { News } from './news.model';
-import QueryBuilder from '../../../util/queryBilter';
+import QueryBuilder from "../../../util/queryBuilder";
 
 // CREATE NEWS
 const createNewsToDB = async (payload: INews, userId: string) => {

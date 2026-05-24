@@ -2,7 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiErrors';
 import { IVideo } from './video.interface';
 import { Video } from './video.model';
-import QueryBuilder from '../../../util/queryBilter';
+import QueryBuilder from "../../../util/queryBuilder";
 
 // CREATE
 const createVideoToDB = async (payload: IVideo, userId: string) => {

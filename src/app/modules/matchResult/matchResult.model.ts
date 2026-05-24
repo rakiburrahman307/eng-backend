@@ -30,6 +30,7 @@ const matchResultSchema = new Schema(
       type: String,
       enum: [
         'goal',
+        'assist',
         'yellow_card',
         'red_card',
         'foul',

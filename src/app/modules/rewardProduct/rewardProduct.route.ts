@@ -15,7 +15,8 @@ router
     fileUploadHandler(),
     RewardProductController.createRewardProduct
   )
-  .get( RewardProductController.getAllRewardProducts);
+.get(RewardProductController.getAllRewardProducts);
+  
 
 // SINGLE + UPDATE + DELETE
 router

@@ -14,6 +14,8 @@ router
   )
   .get(auth(), LeagueTeamController.getLeagueTeams);
 
+
+  router.route("/all").get(LeagueTeamController.getAllLeagueWithTeams);
 // REMOVE
 router
   .route('/:id')

@@ -4,6 +4,9 @@ export type IPackage = {
     title: String;
     description: String;
     price: Number;
+    stripeProductId: String;
+    stripePriceId: String;
+    userType: 'Player' | 'Manager' | 'Club' | 'Referee' | 'Other';
     duration: '1 month' | '3 months' | '6 months' | '1 year'; 
     paymentType: 'Monthly' | 'Yearly';
     productId?: String;

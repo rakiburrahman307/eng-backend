@@ -56,12 +56,19 @@ const getSingleTransfer = catchAsync(async (req: Request, res: Response) => {
 });
 
 const approveTransfer = catchAsync(async (req: Request, res: Response) => {
+  console.log("🚀 APPROVE CONTROLLER HIT");
+  console.log("🆔 transferId:", req.params.id);
+
   const user = req.user as any;
+
+  console.log("👮 admin:", user);
 
   const result = await TransferService.approveTransferToDB(
     req.params.id as string,
     user._id
   );
+
+  console.log("🎉 APPROVE RESULT:", result?._id);
 
   sendResponse(res, {
     success: true,
@@ -69,14 +76,18 @@ const approveTransfer = catchAsync(async (req: Request, res: Response) => {
     message: 'Transfer approved',
     data: result,
   });
+
+  console.log("📤 Response sent");
 });
 
 const rejectTransfer = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as any;
 
+  const reason = req.body?.reason || "No reason provided";
+
   const result = await TransferService.rejectTransferToDB(
     req.params.id as string,
-    req.body.reason,
+    reason,
     user._id
   );
 
@@ -104,6 +115,17 @@ const withdrawTransfer = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getAvailablePlayers = catchAsync(async (req: Request, res: Response) => {
+  const result = await TransferService.getAvailablePlayersFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Available players retrieved',
+    data: result,
+  });
+});
+
 export const TransferController = {
   createTransfer,
   getAllTransfers,
@@ -111,5 +133,6 @@ export const TransferController = {
   getSingleTransfer,
   approveTransfer,
   rejectTransfer,
-  withdrawTransfer,
+    withdrawTransfer,
+  getAvailablePlayers
 };

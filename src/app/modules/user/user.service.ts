@@ -62,25 +62,41 @@ const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
 };
 
 const getUserProfileFromDB = async (user: JwtPayload) => {
-    console.log("🧠 SERVICE CALLED WITH USER:", user);
+  console.log("🧠 SERVICE CALLED WITH USER:", user);
 
-    const id = user?._id;
+  const id = user?._id;
 
-    if (!id) {
-        console.log("❌ No ID in token");
-        return null;
-    }
+  if (!id) {
+    console.log("❌ No ID in token");
+    return null;
+  }
 
-    console.log("🔎 Searching user by ID:", id);
+  console.log("🔎 Searching user by ID:", id);
 
-    const isExistUser = await User.isExistUserById(id);
+  const isExistUser = await User.findById(id);
 
-    if (!isExistUser) {
-        console.log("❌ USER NOT FOUND IN DB");
-        return null;
-    }
+  if (!isExistUser) {
+    console.log("❌ USER NOT FOUND IN USER COLLECTION");
+    return null;
+  }
 
-    return isExistUser;
+  const userDetails = await UserDetails.findOne({ userId: id }).select(
+    "firstName lastName status"
+  );
+
+  console.log("📄 UserDetails found:", !!userDetails);
+
+  return {
+    _id: isExistUser._id,
+      email: isExistUser.email,
+      userName: isExistUser.userName,
+    profile: isExistUser.profile,
+    role: isExistUser.role,
+
+    firstName: userDetails?.firstName || null,
+    lastName: userDetails?.lastName || null,
+    status: userDetails?.status || "PENDING",
+  };
 };
 
 const updateProfileToDB = async (user: JwtPayload, payload: Partial<IUser>): Promise<Partial<IUser | null>> => {

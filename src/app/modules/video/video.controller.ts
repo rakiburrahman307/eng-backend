@@ -10,18 +10,29 @@ const createVideo = catchAsync(async (req: Request, res: Response) => {
 
   const files = req.files as {
     video?: Express.Multer.File[];
+    image?: Express.Multer.File[];
   };
 
   const video = files?.video?.[0];
+  const thumbnail = files?.image?.[0];
 
   const data = req.body?.data ? JSON.parse(req.body.data) : {};
 
   const payload: any = { ...data };
 
+  // 🎥 Video Upload
   if (video) {
     payload.videoUrl = video.path.replace(/\\/g, '/').split('uploads')[1];
   }
 
+  // 🖼️ Thumbnail Upload
+  if (thumbnail) {
+    payload.thumbnail = thumbnail.path
+      .replace(/\\/g, '/')
+      .split('uploads')[1];
+  }
+
+  // 📅 Publish Logic
   if (payload.status === 'publish') {
     payload.publishDateTime = new Date();
   } else {

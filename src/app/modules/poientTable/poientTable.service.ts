@@ -1,98 +1,161 @@
+import { League } from '../league/league.model';
+import { LeagueTeam } from '../leagueTeam/leagueTeam.model';
 import { Match } from '../match/match.model';
 
-const getPointTableFromDB = async () => {
-  const matches = await Match.find({ status: 'finished' })
-    .populate('homeTeam', 'teamName shortName teamLogo')
-    .populate('awayTeam', 'teamName shortName teamLogo');
+const demoStandings = [
+  {
+    team: {
+      _id: 'demo1',
+      teamName: 'Demo FC',
+      shortName: 'DFC',
+      teamLogo: '',
+    },
+    played: 3,
+    win: 2,
+    draw: 1,
+    loss: 0,
+    goalsFor: 5,
+    goalsAgainst: 2,
+    goalDifference: 3,
+    points: 7,
+  },
+  {
+    team: {
+      _id: 'demo2',
+      teamName: 'Mock United',
+      shortName: 'MU',
+      teamLogo: '',
+    },
+    played: 3,
+    win: 1,
+    draw: 1,
+    loss: 1,
+    goalsFor: 3,
+    goalsAgainst: 4,
+    goalDifference: -1,
+    points: 4,
+  },
+];
+
+// =========================
+// SINGLE LEAGUE CALC
+// =========================
+const calculateLeague = async (league: any) => {
+  const leagueId = league._id.toString();
+
+  const leagueTeams = await LeagueTeam.find({ league: leagueId })
+    .populate('team', 'teamName shortName teamLogo');
+
+  const matches = await Match.find({
+    league: leagueId,
+    status: 'finished',
+  });
 
   const table: any = {};
 
+  for (const lt of leagueTeams) {
+    if (!lt.team) continue;
+
+    const team: any = lt.team;
+
+    table[team._id.toString()] = {
+      team,
+      played: 0,
+      win: 0,
+      draw: 0,
+      loss: 0,
+      goalsFor: 0,
+      goalsAgainst: 0,
+      goalDifference: 0,
+      points: 0,
+    };
+  }
+
   for (const match of matches) {
-    const home: any = match.homeTeam;
-    const away: any = match.awayTeam;
+    const homeId = match.homeTeam?.toString();
+    const awayId = match.awayTeam?.toString();
 
-    const homeId = home._id.toString();
-    const awayId = away._id.toString();
+    const homeScore = match.homeScore || 0;
+    const awayScore = match.awayScore || 0;
 
-    // INIT HOME TEAM
-    if (!table[homeId]) {
-      table[homeId] = {
-        team: home,
-        played: 0,
-        win: 0,
-        draw: 0,
-        loss: 0,
-        goalsFor: 0,
-        goalsAgainst: 0,
-        goalDifference: 0,
-        points: 0,
-      };
-    }
+    if (!table[homeId] || !table[awayId]) continue;
 
-    // INIT AWAY TEAM
-    if (!table[awayId]) {
-      table[awayId] = {
-        team: away,
-        played: 0,
-        win: 0,
-        draw: 0,
-        loss: 0,
-        goalsFor: 0,
-        goalsAgainst: 0,
-        goalDifference: 0,
-        points: 0,
-      };
-    }
+    table[homeId].played++;
+    table[awayId].played++;
 
-    // PLAYED
-    table[homeId].played += 1;
-    table[awayId].played += 1;
+    table[homeId].goalsFor += homeScore;
+    table[homeId].goalsAgainst += awayScore;
 
-    // GOALS
-    table[homeId].goalsFor += match.homeScore;
-    table[homeId].goalsAgainst += match.awayScore;
+    table[awayId].goalsFor += awayScore;
+    table[awayId].goalsAgainst += homeScore;
 
-    table[awayId].goalsFor += match.awayScore;
-    table[awayId].goalsAgainst += match.homeScore;
-
-    // GOAL DIFFERENCE
-    table[homeId].goalDifference =
-      table[homeId].goalsFor - table[homeId].goalsAgainst;
-
-    table[awayId].goalDifference =
-      table[awayId].goalsFor - table[awayId].goalsAgainst;
-
-    // RESULT
-    if (match.homeScore > match.awayScore) {
-      table[homeId].win += 1;
-      table[homeId].points += 2;
-
-      table[awayId].loss += 1;
-    } 
-    else if (match.awayScore > match.homeScore) {
-      table[awayId].win += 1;
-      table[awayId].points += 2;
-
-      table[homeId].loss += 1;
-    } 
-    else {
-      table[homeId].draw += 1;
-      table[awayId].draw += 1;
-
+    if (homeScore > awayScore) {
+      table[homeId].win++;
+      table[homeId].points += 3;
+      table[awayId].loss++;
+    } else if (awayScore > homeScore) {
+      table[awayId].win++;
+      table[awayId].points += 3;
+      table[homeId].loss++;
+    } else {
+      table[homeId].draw++;
+      table[awayId].draw++;
       table[homeId].points += 1;
       table[awayId].points += 1;
     }
   }
 
-  // SORTING
-  const result = Object.values(table).sort((a: any, b: any) => {
-    if (b.points !== a.points) return b.points - a.points;
-    return b.goalDifference - a.goalDifference;
-  });
+  const result = Object.values(table);
+
+  // fallback demo
+  if (!result.length) {
+    return demoStandings;
+  }
 
   return result;
 };
 
+// =========================
+// GROUPED RESPONSE
+// =========================
+const getAllLeaguesGrouped = async () => {
+  const leagues = await League.find();
+
+  const response = [];
+
+  for (const league of leagues) {
+    const standings = await calculateLeague(league);
+
+    response.push({
+      league,
+      standings,
+    });
+  }
+
+  return response;
+};
+
+// =========================
+// MAIN API
+// =========================
+const getPointTable = async (leagueId?: string) => {
+  if (leagueId) {
+    const league = await League.findById(leagueId);
+    if (!league) return [];
+
+    const standings = await calculateLeague(league);
+
+    return [
+      {
+        league,
+        standings,
+      },
+    ];
+  }
+
+  return getAllLeaguesGrouped();
+};
+
 export const PointTableService = {
-  getPointTableFromDB,
+  getPointTable,
 };

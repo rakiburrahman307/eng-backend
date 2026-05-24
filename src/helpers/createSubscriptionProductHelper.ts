@@ -4,7 +4,13 @@ import stripe from "../config/stripe";
 import ApiError from "../errors/ApiErrors";
 import config from "../config";
 
-export const createSubscriptionProduct = async ( payload: Partial<IPackage>): Promise<{ productId: string; paymentLink: string } | null> => {
+export const createSubscriptionProduct = async (
+    payload: Partial<IPackage>
+): Promise<{
+    productId: string;
+    priceId: string;
+    paymentLink: string;
+} | null> => {
 
     // Create Product in Stripe
     const product = await stripe.products.create({
@@ -12,10 +18,9 @@ export const createSubscriptionProduct = async ( payload: Partial<IPackage>): Pr
         description: payload.description as string,
     });
 
-    let interval: 'month' | 'year' = 'month'; // Default to 'month'
-    let intervalCount = 1; // Default to every 1 month
+    let interval: 'month' | 'year' = 'month';
+    let intervalCount = 1;
 
-    // Map duration to interval_count
     switch (payload.duration) {
         case '1 month':
             interval = 'month';
@@ -35,23 +40,25 @@ export const createSubscriptionProduct = async ( payload: Partial<IPackage>): Pr
             break;
         default:
             interval = 'month';
-            intervalCount = 1; // Defaults to 1 month if duration is not specified
+            intervalCount = 1;
     }
 
-
-    // Create Price for the Product
+    // Create Price
     const price = await stripe.prices.create({
         product: product.id,
-        unit_amount: Number(payload.price) * 100, // in cents
-        currency: 'usd', // or your chosen currency
-        recurring: { interval, interval_count: intervalCount },
+        unit_amount: Number(payload.price) * 100,
+        currency: 'usd',
+        recurring: {
+            interval,
+            interval_count: intervalCount,
+        },
     });
 
     if (!price) {
         throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create price in Stripe");
     }
 
-    // Create a Payment Link
+    // Create Payment Link
     const paymentLink = await stripe.paymentLinks.create({
         line_items: [
             {
@@ -62,11 +69,12 @@ export const createSubscriptionProduct = async ( payload: Partial<IPackage>): Pr
         after_completion: {
             type: 'redirect',
             redirect: {
-                url: `${config.stripe.paymentSuccess}`, // Redirect URL on successful payment
+                url: `${config.stripe.paymentSuccess}`,
             },
         },
         metadata: {
             productId: product.id,
+            priceId: price.id,   // 🔥 IMPORTANT ADD
         },
     });
 
@@ -74,5 +82,9 @@ export const createSubscriptionProduct = async ( payload: Partial<IPackage>): Pr
         throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create payment link");
     }
 
-    return { productId: product.id, paymentLink: paymentLink.url };
+    return {
+        productId: product.id,
+        priceId: price.id,   // 🔥 THIS FIXES YOUR MAIN BUG
+        paymentLink: paymentLink.url
+    };
 };

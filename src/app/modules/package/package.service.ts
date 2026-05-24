@@ -6,35 +6,35 @@ import mongoose from "mongoose";
 import { createSubscriptionProduct } from "../../../helpers/createSubscriptionProductHelper";
 import stripe from "../../../config/stripe";
 
-const createPackageToDB = async(payload: IPackage): Promise<IPackage | null>=>{
+const createPackageToDB = async (payload: IPackage): Promise<IPackage | null> => {
 
     const productPayload = {
         title: payload.title,
         description: payload.description,
         duration: payload.duration,
         price: Number(payload.price),
-    }
+    };
 
     const product = await createSubscriptionProduct(productPayload);
-    
 
-    if(!product){
-        throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create subscription product")
+    if (!product) {
+        throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create subscription product");
     }
 
-    if(product){
-        payload.paymentLink = product.paymentLink
-        payload.productId = product.productId
-    }
+    // ✅ FIX: map correctly
+    payload.paymentLink = product.paymentLink;
+    payload.stripeProductId = product.productId;
+    payload.stripePriceId = product.priceId;   // 🔥 MUST ADD THIS
 
     const result = await Package.create(payload);
-    if(!result){
+
+    if (!result) {
         await stripe.products.del(product.productId);
-        throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to created Package")
+        throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create Package");
     }
 
     return result;
-}
+};
 
 const updatePackageToDB = async(id: string, payload: IPackage): Promise<IPackage | null>=>{
 
@@ -56,17 +56,26 @@ const updatePackageToDB = async(id: string, payload: IPackage): Promise<IPackage
 }
 
 
-const getPackageFromDB = async(paymentType: string): Promise<IPackage[]>=>{
-    const query:any = {
-        status: "Active"
-    }
-    if(paymentType){
-        query.paymentType = paymentType
-    }
+const getPackageFromDB = async (
+  paymentType: string,
+  userType: string
+): Promise<IPackage[]> => {
 
-    const result = await Package.find(query);
-    return result;
-}
+  const query: any = {
+    status: "Active",
+  };
+
+  if (paymentType) {
+    query.paymentType = paymentType;
+  }
+
+  if (userType) {
+    query.userType = userType;
+  }
+
+  const result = await Package.find(query);
+  return result;
+};
 
 const getPackageDetailsFromDB = async(id: string): Promise<IPackage | null>=>{
     if(!mongoose.Types.ObjectId.isValid(id)){
@@ -94,10 +103,55 @@ const deletePackageToDB = async(id: string): Promise<IPackage | null>=>{
     return result;
 }
 
+
+
+const togglePackageStatusToDB = async (id: string): Promise<IPackage | null> => {
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid ID");
+    }
+
+    const packageData = await Package.findById(id);
+
+    if (!packageData) {
+        throw new ApiError(StatusCodes.NOT_FOUND, "Package not found");
+    }
+
+    const newStatus =
+        packageData.status === "Active" ? "Delete" : "Active";
+
+    const result = await Package.findByIdAndUpdate(
+        id,
+        { status: newStatus },
+        { new: true }
+    );
+
+    return result;
+};
+
+const getActivePackagesFromDB = async (
+  filters: { status?: string; userType?: string }
+): Promise<IPackage[]> => {
+  const query: any = {};
+
+  if (filters.status) {
+    query.status = filters.status;
+  }
+
+  if (filters.userType) {
+    query.userType = filters.userType;
+  }
+
+  const result = await Package.find(query);
+
+  return result;
+};
 export const PackageService = {
     createPackageToDB,
     updatePackageToDB,
     getPackageFromDB,
     getPackageDetailsFromDB,
-    deletePackageToDB
+    deletePackageToDB,
+    togglePackageStatusToDB,
+    getActivePackagesFromDB
 }

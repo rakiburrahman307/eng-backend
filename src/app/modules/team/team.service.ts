@@ -1,7 +1,7 @@
-import QueryBuilder from '../../../util/queryBilter';
-import { Team } from './team.model';
-import { UserDetails } from '../user/userDetails.model';
-import { ManagerTeam } from '../managerTeam/managerTeam.model';
+import QueryBuilder from "../../../util/queryBuilder";
+import { Team } from "./team.model";
+import { UserDetails } from "../user/userDetails.model";
+import { ManagerTeam } from "../managerTeam/managerTeam.model";
 
 // CREATE TEAM
 const createTeamToDB = async (payload: any) => {
@@ -11,7 +11,7 @@ const createTeamToDB = async (payload: any) => {
 // GET ALL TEAMS
 const getAllTeamsFromDB = async (query: Record<string, any>) => {
   const teamQuery = new QueryBuilder(Team.find(), query)
-    .search(['teamName', 'shortName', 'city', 'country'])
+    .search(["teamName", "shortName", "city", "country"])
     .filter()
     .sort()
     .paginate()
@@ -29,7 +29,7 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
     },
     {
       $group: {
-        _id: '$selectTeam',
+        _id: "$selectTeam",
         totalMembers: { $sum: 1 },
       },
     },
@@ -42,7 +42,7 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
     },
     {
       $group: {
-        _id: '$team',
+        _id: "$team",
         totalManagers: { $sum: 1 },
       },
     },
@@ -50,11 +50,11 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
 
   const result = teams.map((team) => {
     const members = memberCounts.find(
-      (m) => m._id.toString() === team._id.toString()
+      (m) => m._id.toString() === team._id.toString(),
     );
 
     const managers = managerCounts.find(
-      (m) => m._id.toString() === team._id.toString()
+      (m) => m._id.toString() === team._id.toString(),
     );
 
     return {
@@ -75,13 +75,14 @@ const getSingleTeamFromDB = async (id: string) => {
   const team = await Team.findById(id);
 
   if (!team) {
-    throw new Error('Team not found');
+    throw new Error("Team not found");
   }
 
-  const members = await UserDetails.find({ selectTeam: id })
-    .select('firstName lastName document position');
+  const members = await UserDetails.find({ selectTeam: id }).select(
+    "firstName lastName document position",
+  );
 
-  const managers = await ManagerTeam.find({ team: id }).populate('manager');
+  const managers = await ManagerTeam.find({ team: id }).populate("manager");
 
   return {
     ...team.toObject(),
@@ -97,7 +98,7 @@ const updateTeamToDB = async (id: string, payload: any) => {
   const team = await Team.findById(id);
 
   if (!team) {
-    throw new Error('Team not found');
+    throw new Error("Team not found");
   }
 
   return await Team.findByIdAndUpdate(id, payload, {
@@ -111,7 +112,7 @@ const deleteTeamFromDB = async (id: string) => {
   const team = await Team.findById(id);
 
   if (!team) {
-    throw new Error('Team not found');
+    throw new Error("Team not found");
   }
 
   // optional cleanup

@@ -21,6 +21,10 @@ const videoSchema = new Schema<IVideo, VideoModel>(
       type: String,
       required: true,
     },
+    thumbnail: {
+      type: String,
+      requred: false
+    },
 
     createdBy: {
       type: Schema.Types.ObjectId,

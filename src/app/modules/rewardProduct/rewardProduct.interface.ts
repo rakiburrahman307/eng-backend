@@ -7,7 +7,8 @@ export interface IRewardProduct {
 
   point: number;
 
-  status: 'publish' | 'unpublish';
+    status: 'publish' | 'unpublish';
+    productType: 'nonCoffee' | 'Coffee';
 
   createdBy: Types.ObjectId;
 

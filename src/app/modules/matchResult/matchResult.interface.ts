@@ -9,6 +9,7 @@ export interface IMatchResult {
 
   eventType:
     | 'goal'
+    | 'assist'
     | 'yellow_card'
     | 'red_card'
     | 'foul'

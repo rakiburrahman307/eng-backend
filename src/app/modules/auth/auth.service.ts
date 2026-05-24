@@ -217,7 +217,7 @@ const resetPasswordToDB = async ( token: string, payload: IAuthResetPassword ) =
 const changePasswordToDB = async ( user: JwtPayload, payload: IChangePassword) => {
 
     const { currentPassword, newPassword, confirmPassword } = payload;
-    const isExistUser = await User.findById(user.id).select('+password');
+    const isExistUser = await User.findById(user._id).select('+password');
     if (!isExistUser) {
         throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
     }
@@ -244,7 +244,7 @@ const changePasswordToDB = async ( user: JwtPayload, payload: IChangePassword) =
         password: hashPassword,
     };
 
-    await User.findOneAndUpdate({ _id: user.id }, updateData, { new: true });
+    await User.findOneAndUpdate({ _id: user._id }, updateData, { new: true });
 };
 
 

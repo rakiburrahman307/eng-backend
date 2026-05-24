@@ -6,7 +6,9 @@ import { PointTableService } from './poientTable.service';
 
 
 const getPointTable = catchAsync(async (req: Request, res: Response) => {
-  const result = await PointTableService.getPointTableFromDB();
+  const leagueId = req.query.leagueId as string | undefined;
+
+  const result = await PointTableService.getPointTable(leagueId);
 
   sendResponse(res, {
     success: true,

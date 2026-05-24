@@ -11,13 +11,22 @@ const router = express.Router();
 router
   .route('/')
   .post(
-    auth(USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.MANAGER),
+    auth( USER_ROLES.MANAGER),
     TransferController.createTransfer
   )
   .get(
-    auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+    auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN,),
     TransferController.getAllTransfers
-  );
+);
+  
+
+//avilabe
+
+router.get(
+  '/available',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER),
+  TransferController.getAvailablePlayers
+);
 
 //
 // MY SENT REQUESTS (PLAYER / MANAGER)
@@ -60,8 +69,12 @@ router.patch(
 //
 router.patch(
   '/:id/withdraw',
-  auth(USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS),
+  auth(USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS,USER_ROLES.MANAGER),
   TransferController.withdrawTransfer
 );
+
+// avilabe player
+
+
 
 export default router;

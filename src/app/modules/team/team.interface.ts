@@ -9,4 +9,5 @@ export interface ITeam {
   city: string;
   country: string;
   manager?: Types.ObjectId | null;
+  coin?: number;
 }

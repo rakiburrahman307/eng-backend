@@ -2,9 +2,10 @@ import { MatchResult } from './matchResult.model';
 import { PlayerStats } from '../playerStats/playerStats.model';
 
 import { StatusCodes } from 'http-status-codes';
-import QueryBuilder from '../../../util/queryBilter';
+import QueryBuilder from "../../../util/queryBuilder";
 import ApiError from '../../../errors/ApiErrors';
 import { Match } from '../match/match.model';
+import { Team } from '../team/team.model';
 
 // ========================== CREATE ==========================
 const createMatchResultToDB = async (payload: any) => {
@@ -249,14 +250,44 @@ const updateMatchWinner = async (matchId: any) => {
 
   let winnerTeam = null;
 
-  if (match.homeScore > match.awayScore) {
-    winnerTeam = match.homeTeam;
-  } else if (match.awayScore > match.homeScore) {
-    winnerTeam = match.awayTeam;
+  const homeTeamId = match.homeTeam;
+  const awayTeamId = match.awayTeam;
+
+  const homeScore = match.homeScore;
+  const awayScore = match.awayScore;
+
+  // 🟢 WIN CONDITION
+  if (homeScore > awayScore) {
+    winnerTeam = homeTeamId;
+  } else if (awayScore > homeScore) {
+    winnerTeam = awayTeamId;
   }
 
+  // update match winner
   await Match.findByIdAndUpdate(matchId, {
     winnerTeam,
+  });
+
+  // ===============================
+  // 💰 COIN DISTRIBUTION LOGIC
+  // ===============================
+
+  if (homeScore === awayScore) {
+    // 🔵 DRAW CASE → both team get 2k
+    await Team.findByIdAndUpdate(homeTeamId, {
+      $inc: { coins: 2000 },
+    });
+
+    await Team.findByIdAndUpdate(awayTeamId, {
+      $inc: { coins: 2000 },
+    });
+
+    return;
+  }
+
+  // 🟢 WIN CASE → winner gets 5000
+  await Team.findByIdAndUpdate(winnerTeam, {
+    $inc: { coins: 5000 },
   });
 };
 

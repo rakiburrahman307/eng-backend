@@ -4,6 +4,7 @@ export type IVideo = {
   createdBy?: Types.ObjectId | string;
   title: string;
   category: string;
+  thumbnail?: string;
   description: string;
   videoUrl: string;
   status: 'draft' | 'publish' | 'schedule';
