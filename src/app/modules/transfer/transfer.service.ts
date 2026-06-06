@@ -6,36 +6,62 @@ import { User } from '../user/user.model';
 import { ManagerTeam } from '../managerTeam/managerTeam.model';
 import { UserDetails } from '../user/userDetails.model';
 import { USER_ROLES } from '../../../enums/user';
+import mongoose from 'mongoose';
 
 // CREATE
 const createTransferToDB = async (payload: any, userId: string) => {
+  console.log("🚀 Transfer API called");
+  console.log("👉 userId (manager):", userId);
+  console.log("👉 payload:", payload);
+
+  // 1. Check player
   const player = await User.findById(payload.player);
 
+  console.log("👤 Player found:", player);
+
   if (!player) {
+    console.log("❌ Player not found in DB");
     throw new ApiError(StatusCodes.NOT_FOUND, 'Player not found');
   }
 
+  // 2. Get player details
   const userDetails = await UserDetails.findOne({
     userId: payload.player,
   });
 
+  console.log("📄 UserDetails:", userDetails);
+
   const fromTeam = userDetails?.selectTeam || null;
 
+  console.log("🏟️ fromTeam:", fromTeam);
+
+  // 3. Determine transfer type
   let transferType: any = 'CLUB_TO_CLUB';
 
   if (!fromTeam) {
     transferType = 'FREE_AGENT';
   }
 
+  console.log("🔁 transferType:", transferType);
+
+  // 4. Check manager permission
+  console.log("🔎 Checking manager permission...");
+  console.log("manager:", userId);
+  console.log("team:", payload.toTeam);
+
   const isManager = await ManagerTeam.findOne({
     manager: userId,
     team: payload.toTeam,
   });
 
+  console.log("🧾 isManager result:", isManager);
+
   if (!isManager) {
+    console.log("❌ NOT AUTHORIZED: Manager does not own this team");
     throw new ApiError(StatusCodes.FORBIDDEN, 'Not your team');
   }
 
+  // 5. Create transfer
   const transfer = await Transfer.create({
     player: payload.player,
     fromTeam,
@@ -43,6 +69,8 @@ const createTransferToDB = async (payload: any, userId: string) => {
     requestedBy: userId,
     transferType,
   });
+
+  console.log("✅ Transfer created:", transfer);
 
   return transfer;
 };
@@ -274,14 +302,214 @@ const withdrawTransferToDB = async (transferId: string, userId: string) => {
 };
 
 // avilabe 
-const getAvailablePlayersFromDB = async () => {
-  const players = await User.find({
-    role: USER_ROLES.OTHER_CLUBS,
-  })
-    .select('-password')
-    .sort({ createdAt: -1 });
+const getAvailablePlayersFromDB = async (
+  managerId: string,
+  page = 1,
+  limit = 10
+) => {
+  const managerObjectId = new mongoose.Types.ObjectId(managerId);
+  const skip = (page - 1) * limit;
 
-  return players;
+  const result = await User.aggregate([
+    // 1️⃣ Filter players
+    {
+      $match: {
+        role: USER_ROLES.OTHER_CLUBS,
+      },
+    },
+
+    // 2️⃣ Approved transfers
+    {
+      $lookup: {
+        from: "transfers",
+        let: { playerId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$player", "$$playerId"] },
+                  { $eq: ["$status", "APPROVED"] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "approvedTransfers",
+      },
+    },
+
+    // 3️⃣ Pending by this manager
+    {
+      $lookup: {
+        from: "transfers",
+        let: {
+          playerId: "$_id",
+          managerId: managerObjectId,
+        },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$player", "$$playerId"] },
+                  { $eq: ["$status", "PENDING"] },
+                  { $eq: ["$requestedBy", "$$managerId"] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "myPending",
+      },
+    },
+
+    // 4️⃣ Flags
+    {
+      $addFields: {
+        isApproved: { $gt: [{ $size: "$approvedTransfers" }, 0] },
+        isMyPending: { $gt: [{ $size: "$myPending" }, 0] },
+      },
+    },
+
+    // 5️⃣ Filters
+    {
+      $match: {
+        approvedTransfers: { $eq: [] },
+        myPending: { $eq: [] },
+      },
+    },
+
+    // 6️⃣ Join details
+    {
+      $lookup: {
+        from: "userdetails",
+        localField: "_id",
+        foreignField: "userId",
+        as: "details",
+      },
+    },
+
+    {
+      $unwind: {
+        path: "$details",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    // 7️⃣ Final projection
+    {
+      $project: {
+        _id: 1,
+        userName: 1,
+        profile: 1,
+        email: 1,
+        role: 1,
+        createdAt: 1,
+
+        firstName: "$details.firstName",
+        lastName: "$details.lastName",
+        phone: "$details.phone",
+        selectTeam: "$details.selectTeam",
+
+        isApproved: 1,
+        isMyPending: 1,
+      },
+    },
+
+    // 8️⃣ SORT
+    {
+      $sort: { createdAt: -1 },
+    },
+
+    // 9️⃣ PAGINATION (IMPORTANT)
+    {
+      $facet: {
+        data: [
+          { $skip: skip },
+          { $limit: limit },
+        ],
+        meta: [
+          { $count: "total" },
+        ],
+      },
+    },
+  ]);
+
+  const data = result[0]?.data || [];
+  const total = result[0]?.meta[0]?.total || 0;
+
+  return {
+      meta: {
+          total,
+          page,
+          limit,
+          totalPage: Math.ceil(total / limit),
+        },
+        data,
+  };
+};
+
+const getManagerTransferRequestsFromDB = async (
+  managerId: string,
+  query: Record<string, any>
+) => {
+  const managerTeam = await ManagerTeam.findOne({
+    manager: managerId,
+  });
+
+  if (!managerTeam) {
+    throw new ApiError(
+      StatusCodes.NOT_FOUND,
+      "Manager team not found"
+    );
+  }
+
+  const transfers = await Transfer.find({
+    toTeam: managerTeam.team,
+  })
+    .populate({
+      path: "player",
+      select: "email profile userName",
+    })
+    .populate({
+      path: "fromTeam",
+      select: "teamName",
+    })
+    .populate({
+      path: "toTeam",
+      select: "teamName",
+    })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  if (!transfers.length) return [];
+
+  // 🔥 ADD USERDETAILS MANUALLY
+  const userIds = transfers.map((t) => t.player?._id);
+
+  const details = await UserDetails.find({
+    userId: { $in: userIds },
+  });
+
+  const detailsMap = new Map(
+    details.map((d) => [d.userId.toString(), d])
+  );
+
+  const result = transfers.map((t) => {
+    const d = detailsMap.get(t.player?._id?.toString());
+
+    return {
+      ...t,
+      player: {
+        ...t.player,
+        firstName: d?.firstName || null,
+        lastName: d?.lastName || null,
+      },
+    };
+  });
+
+  return result;
 };
 
 export const TransferService = {
@@ -292,6 +520,7 @@ export const TransferService = {
   approveTransferToDB,
   rejectTransferToDB,
     withdrawTransferToDB,
-    getAvailablePlayersFromDB
+    getAvailablePlayersFromDB,
+    getManagerTransferRequestsFromDB
   
 };

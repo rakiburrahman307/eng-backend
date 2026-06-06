@@ -7,7 +7,9 @@ import { User } from "../user/user.model";
 // GET ALL USERS
 const getAllUsersFromDB = async (query: Record<string, any>) => {
   const userQuery = new QueryBuilder(
-    User.find().select('userName role profile verified'),
+    User.find({
+      role: { $ne: USER_ROLES.SUPER_ADMIN },
+    }).select('userName role profile verified'),
     query
   )
     .search(['userName', 'email', 'location'])

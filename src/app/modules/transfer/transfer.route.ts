@@ -19,6 +19,12 @@ router
     TransferController.getAllTransfers
 );
   
+// GET AVAILABLE PLAYERS FOR TRANSFER (ADMIN / MANAGER)
+router.get(
+  '/manager-requests',
+  auth(USER_ROLES.MANAGER),
+  TransferController.getManagerTransferRequests
+);
 
 //avilabe
 

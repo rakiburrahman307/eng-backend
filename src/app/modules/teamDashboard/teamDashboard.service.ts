@@ -9,18 +9,36 @@ const getTeamDashboardFromDB = async (teamId: string) => {
   const teamObjectId = new mongoose.Types.ObjectId(teamId);
 
   // 👥 PLAYERS
-  const playersAgg = await UserDetails.aggregate([
-    {
-      $match: { selectTeam: teamObjectId },
+ const playersAgg = await UserDetails.aggregate([
+  {
+    $match: { selectTeam: teamObjectId },
+  },
+
+  {
+    $lookup: {
+      from: "users",
+      localField: "userId",
+      foreignField: "_id",
+      as: "user",
     },
-    {
-      $project: {
-        firstName: 1,
-        lastName: 1,
-        position: 1,
-      },
+  },
+
+  {
+    $unwind: {
+      path: "$user",
+      preserveNullAndEmptyArrays: true,
     },
-  ]);
+  },
+
+  {
+    $project: {
+      firstName: 1,
+      lastName: 1,
+      profile: "$user.profile",
+      position: 1,
+    },
+  },
+]);
 
   const totalPlayers = playersAgg.length;
 

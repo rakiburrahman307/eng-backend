@@ -33,6 +33,10 @@ router
     
 router
     .route('/player')
+    .get(
+    auth(USER_ROLES.PLAYER),
+    UserController.getPlayer
+  )
     .post(
         auth(USER_ROLES.PLAYER),
         // validateRequest(UserValidation.createPlayerZodSchema),
@@ -48,6 +52,10 @@ router
   // manager 
 router
     .route('/manager')
+    .get(
+    auth(USER_ROLES.MANAGER),
+    UserController.getManager
+  )
     .post(
         auth(USER_ROLES.MANAGER),
         // validateRequest(UserValidation.createPlayerZodSchema),
@@ -62,6 +70,10 @@ router
 
 router
     .route('/referee')
+    .get(
+    auth(USER_ROLES.REFEREE),
+    UserController.getReferee
+  )
     .post(
         auth(USER_ROLES.REFEREE),
         // validateRequest(UserValidation.createPlayerZodSchema),
@@ -78,6 +90,10 @@ router
 
 router
     .route('/other-clubs')
+    .get(
+    auth(USER_ROLES.OTHER_CLUBS),
+    UserController.getOtherClub
+  )
     .post(
         auth(USER_ROLES.OTHER_CLUBS),
         // validateRequest(UserValidation.createPlayerZodSchema),
@@ -90,6 +106,13 @@ router
     UserController.updatePlayer
   );
 
+
+  router
+  .route('/player-details/:userId')
+  .get(
+    // auth(USER_ROLES.OTHER_CLUBS),
+    UserController.getOtherClubByUserId
+  );
     
 
 

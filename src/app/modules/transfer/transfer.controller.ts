@@ -116,15 +116,41 @@ const withdrawTransfer = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getAvailablePlayers = catchAsync(async (req: Request, res: Response) => {
-  const result = await TransferService.getAvailablePlayersFromDB();
+    if (!req.user) {
+        throw new Error("User not authenticated");
+    }
+  const managerId = req.user._id as string; // from auth middleware
+
+  const result = await TransferService.getAvailablePlayersFromDB(managerId);
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: 'Available players retrieved',
+    message: "Available players retrieved",
     data: result,
   });
 });
+
+
+
+const getManagerTransferRequests = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user as any;
+
+    const result =
+      await TransferService.getManagerTransferRequestsFromDB(
+        user._id,
+        req.query
+      );
+
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: 'Manager transfer requests retrieved',
+      data: result,
+    });
+  }
+);
 
 export const TransferController = {
   createTransfer,
@@ -134,5 +160,6 @@ export const TransferController = {
   approveTransfer,
   rejectTransfer,
     withdrawTransfer,
-  getAvailablePlayers
+    getAvailablePlayers,
+  getManagerTransferRequests
 };

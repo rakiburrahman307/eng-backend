@@ -9,6 +9,7 @@ import { emailTemplate } from "../../../shared/emailTemplate";
 import { emailHelper } from "../../../helpers/emailHelper";
 import unlinkFile from "../../../shared/unlinkFile";
 import { UserDetails } from "./userDetails.model";
+import { Subscription } from "../subscription/subscription.model";
 
 const createAdminToDB = async (payload: any): Promise<IUser> => {
 
@@ -80,22 +81,44 @@ const getUserProfileFromDB = async (user: JwtPayload) => {
     return null;
   }
 
+  // user details
   const userDetails = await UserDetails.findOne({ userId: id }).select(
     "firstName lastName status"
   );
 
   console.log("📄 UserDetails found:", !!userDetails);
 
+  // active subscription
+  const subscription = await Subscription.findOne({
+    user: id,
+    status: "active",
+  }).populate("package");
+
   return {
     _id: isExistUser._id,
-      email: isExistUser.email,
-      userName: isExistUser.userName,
+    email: isExistUser.email,
+    userName: isExistUser.userName,
     profile: isExistUser.profile,
     role: isExistUser.role,
 
     firstName: userDetails?.firstName || null,
     lastName: userDetails?.lastName || null,
     status: userDetails?.status || "PENDING",
+
+    subscription: subscription
+      ? {
+          _id: subscription._id,
+          price: subscription.price,
+          trxId: subscription.trxId,
+          subscriptionId: subscription.subscriptionId,
+          currentPeriodStart: subscription.currentPeriodStart,
+          currentPeriodEnd: subscription.currentPeriodEnd,
+          remaining: subscription.remaining,
+          status: subscription.status,
+
+          package: subscription.package,
+        }
+      : false,
   };
 };
 
@@ -152,11 +175,133 @@ const updatePlayerByUserId = async (
   return result;
 };
 
+
+
+const getPlayerByUserId = async (
+  userId: string
+) => {
+  const result = await UserDetails.findOne({
+    userId,
+  });
+
+  if (!result) {
+    throw new ApiError(
+      StatusCodes.NOT_FOUND,
+      "Player not found"
+    );
+  }
+
+  return result;
+};
+
+
+const getManagerByUserId = async (
+  userId: string
+) => {
+  const result = await UserDetails.findOne({
+    userId,
+  })
+    .populate('selectTeam', 'teamName')
+    .lean();
+
+  if (!result) {
+    throw new ApiError(
+      StatusCodes.NOT_FOUND,
+      'Manager not found'
+    );
+  }
+
+  return {
+    ...result,
+    selectTeam: result.selectTeam
+      ? {
+          id: (result.selectTeam as any)._id,
+          teamName: (result.selectTeam as any).teamName,
+        }
+      : null,
+  };
+};
+
+
+const getRefereeByUserId = async (
+  userId: string
+) => {
+  const result = await UserDetails.findOne({
+    userId,
+  });
+
+  if (!result) {
+    throw new ApiError(
+      StatusCodes.NOT_FOUND,
+      'Referee not found'
+    );
+  }
+
+  return result;
+};
+
+
+
+const getOtherClubByUserId = async (
+  userId: string
+) => {
+  const result = await UserDetails.findOne({
+    userId,
+  });
+
+  if (!result) {
+    throw new ApiError(
+      StatusCodes.NOT_FOUND,
+      'Other club not found'
+    );
+  }
+
+  return result;
+};
+
+
+
+const getOtherClubByUserIdUserId = async (userId: string) => {
+  const result = await UserDetails.findOne({ userId })
+    .populate({
+      path: 'selectTeam',
+      select: 'teamName _id',
+    })
+    .populate({
+      path: 'userId',
+      select: 'profile',
+    })
+    .lean();
+
+  if (!result) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'Other club not found');
+  }
+
+  return {
+    ...result,
+
+    // team only name
+      selectTeam: (result.selectTeam as any)?.teamName || null,
+      selectTeamId: (result.selectTeam as any)?._id || null,
+
+    // flatten user profile (NO userId object)
+    profile: (result.userId as any)?.profile || null,
+
+    // remove full user object
+    userId: undefined,
+  };
+};
+
 export const UserService = {
     createUserToDB,
     getUserProfileFromDB,
     updateProfileToDB,
     createAdminToDB,
     createPlayerToDB,
-    updatePlayerByUserId
+    updatePlayerByUserId,
+    getPlayerByUserId,
+    getManagerByUserId,
+    getRefereeByUserId,
+    getOtherClubByUserId,
+    getOtherClubByUserIdUserId
 };

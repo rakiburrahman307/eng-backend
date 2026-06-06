@@ -265,11 +265,140 @@ const updatePlayer = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+
+const getPlayer = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user as any;
+
+  if (!user?._id) {
+    throw new ApiError(
+      StatusCodes.UNAUTHORIZED,
+      "Unauthorized user"
+    );
+  }
+
+  const result = await UserService.getPlayerByUserId(
+    user._id
+  );
+
+  return sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Player retrieved successfully",
+    data: result,
+  });
+});
+
+const getManager = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user as any;
+
+    if (!user?._id) {
+      throw new ApiError(
+        StatusCodes.UNAUTHORIZED,
+        'Unauthorized user'
+      );
+    }
+
+    const result =
+      await UserService.getManagerByUserId(
+        user._id
+      );
+
+    return sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: 'Manager retrieved successfully',
+      data: result,
+    });
+  }
+);
+
+
+
+const getReferee = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user as any;
+
+    if (!user?._id) {
+      throw new ApiError(
+        StatusCodes.UNAUTHORIZED,
+        'Unauthorized user'
+      );
+    }
+
+    const result =
+      await UserService.getRefereeByUserId(
+        user._id
+      );
+
+    return sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: 'Referee retrieved successfully',
+      data: result,
+    });
+  }
+);
+
+
+const getOtherClub = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user as any;
+
+    if (!user?._id) {
+      throw new ApiError(
+        StatusCodes.UNAUTHORIZED,
+        'Unauthorized user'
+      );
+    }
+
+    const result =
+      await UserService.getOtherClubByUserId(
+        user._id
+      );
+
+    return sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: 'Other club retrieved successfully',
+      data: result,
+    });
+  }
+);
+
+
+
+const getOtherClubByUserId = catchAsync(
+  async (req: Request, res: Response) => {
+    const { userId } = req.params;
+
+    const result =
+      await UserService.getOtherClubByUserIdUserId(
+        userId as string
+      );
+
+    return sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: 'Other club retrieved successfully',
+      data: result,
+    });
+  }
+);
+
+
+
+
 export const UserController = { 
     createUser, 
     createAdmin, 
     getUserProfile, 
     updateProfile,
     createPlayer,
-    updatePlayer
+    updatePlayer,
+    getPlayer,
+    getManager,
+    getReferee,
+    getOtherClub,
+    getOtherClubByUserId
 };
