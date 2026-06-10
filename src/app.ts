@@ -15,16 +15,8 @@ app.post(
   '/api/v1/payment/webhook',
   express.raw({ type: 'application/json' }), // raw body required for Stripe
   (req, res, next) => {
-    console.log("🚀 Stripe webhook hit");
-    console.log("📦 Headers:", req.headers);
-    console.log("📏 Content-Type:", req.headers['content-type']);
-    console.log("🧾 Raw Body Type:", typeof req.body);
-
-
     if (Buffer.isBuffer(req.body)) {
-      console.log("📦 Raw Body Length:", req.body.length);
     }
-
     next(); // pass to actual handler
   },
   handleStripeWebhook

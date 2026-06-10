@@ -8,7 +8,7 @@ import { NewsService } from './news.service';
 const createNews = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as any;
 
-  console.log("🔥 USER:", user);
+
 
   const files = req.files as {
     image?: Express.Multer.File[];
@@ -16,11 +16,11 @@ const createNews = catchAsync(async (req: Request, res: Response) => {
 
   const image = files?.image?.[0];
 
-  console.log("🖼️ IMAGE FILE:", image);
+
 
   const data = req.body?.data ? JSON.parse(req.body.data) : {};
 
-  console.log("📦 RAW DATA:", data);
+
 
   const payload: any = {
     ...data,
@@ -29,7 +29,7 @@ const createNews = catchAsync(async (req: Request, res: Response) => {
   // ❌ remove user publish date input
   delete payload.publishDateTime;
 
-  console.log("🧹 AFTER DELETE publishDateTime:", payload);
+
 
   // ✅ image path clean
   if (image) {
@@ -38,7 +38,7 @@ const createNews = catchAsync(async (req: Request, res: Response) => {
       .split('uploads')[1];
   }
 
-  console.log("🖼️ FINAL IMAGE PATH:", payload.image);
+
 
   // 🔥 auto publish logic
   if (payload.status === 'publish') {
@@ -47,13 +47,11 @@ const createNews = catchAsync(async (req: Request, res: Response) => {
     payload.publishDateTime = null;
   }
 
-  console.log("⏰ FINAL PUBLISH DATE:", payload.publishDateTime);
 
-  console.log("🚀 FINAL PAYLOAD BEFORE DB:", payload);
 
   const result = await NewsService.createNewsToDB(payload, user._id);
 
-  console.log("✅ CREATED RESULT:", result);
+
 
   sendResponse(res, {
     success: true,
@@ -115,8 +113,6 @@ const updateNews = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as any;
   const userId = user._id;
 
-  console.log("🔐 USER FROM TOKEN:", user);
-  console.log("🆔 USER ID:", userId);
 
   const files = req.files as {
     image?: Express.Multer.File[];
@@ -126,8 +122,7 @@ const updateNews = catchAsync(async (req: Request, res: Response) => {
 
   const data = req.body?.data ? JSON.parse(req.body.data) : {};
 
-  console.log("📦 DATA:", data);
-  console.log("🖼️ IMAGE:", image);
+ 
 
   const payload: any = {
     ...data,
@@ -139,7 +134,7 @@ const updateNews = catchAsync(async (req: Request, res: Response) => {
       .split('uploads')[1];
   }
 
-  console.log("🚀 FINAL PAYLOAD:", payload);
+
 
   const result = await NewsService.updateNewsToDB(
     id,

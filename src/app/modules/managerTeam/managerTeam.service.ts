@@ -65,8 +65,25 @@ const removeManagerFromTeamFromDB = async (id: string) => {
   return data;
 };
 
+
+const getMyTeamsFromDB = async (managerId: string) => {
+  const teams = await ManagerTeam.find({
+    manager: managerId,
+  })
+    .populate({
+      path: 'team',
+    //   populate: {
+    //     path: 'club',
+    //   },
+    });
+
+  return teams;
+};
+
+
 export const ManagerTeamService = {
   assignManagerToTeamToDB,
   getAllManagerTeamsFromDB,
   removeManagerFromTeamFromDB,
+  getMyTeamsFromDB
 };

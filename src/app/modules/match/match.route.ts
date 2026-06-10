@@ -5,6 +5,12 @@ import { MatchController } from './match.controller';
 
 const router = express.Router();
 
+
+router.get(
+  '/manager-upcoming-matches',
+  auth(USER_ROLES.MANAGER),
+  MatchController.getUpcomingMatchesForManager,
+);
 // CREATE + GET ALL
 router
   .route('/')
@@ -46,5 +52,8 @@ router.patch(
   auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
   MatchController.toggleMatchStatus
 );
+
+
+
 
 export default router;

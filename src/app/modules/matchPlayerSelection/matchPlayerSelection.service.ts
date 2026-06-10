@@ -1,66 +1,150 @@
-import { Match } from "../match/match.model";
+import ApiError from "../../../errors/ApiErrors";
+import { UserDetails } from "../user/userDetails.model";
 import { MatchPlayerSelection } from "./matchPlayerSelection.model";
 
 // CREATE
 const createSelectionIntoDB = async (payload: any) => {
-  const result = await MatchPlayerSelection.create(payload);
-  return result;
-};
+  const { match, team, players, teamFormation } = payload;
 
-// GET (by match)
-const getSelectionsFromDB = async (matchId: string) => {
-  // 1. Get match with teams
-  const match = await Match.findById(matchId)
-    .populate("homeTeam")
-    .populate("awayTeam");
-
-  if (!match) {
-    throw new Error("Match not found");
+  if (!teamFormation) {
+    throw new ApiError(400, "Team formation is required");
   }
 
-  // 2. Get all selections for this match
-  const selections = await MatchPlayerSelection.find({ match: matchId })
-    .populate("player")
-    .populate("team");
+  if (!Array.isArray(players) || players.length === 0) {
+    throw new ApiError(400, "Players array is required");
+  }
 
-  // 3. Helper to group by team
-  const buildTeamData = (teamId: string) => {
-    const players = selections
-      .filter(
-        (s) => s.team && s.team._id.toString() === teamId
-      )
-      .map((s) => ({
-        player: s.player,
-        position: s.position,
-      }));
+  const unique = new Set(players.map((p: any) => p.player.toString()));
+  if (unique.size !== players.length) {
+    throw new ApiError(400, "Duplicate players not allowed");
+  }
 
-    return players;
-  };
-
-  // 4. Response structure
-  const response = {
+  return await MatchPlayerSelection.create({
     match,
-    homeTeam: {
-      team: match.homeTeam,
-      players: buildTeamData(match.homeTeam._id.toString()),
-    },
-    awayTeam: {
-      team: match.awayTeam,
-      players: buildTeamData(match.awayTeam._id.toString()),
-    },
-  };
-
-  return response;
+    team,
+    teamFormation, // ✅ ADD THIS
+    players: players.map((p: any) => ({
+      player: p.player,
+      position: p.position,
+      substitute: p.substitute ?? false,
+    })),
+  });
 };
 
 // GET ALL
-const getAllSelectionsFromDB = async () => {
-  const result = await MatchPlayerSelection.find()
-    .populate("match")
-    .populate("team")
-    .populate("player");
+// const getAllSelectionsFromDB = async () => {
+//   console.log("🚀 START getAllSelectionsFromDB");
 
-  return result;
+//   const result = await MatchPlayerSelection.find()
+//     .populate("match")
+//     .populate("team")
+//     .populate({
+//       path: "players.player",
+//       model: "UserDetails", // 🔥 IMPORTANT FIX
+//     })
+//     .lean();
+
+//   console.log("📦 TOTAL MATCHES:", result.length);
+
+//   if (!result.length) {
+//     console.log("❌ No data found");
+//     return [];
+//   }
+
+//   const formatted = result.map((item: any, itemIndex: number) => {
+//     console.log(`\n🔥 ITEM INDEX: ${itemIndex}`);
+//     console.log("📌 MATCH ID:", item._id);
+
+//     const players = (item.players || []).map((p: any, playerIndex: number) => {
+//       console.log(`👉 PLAYER INDEX: ${playerIndex}`);
+
+//       const userDetails = p.player;
+
+//       if (!userDetails) {
+//         console.log("❌ UserDetails NOT FOUND (populate failed)");
+//       }
+
+//       return {
+//         _id: userDetails?._id || null,
+
+//         firstName: userDetails?.firstName || null,
+//         lastName: userDetails?.lastName || null,
+
+//         position: p.position,
+//         substitute: p.substitute,
+
+//         profile: userDetails?.profile || null,
+//       };
+//     });
+
+//     return {
+//       _id: item._id,
+//       match: item.match,
+//       team: item.team,
+//       players,
+//       createdAt: item.createdAt,
+//       updatedAt: item.updatedAt,
+//     };
+//   });
+
+//   console.log("🎯 DONE");
+
+//   return formatted;
+// };
+
+
+const getAllSelectionsFromDB = async () => {
+  console.log("🚀 START getAllSelectionsFromDB");
+
+  // STEP 1: get selections + user IDs
+  const result = await MatchPlayerSelection.find()
+    .populate({
+      path: "players.player",
+      model: "User",
+      select: "_id profile",
+    })
+    .lean();
+
+  if (!result.length) return [];
+
+  // STEP 2: collect userIds
+  const userIds = result.flatMap((r: any) =>
+    r.players.map((p: any) => p.player?._id)
+  );
+
+  // STEP 3: get UserDetails (name info)
+  const userDetails = await UserDetails.find({
+    userId: { $in: userIds },
+  }).lean();
+
+  // STEP 4: map UserDetails by userId
+  const detailsMap = new Map(
+    userDetails.map((d: any) => [d.userId.toString(), d])
+  );
+
+  // STEP 5: merge both User + UserDetails
+  const formattedResult = result.map((match: any) => ({
+  ...match,
+  players: match.players.map((p: any) => {
+    const user = p.player;
+    const details = detailsMap.get(user?._id?.toString());
+
+    return {
+      position: p.position,
+      substitute: p.substitute,
+
+      // ✅ FLAT OUTPUT (NO nested object)
+      _id: user?._id,
+      profile: user?.profile,
+      firstName: details?.firstName,
+      lastName: details?.lastName,
+    };
+  }),
+}));
+
+  console.log("🎯 FINAL DATA:", JSON.stringify(formattedResult, null, 2));
+
+  return formattedResult;
 };
 
 // GET SINGLE
@@ -68,21 +152,135 @@ const getSingleSelectionFromDB = async (id: string) => {
   const result = await MatchPlayerSelection.findById(id)
     .populate("match")
     .populate("team")
-    .populate("player");
+    .populate("players.player");
+
+  if (!result) throw new ApiError(404, "Selection not found");
 
   return result;
+};
+
+// UPDATE
+const updateSelectionIntoDB = async (id: string, payload: any) => {
+  const updated = await MatchPlayerSelection.findByIdAndUpdate(
+    id,
+    {
+      $set: {
+        match: payload.match,
+        team: payload.team,
+        players: payload.players?.map((p: any) => ({
+          player: p.player,
+          position: p.position,
+          substitute: p.substitute ?? false,
+        })),
+      },
+    },
+    { new: true }
+  )
+    .populate("match")
+    .populate("team")
+    .populate("players.player");
+
+  if (!updated) throw new ApiError(404, "Selection not found");
+
+  return updated;
 };
 
 // DELETE
 const deleteSelectionFromDB = async (id: string) => {
-  const result = await MatchPlayerSelection.findByIdAndDelete(id);
-  return result;
+  const deleted = await MatchPlayerSelection.findByIdAndDelete(id);
+
+  if (!deleted) throw new ApiError(404, "Selection not found");
+
+  return deleted;
 };
+
+
+const getPlayersByMatchAndTeamFromDB = async (
+  matchId: string,
+  teamId: string
+) => {
+  if (!matchId || !teamId) {
+    throw new ApiError(400, "matchId and teamId are required");
+  }
+
+  console.log("🚀 START getPlayersByMatchAndTeamFromDB");
+
+  // STEP 1: GET LATEST DOCUMENT
+  const resultArr = await MatchPlayerSelection.find({
+    match: matchId,
+    team: teamId,
+  })
+    .sort({ createdAt: -1 }) // 👈 latest first
+    .limit(1)
+    .populate({
+      path: "match",
+    })
+    .populate({
+      path: "team",
+    })
+    .populate({
+      path: "players.player",
+      model: "User",
+      select: "_id profile",
+    })
+    .lean();
+
+  const result = resultArr[0];
+
+  if (!result) {
+    throw new ApiError(404, "No players found for this match and team");
+  }
+
+  // STEP 2: collect userIds
+  const userIds = result.players.map((p: any) => p.player?._id);
+
+  // STEP 3: get UserDetails
+  const userDetails = await UserDetails.find({
+    userId: { $in: userIds },
+  }).lean();
+
+  // STEP 4: map for quick lookup
+  const detailsMap = new Map(
+    userDetails.map((d: any) => [d.userId.toString(), d])
+  );
+
+  // STEP 5: FORMAT RESPONSE
+  const formattedResult = {
+    ...result,
+
+    // 👇 ensure always present
+    teamFormation: result.teamFormation || "4-4-2",
+
+    players: result.players.map((p: any) => {
+      const user = p.player;
+      const details = detailsMap.get(user?._id?.toString());
+
+      return {
+        position: p.position,
+        substitute: p.substitute,
+
+        _id: user?._id,
+        profile: user?.profile,
+        firstName: details?.firstName || null,
+        lastName: details?.lastName || null,
+      };
+    }),
+  };
+
+  console.log(
+    "🎯 FINAL DATA:",
+    JSON.stringify(formattedResult, null, 2)
+  );
+
+  return formattedResult;
+};
+
 
 export const MatchPlayerSelectionService = {
   createSelectionIntoDB,
-  getSelectionsFromDB,
   getAllSelectionsFromDB,
   getSingleSelectionFromDB,
-  deleteSelectionFromDB
+  updateSelectionIntoDB,
+    deleteSelectionFromDB,
+  getPlayersByMatchAndTeamFromDB
 };

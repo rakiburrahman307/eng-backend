@@ -63,21 +63,21 @@ const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
 };
 
 const getUserProfileFromDB = async (user: JwtPayload) => {
-  console.log("🧠 SERVICE CALLED WITH USER:", user);
+ 
 
   const id = user?._id;
 
   if (!id) {
-    console.log("❌ No ID in token");
+
     return null;
   }
 
-  console.log("🔎 Searching user by ID:", id);
+
 
   const isExistUser = await User.findById(id);
 
   if (!isExistUser) {
-    console.log("❌ USER NOT FOUND IN USER COLLECTION");
+
     return null;
   }
 
@@ -86,7 +86,7 @@ const getUserProfileFromDB = async (user: JwtPayload) => {
     "firstName lastName status"
   );
 
-  console.log("📄 UserDetails found:", !!userDetails);
+
 
   // active subscription
   const subscription = await Subscription.findOne({
@@ -177,11 +177,12 @@ const updatePlayerByUserId = async (
 
 
 
-const getPlayerByUserId = async (
-  userId: string
-) => {
+const getPlayerByUserId = async (userId: string) => {
   const result = await UserDetails.findOne({
     userId,
+  }).populate({
+    path: "selectTeam",
+    select: "teamName", // Team model e jei field e team name ache
   });
 
   if (!result) {

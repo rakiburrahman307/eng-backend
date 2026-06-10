@@ -2,7 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiErrors';
 import { League } from '../league/league.model';
 import { Team } from '../team/team.model';
-import { ILeagueTeam } from './leagueTeam.interface';
+import { IGroupedLeagueWithTeams, ILeague, ILeagueTeam, ITeam } from './leagueTeam.interface';
 import { LeagueTeam } from './leagueTeam.model';
 
 // ADD TEAM
@@ -116,44 +116,36 @@ const removeSingleTeamFromLeague = async (
 
 
 
-const getAllLeagueWithTeamsFromDB = async () => {
-  console.log("========== SERVICE START ==========");
-
+const getAllLeagueWithTeamsFromDB = async (): Promise<IGroupedLeagueWithTeams[]> => {
   const data = await LeagueTeam.find()
-    .populate("league")
-    .populate("team");
+    .populate<{ league: ILeague }>("league")
+    .populate<{ team: ITeam }>("team");
 
-  console.log("Raw records:", data.length);
-
-  const grouped = new Map<string, any>();
+  const grouped = new Map<string, IGroupedLeagueWithTeams>();
 
   data.forEach((item) => {
-    const league = item.league as any;
-    const team = item.team as any;
+    const league = item.league;
+    const team = item.team;
 
-    if (!league?._id) return;
+    if (!league || !(league as ILeague)._id) return;
 
-    const leagueId = league._id.toString();
+    const leagueObj = league as ILeague;
+    const teamObj = team as ITeam;
+
+    const leagueId = leagueObj._id.toString();
 
     if (!grouped.has(leagueId)) {
       grouped.set(leagueId, {
-        league,
+        league: leagueObj,
         teams: [],
       });
     }
 
-    grouped.get(leagueId).teams.push(team);
+    grouped.get(leagueId)!.teams.push(teamObj);
   });
 
-  const result = Array.from(grouped.values());
-
-  console.log("Final grouped result:", JSON.stringify(result, null, 2));
-
-  console.log("========== SERVICE END ==========");
-
-  return result;
+  return Array.from(grouped.values());
 };
-
 
 
 export const LeagueTeamService = {
@@ -161,6 +153,6 @@ export const LeagueTeamService = {
   getLeagueTeamsFromDB,
   removeTeamFromLeagueToDB,
   getTeamsByLeagueFromDB,
-    removeSingleTeamFromLeague,
+  removeSingleTeamFromLeague,
   getAllLeagueWithTeamsFromDB
 };

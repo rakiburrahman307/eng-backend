@@ -56,19 +56,18 @@ const getSingleTransfer = catchAsync(async (req: Request, res: Response) => {
 });
 
 const approveTransfer = catchAsync(async (req: Request, res: Response) => {
-  console.log("🚀 APPROVE CONTROLLER HIT");
-  console.log("🆔 transferId:", req.params.id);
+
 
   const user = req.user as any;
 
-  console.log("👮 admin:", user);
+
 
   const result = await TransferService.approveTransferToDB(
     req.params.id as string,
     user._id
   );
 
-  console.log("🎉 APPROVE RESULT:", result?._id);
+
 
   sendResponse(res, {
     success: true,
@@ -77,7 +76,6 @@ const approveTransfer = catchAsync(async (req: Request, res: Response) => {
     data: result,
   });
 
-  console.log("📤 Response sent");
 });
 
 const rejectTransfer = catchAsync(async (req: Request, res: Response) => {

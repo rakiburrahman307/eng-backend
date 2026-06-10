@@ -25,4 +25,9 @@ router
     ManagerTeamController.removeManagerFromTeam
   );
 
+  router.get(
+  '/my-teams',
+  auth(USER_ROLES.MANAGER),
+  ManagerTeamController.getMyTeams
+);
 export default router;

@@ -89,7 +89,7 @@ const removeSingleTeamFromLeague = catchAsync(async (req, res) => {
 
 
 const getAllLeagueWithTeams = catchAsync(async (req, res) => {
-  console.log("========== GET ALL LEAGUE TEAMS ==========");
+
 
   const result = await LeagueTeamService.getAllLeagueWithTeamsFromDB();
 

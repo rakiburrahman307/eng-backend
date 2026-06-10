@@ -123,6 +123,29 @@ const addMatchReview = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+
+const getUpcomingMatchesForManager = catchAsync(
+  async (req: Request, res: Response) => {
+    const managerId =
+      (req.user as any)?._id || (req.user as any)?.id;
+
+    const result =
+      await MatchService.getUpcomingMatchesForManagerFromDB(
+        managerId,
+        req.query,
+      );
+
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: 'Upcoming matches retrieved successfully',
+      pagination: result.meta,
+      data: result.result,
+    });
+  },
+);
+
+
 export const MatchController = {
   createMatch,
   getAllMatches,
@@ -131,5 +154,6 @@ export const MatchController = {
   deleteMatch,
   toggleMatchStatus,
   getMatchesForReferee,
-  addMatchReview
+  addMatchReview,
+  getUpcomingMatchesForManager
 };

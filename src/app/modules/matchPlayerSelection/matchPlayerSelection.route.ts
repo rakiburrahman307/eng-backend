@@ -6,14 +6,19 @@ const router = express.Router();
 // CREATE
 router.post("/", MatchPlayerSelectionController.createSelection);
 
-// GET BY MATCH
-router.get("/:matchId", MatchPlayerSelectionController.getSelections);
-
 // GET ALL
 router.get("/", MatchPlayerSelectionController.getAllSelections);
 
+router.get(
+  "/filter",
+  MatchPlayerSelectionController.getPlayersByMatchAndTeam
+);
+
 // GET SINGLE
-router.get("/single/:id", MatchPlayerSelectionController.getSingleSelection);
+router.get("/:id", MatchPlayerSelectionController.getSingleSelection);
+
+// UPDATE
+router.patch("/:id", MatchPlayerSelectionController.updateSelection);
 
 // DELETE
 router.delete("/:id", MatchPlayerSelectionController.deleteSelection);

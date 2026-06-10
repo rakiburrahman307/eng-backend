@@ -10,7 +10,39 @@ const getPlayerDashboardFromDB = async (playerId: string) => {
   // 👤 PLAYER INFO
   const player = await UserDetails.findOne({
     userId: playerObjectId,
-  }).populate("selectTeam");
+  })
+    .populate("selectTeam")
+    .populate({
+      path: "userId",
+      select: "profile",
+    });
+
+  if (!player) {
+    throw new Error("Player not found");
+  }
+
+  // Calculate age
+  const today = new Date();
+  const dob = new Date(player.dateOfBirth);
+
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+
+  if (
+    monthDiff < 0 ||
+    (monthDiff === 0 && today.getDate() < dob.getDate())
+  ) {
+    age--;
+  }
+
+  const playerData: any = player.toObject();
+
+  // Add profile and age separately
+  playerData.profile = playerData.userId?.profile || null;
+//   playerData.age = age;
+
+  // Optional: remove populated user object
+  playerData.userId = playerObjectId;
 
   // ⚽ MATCH STATS
   const stats = await MatchResult.aggregate([
@@ -49,7 +81,7 @@ const getPlayerDashboardFromDB = async (playerId: string) => {
     .populate("match team");
 
   return {
-    player,
+    player: playerData,
     stats: {
       goals,
       assists,

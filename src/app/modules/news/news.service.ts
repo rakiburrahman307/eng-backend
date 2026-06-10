@@ -81,9 +81,7 @@ const updateNewsToDB = async (
 ) => {
   const news = await News.findById(newsId);
 
-  console.log("📰 NEWS FROM DB:", news);
-  console.log("👤 CREATED BY:", news?.createdBy);
-  console.log("🔐 USER ID:", userId);
+
 
   if (!news) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'News not found');
@@ -91,12 +89,10 @@ const updateNewsToDB = async (
 
   const createdBy = news.createdBy ? news.createdBy.toString() : null;
 
-  console.log("🔎 COMPARE:");
-  console.log("DB:", createdBy);
-  console.log("USER:", userId);
+
 
   if (!createdBy || createdBy !== userId.toString()) {
-    console.log("❌ NOT MATCHED → BLOCKED");
+  
     throw new ApiError(StatusCodes.FORBIDDEN, 'Not allowed');
   }
 
@@ -104,7 +100,7 @@ const updateNewsToDB = async (
     new: true,
   });
 
-  console.log("✅ UPDATED RESULT:", result);
+
 
   return result;
 };

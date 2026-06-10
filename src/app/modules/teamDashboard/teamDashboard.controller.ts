@@ -18,6 +18,26 @@ const getTeamDashboard = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+
+const getClubOverview = catchAsync(
+  async (req: Request, res: Response) => {
+    const teamId = req.params.teamId as string;
+
+    const result =
+      await TeamDashboardService.getClubOverviewFromDB(
+        teamId
+      );
+
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "Club overview retrieved successfully",
+      data: result,
+    });
+  }
+);
+
 export const TeamDashboardController = {
   getTeamDashboard,
+  getClubOverview,
 };

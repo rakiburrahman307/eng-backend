@@ -4,6 +4,8 @@ import { LeagueTeam } from "../leagueTeam/leagueTeam.model";
 import { User } from "../user/user.model";
 import { Team } from "../team/team.model";
 import { getRatingCoin } from "../../../util/getRatingCoin";
+import mongoose from "mongoose";
+import { ManagerTeam } from "../managerTeam/managerTeam.model";
 
 
 
@@ -244,6 +246,50 @@ const addMatchReviewToDB = async (
 };
 
 
+
+const getUpcomingMatchesForManagerFromDB = async (
+  managerId: string,
+  query: Record<string, any>,
+) => {
+
+  const managerTeams = await ManagerTeam.find({
+    manager: new mongoose.Types.ObjectId(managerId),
+  });
+
+  const teamIds = managerTeams.map((item) => item.team);
+
+
+  const matchQuery = new QueryBuilder(
+    Match.find({
+      status: 'upcoming',
+      $or: [
+        { homeTeam: { $in: teamIds } },
+        { awayTeam: { $in: teamIds } },
+      ],
+    }),
+    query,
+  )
+    .filter()
+    .sort()
+    .paginate()
+    .fields();
+
+  const result = await matchQuery.modelQuery
+    .populate('league')
+    .populate('homeTeam')
+    .populate('awayTeam')
+    .populate('referee')
+    .populate('winnerTeam');
+
+  const meta = await matchQuery.getPaginationInfo();
+
+  return {
+    meta,
+    result,
+  };
+};
+
+
 export const MatchService = {
   createMatchToDB,
   getAllMatchesFromDB,
@@ -252,5 +298,6 @@ export const MatchService = {
   deleteMatchFromDB,
   toggleMatchStatusToDB,
   getMatchesByRefereeFromDB,
-  addMatchReviewToDB
+  addMatchReviewToDB,
+  getUpcomingMatchesForManagerFromDB
 };

@@ -13,8 +13,7 @@ const auth = (...args: any[]) => async (
   try {
     const authHeader = req.headers.authorization;
 
-    console.log("🔥 AUTH MIDDLEWARE HIT");
-    console.log("📦 authHeader:", authHeader);
+
 
     // ----------------------------------------
     // 1️⃣ Parse options
@@ -88,7 +87,7 @@ const auth = (...args: any[]) => async (
       role: decoded.role,
     };
 
-    console.log("✅ USER ATTACHED:", req.user);
+
 
     // ----------------------------------------
     // 6️⃣ Role check (only if roles given)

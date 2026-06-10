@@ -11,26 +11,11 @@ const createSelection = catchAsync(async (req: Request, res: Response) => {
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.CREATED,
-    message: "Player selected for match successfully",
+    message: "Players selected successfully",
     data: result,
   });
 });
 
-// GET
-const getSelections = catchAsync(async (req: Request, res: Response) => {
-  const result = await MatchPlayerSelectionService.getSelectionsFromDB(
-    req.params.matchId as string
-  );
-
-  sendResponse(res, {
-    success: true,
-    statusCode: StatusCodes.OK,
-    message: "Match selections retrieved successfully",
-    data: result,
-  });
-});
-
-// UPDATE
 // GET ALL
 const getAllSelections = catchAsync(async (req: Request, res: Response) => {
   const result = await MatchPlayerSelectionService.getAllSelectionsFromDB();
@@ -38,7 +23,7 @@ const getAllSelections = catchAsync(async (req: Request, res: Response) => {
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: "All selections retrieved successfully",
+    message: "All selections fetched",
     data: result,
   });
 });
@@ -52,7 +37,22 @@ const getSingleSelection = catchAsync(async (req: Request, res: Response) => {
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: "Selection retrieved successfully",
+    message: "Selection fetched",
+    data: result,
+  });
+});
+
+// UPDATE
+const updateSelection = catchAsync(async (req: Request, res: Response) => {
+  const result = await MatchPlayerSelectionService.updateSelectionIntoDB(
+    req.params.id as string,
+    req.body
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Selection updated",
     data: result,
   });
 });
@@ -66,16 +66,37 @@ const deleteSelection = catchAsync(async (req: Request, res: Response) => {
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: "Selection deleted successfully",
+    message: "Selection deleted",
     data: result,
   });
 });
 
 
+
+const getPlayersByMatchAndTeam = catchAsync(async (req: Request, res: Response) => {
+  const { matchId, teamId } = req.query;
+
+  const result =
+    await MatchPlayerSelectionService.getPlayersByMatchAndTeamFromDB(
+      matchId as string,
+      teamId as string
+    );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Players fetched successfully by match and team",
+    data: result,
+  });
+});
+
+
+
 export const MatchPlayerSelectionController = {
   createSelection,
-  getSelections,
   getAllSelections,
   getSingleSelection,
-  deleteSelection
+  updateSelection,
+    deleteSelection,
+  getPlayersByMatchAndTeam
 };

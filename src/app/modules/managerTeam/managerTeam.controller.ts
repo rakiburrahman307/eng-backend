@@ -47,8 +47,23 @@ const removeManagerFromTeam = catchAsync(async (req: Request, res: Response) => 
   });
 });
 
+const getMyTeams = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user as any;
+
+  const result = await ManagerTeamService.getMyTeamsFromDB(user._id);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Manager teams retrieved successfully',
+    data: result,
+  });
+});
+
+
 export const ManagerTeamController = {
   assignManagerToTeam,
   getAllManagerTeams,
   removeManagerFromTeam,
+  getMyTeams
 };

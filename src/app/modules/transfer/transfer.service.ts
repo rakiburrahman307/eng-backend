@@ -10,17 +10,15 @@ import mongoose from 'mongoose';
 
 // CREATE
 const createTransferToDB = async (payload: any, userId: string) => {
-  console.log("🚀 Transfer API called");
-  console.log("👉 userId (manager):", userId);
-  console.log("👉 payload:", payload);
+
 
   // 1. Check player
   const player = await User.findById(payload.player);
 
-  console.log("👤 Player found:", player);
+
 
   if (!player) {
-    console.log("❌ Player not found in DB");
+
     throw new ApiError(StatusCodes.NOT_FOUND, 'Player not found');
   }
 
@@ -29,11 +27,11 @@ const createTransferToDB = async (payload: any, userId: string) => {
     userId: payload.player,
   });
 
-  console.log("📄 UserDetails:", userDetails);
+
 
   const fromTeam = userDetails?.selectTeam || null;
 
-  console.log("🏟️ fromTeam:", fromTeam);
+
 
   // 3. Determine transfer type
   let transferType: any = 'CLUB_TO_CLUB';
@@ -42,22 +40,19 @@ const createTransferToDB = async (payload: any, userId: string) => {
     transferType = 'FREE_AGENT';
   }
 
-  console.log("🔁 transferType:", transferType);
 
   // 4. Check manager permission
-  console.log("🔎 Checking manager permission...");
-  console.log("manager:", userId);
-  console.log("team:", payload.toTeam);
+
 
   const isManager = await ManagerTeam.findOne({
     manager: userId,
     team: payload.toTeam,
   });
 
-  console.log("🧾 isManager result:", isManager);
+
 
   if (!isManager) {
-    console.log("❌ NOT AUTHORIZED: Manager does not own this team");
+
     throw new ApiError(StatusCodes.FORBIDDEN, 'Not your team');
   }
 
@@ -70,7 +65,7 @@ const createTransferToDB = async (payload: any, userId: string) => {
     transferType,
   });
 
-  console.log("✅ Transfer created:", transfer);
+
 
   return transfer;
 };
@@ -182,12 +177,97 @@ const getAllTransfersFromDB = async (query: Record<string, any>) => {
 };
 // MY TRANSFERS
 const getMyTransfersFromDB = async (userId: string) => {
-  return await Transfer.find({
-    requestedBy: userId,
-  })
-    .populate('player')
-    .populate('fromTeam')
-    .populate('toTeam');
+  const transfers = await Transfer.aggregate([
+    {
+      $match: {
+        requestedBy: new mongoose.Types.ObjectId(userId),
+      },
+    },
+
+    // User Details
+    {
+      $lookup: {
+        from: 'userdetails',
+        localField: 'player',
+        foreignField: 'userId',
+        as: 'playerDetails',
+      },
+    },
+    {
+      $unwind: {
+        path: '$playerDetails',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    // User Profile
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'player',
+        foreignField: '_id',
+        as: 'playerUser',
+      },
+    },
+    {
+      $unwind: {
+        path: '$playerUser',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    // From Team
+    {
+      $lookup: {
+        from: 'teams',
+        localField: 'fromTeam',
+        foreignField: '_id',
+        as: 'fromTeam',
+      },
+    },
+    {
+      $unwind: {
+        path: '$fromTeam',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    // To Team
+    {
+      $lookup: {
+        from: 'teams',
+        localField: 'toTeam',
+        foreignField: '_id',
+        as: 'toTeam',
+      },
+    },
+    {
+      $unwind: {
+        path: '$toTeam',
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    {
+      $addFields: {
+        player: {
+          _id: '$player',
+          firstName: '$playerDetails.firstName',
+          lastName: '$playerDetails.lastName',
+          profile: '$playerUser.profile',
+        },
+      },
+    },
+
+    {
+      $project: {
+        playerDetails: 0,
+        playerUser: 0,
+      },
+    },
+  ]);
+
+  return transfers;
 };
 
 // SINGLE
@@ -206,53 +286,46 @@ const getSingleTransferFromDB = async (id: string) => {
 
 // APPROVE
 const approveTransferToDB = async (id: string, adminId: string) => {
-  console.log("🚀 APPROVE TRANSFER START");
-  console.log("🆔 transferId:", id);
-  console.log("👮 adminId:", adminId);
+
 
   // 1. Find transfer
   const transfer = await Transfer.findById(id);
 
-  console.log("📦 transfer found:", transfer);
+
 
   if (!transfer) {
-    console.log("❌ Transfer not found");
+
     throw new ApiError(StatusCodes.NOT_FOUND, 'Transfer not found');
   }
 
-  console.log("🎯 player:", transfer.player);
-  console.log("🏁 fromTeam:", transfer.fromTeam);
-  console.log("🏁 toTeam:", transfer.toTeam);
-  console.log("📊 current status:", transfer.status);
 
   // 2. Find user details
   const userDetails = await UserDetails.findOne({
     userId: transfer.player,
   });
 
-  console.log("🧾 userDetails before update:", userDetails);
+
 
   if (!userDetails) {
-    console.log("❌ UserDetails not found for player");
+
     throw new ApiError(StatusCodes.NOT_FOUND, "UserDetails not found");
   }
 
   // 3. Update team
-  console.log("🔄 Updating player team...");
+
   userDetails.selectTeam = transfer.toTeam as any;
 
   await userDetails.save();
 
-  console.log("✅ Player team updated:", userDetails.selectTeam);
+
 
   // 4. Update transfer
-  console.log("✍️ Updating transfer status...");
+
   transfer.status = 'APPROVED';
   transfer.approvedBy = adminId as any;
 
   await transfer.save();
 
-  console.log("✅ Transfer approved successfully");
 
   return transfer;
 };

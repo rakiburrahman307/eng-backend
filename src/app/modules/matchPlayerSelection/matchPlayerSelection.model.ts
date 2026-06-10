@@ -1,5 +1,26 @@
 import { Schema, model } from "mongoose";
 
+const playerSelectionSchema = new Schema(
+  {
+    player: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    position: {
+      type: String,
+      required: true, // GK, DF, MF, FW
+    },
+
+    substitute: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { _id: false }
+);
+
 const matchPlayerSelectionSchema = new Schema(
   {
     match: {
@@ -12,17 +33,15 @@ const matchPlayerSelectionSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "Team",
       required: true,
-    },
-
-    player: {
-      type: Schema.Types.ObjectId,
-      ref: "UserDetails",
-      required: true,
-    },
-
-    position: {
+        },
+    teamFormation: {
       type: String,
-      required: true, // e.g. GK, DF, MF, FW
+      required: true, // e.g., "4-4-2", "4-3-3", "3-5-2"
+    },
+
+    players: {
+      type: [playerSelectionSchema],
+      required: true,
     },
   },
   {

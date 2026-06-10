@@ -67,7 +67,7 @@ const fileUploadHandler = () => {
 
   // file filter
   const fileFilter = (req: Request, file: any, cb: FileFilterCallback) => {
-    console.log("📁 FILE RECEIVED:", file.fieldname);
+
 
     // IMAGE validation
     if (file.fieldname === 'image') {

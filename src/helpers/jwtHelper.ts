@@ -14,9 +14,7 @@ const createToken = (
     throw new Error('❌ JWT expire time is missing');
   }
 
-  console.log('🔐 Creating JWT Token...');
-  console.log('Payload:', payload);
-  console.log('Expire Time:', expireTime);
+
 
   const token = jwt.sign(payload, secret, {
     expiresIn: expireTime as any,
