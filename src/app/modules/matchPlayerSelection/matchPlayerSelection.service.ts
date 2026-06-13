@@ -26,6 +26,7 @@ const createSelectionIntoDB = async (payload: any) => {
     players: players.map((p: any) => ({
       player: p.player,
       position: p.position,
+      positionIndex: p.positionIndex,
       substitute: p.substitute ?? false,
     })),
   });
@@ -33,7 +34,6 @@ const createSelectionIntoDB = async (payload: any) => {
 
 // GET ALL
 // const getAllSelectionsFromDB = async () => {
-//   console.log("🚀 START getAllSelectionsFromDB");
 
 //   const result = await MatchPlayerSelection.find()
 //     .populate("match")
@@ -44,24 +44,19 @@ const createSelectionIntoDB = async (payload: any) => {
 //     })
 //     .lean();
 
-//   console.log("📦 TOTAL MATCHES:", result.length);
-
 //   if (!result.length) {
-//     console.log("❌ No data found");
+
 //     return [];
 //   }
 
 //   const formatted = result.map((item: any, itemIndex: number) => {
-//     console.log(`\n🔥 ITEM INDEX: ${itemIndex}`);
-//     console.log("📌 MATCH ID:", item._id);
 
 //     const players = (item.players || []).map((p: any, playerIndex: number) => {
-//       console.log(`👉 PLAYER INDEX: ${playerIndex}`);
 
 //       const userDetails = p.player;
 
 //       if (!userDetails) {
-//         console.log("❌ UserDetails NOT FOUND (populate failed)");
+
 //       }
 
 //       return {
@@ -87,15 +82,10 @@ const createSelectionIntoDB = async (payload: any) => {
 //     };
 //   });
 
-//   console.log("🎯 DONE");
-
 //   return formatted;
 // };
 
-
 const getAllSelectionsFromDB = async () => {
-  console.log("🚀 START getAllSelectionsFromDB");
-
   // STEP 1: get selections + user IDs
   const result = await MatchPlayerSelection.find()
     .populate({
@@ -109,7 +99,7 @@ const getAllSelectionsFromDB = async () => {
 
   // STEP 2: collect userIds
   const userIds = result.flatMap((r: any) =>
-    r.players.map((p: any) => p.player?._id)
+    r.players.map((p: any) => p.player?._id),
   );
 
   // STEP 3: get UserDetails (name info)
@@ -119,30 +109,29 @@ const getAllSelectionsFromDB = async () => {
 
   // STEP 4: map UserDetails by userId
   const detailsMap = new Map(
-    userDetails.map((d: any) => [d.userId.toString(), d])
+    userDetails.map((d: any) => [d.userId.toString(), d]),
   );
 
   // STEP 5: merge both User + UserDetails
   const formattedResult = result.map((match: any) => ({
-  ...match,
-  players: match.players.map((p: any) => {
-    const user = p.player;
-    const details = detailsMap.get(user?._id?.toString());
+    ...match,
+    players: match.players.map((p: any) => {
+      const user = p.player;
+      const details = detailsMap.get(user?._id?.toString());
 
-    return {
-      position: p.position,
-      substitute: p.substitute,
+      return {
+        position: p.position,
+        substitute: p.substitute,
+        positionIndex: p.positionIndex,
 
-      // ✅ FLAT OUTPUT (NO nested object)
-      _id: user?._id,
-      profile: user?.profile,
-      firstName: details?.firstName,
-      lastName: details?.lastName,
-    };
-  }),
-}));
-
-  console.log("🎯 FINAL DATA:", JSON.stringify(formattedResult, null, 2));
+        // ✅ FLAT OUTPUT (NO nested object)
+        _id: user?._id,
+        profile: user?.profile,
+        firstName: details?.firstName,
+        lastName: details?.lastName,
+      };
+    }),
+  }));
 
   return formattedResult;
 };
@@ -170,11 +159,12 @@ const updateSelectionIntoDB = async (id: string, payload: any) => {
         players: payload.players?.map((p: any) => ({
           player: p.player,
           position: p.position,
+          positionIndex: p.positionIndex,
           substitute: p.substitute ?? false,
         })),
       },
     },
-    { new: true }
+    { new: true },
   )
     .populate("match")
     .populate("team")
@@ -194,16 +184,13 @@ const deleteSelectionFromDB = async (id: string) => {
   return deleted;
 };
 
-
 const getPlayersByMatchAndTeamFromDB = async (
   matchId: string,
-  teamId: string
+  teamId: string,
 ) => {
   if (!matchId || !teamId) {
     throw new ApiError(400, "matchId and teamId are required");
   }
-
-  console.log("🚀 START getPlayersByMatchAndTeamFromDB");
 
   // STEP 1: GET LATEST DOCUMENT
   const resultArr = await MatchPlayerSelection.find({
@@ -241,7 +228,7 @@ const getPlayersByMatchAndTeamFromDB = async (
 
   // STEP 4: map for quick lookup
   const detailsMap = new Map(
-    userDetails.map((d: any) => [d.userId.toString(), d])
+    userDetails.map((d: any) => [d.userId.toString(), d]),
   );
 
   // STEP 5: FORMAT RESPONSE
@@ -258,6 +245,7 @@ const getPlayersByMatchAndTeamFromDB = async (
       return {
         position: p.position,
         substitute: p.substitute,
+        positionIndex: p.positionIndex,
 
         _id: user?._id,
         profile: user?.profile,
@@ -267,20 +255,14 @@ const getPlayersByMatchAndTeamFromDB = async (
     }),
   };
 
-  console.log(
-    "🎯 FINAL DATA:",
-    JSON.stringify(formattedResult, null, 2)
-  );
-
   return formattedResult;
 };
-
 
 export const MatchPlayerSelectionService = {
   createSelectionIntoDB,
   getAllSelectionsFromDB,
   getSingleSelectionFromDB,
   updateSelectionIntoDB,
-    deleteSelectionFromDB,
-  getPlayersByMatchAndTeamFromDB
+  deleteSelectionFromDB,
+  getPlayersByMatchAndTeamFromDB,
 };

@@ -107,10 +107,10 @@ const calculateLeague = async (league: any) => {
 
   const result = Object.values(table);
 
-  // fallback demo
-  if (!result.length) {
-    return demoStandings;
-  }
+  // // fallback demo
+  // if (!result.length) {
+  //   return demoStandings;
+  // }
 
   return result;
 };

@@ -11,6 +11,10 @@ const playerSelectionSchema = new Schema(
     position: {
       type: String,
       required: true, // GK, DF, MF, FW
+        },
+    positionIndex: {
+      type: Number,
+      required: true, // To maintain the order of players in the same position
     },
 
     substitute: {

@@ -4,6 +4,7 @@ export interface IPlayerSelection {
   player: Types.ObjectId;
   position: string;
   substitute: boolean;
+  positionIndex: number;
 }
 
 export interface IMatchPlayerSelection {
