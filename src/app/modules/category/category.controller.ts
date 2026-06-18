@@ -38,7 +38,8 @@ const getCategories = catchAsync(async (req: Request, res: Response) => {
 })
 
 const updateCategory = catchAsync(async (req: Request, res: Response) => {
-  const id = req.params.id
+  const rawId = req.params.id
+  const id: string = Array.isArray(rawId) ? rawId[0] : String(rawId)
   const updateCategoryData = req.body;
 
   let image;
@@ -61,7 +62,8 @@ const updateCategory = catchAsync(async (req: Request, res: Response) => {
 })
 
 const deleteCategory = catchAsync(async (req: Request, res: Response) => {
-  const id = req.params.id
+  const rawId = req.params.id
+  const id: string = Array.isArray(rawId) ? rawId[0] : String(rawId)
   const result = await CategoryService.deleteCategoryToDB(id)
 
   sendResponse(res, {

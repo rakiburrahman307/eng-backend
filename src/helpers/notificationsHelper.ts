@@ -4,7 +4,7 @@ import { Notification } from "../app/modules/notification/notification.model";
 
 export const sendNotifications = async (data:any):Promise<INotification> =>{
 
-    const result = await Notification.create(data);
+    const result = await Notification.create(data) as INotification;
 
     //@ts-ignore
     const socketIo = global.io;

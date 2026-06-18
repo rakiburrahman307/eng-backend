@@ -1,12 +1,11 @@
 import { StatusCodes } from 'http-status-codes';
-import Stripe from 'stripe';
 import ApiError from '../errors/ApiErrors';
 import stripe from '../config/stripe';
 const User:any = "";
 const Subscription:any = "";
 const PricingPlan:any = "";
 
-export const handleSubscriptionUpdated = async (data: Stripe.Subscription) => {
+export const handleSubscriptionUpdated = async (data: any) => {
 
     // Retrieve the subscription from Stripe
     const subscription = await stripe.subscriptions.retrieve(data.id);
@@ -14,7 +13,7 @@ export const handleSubscriptionUpdated = async (data: Stripe.Subscription) => {
     // Retrieve the customer associated with the subscription
     const customer = (await stripe.customers.retrieve(
         subscription.customer as string
-    )) as Stripe.Customer;
+    )) as any;
 
     // Extract price ID from subscription items
     const priceId = subscription.items.data[0]?.price?.id;

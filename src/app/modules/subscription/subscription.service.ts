@@ -59,7 +59,7 @@ const subscriptionsFromDB = async (query: Record<string, unknown>): Promise<ISub
                 { title: { $regex: search, $options: "i" } },
                 { paymentType: { $regex: search, $options: "i" } },
             ]
-        }).distinct("_id");
+        } as any).distinct("_id");
     
         if (matchingPackageIds.length) {
             anyConditions.push({

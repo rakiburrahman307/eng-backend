@@ -1,11 +1,10 @@
 import { StatusCodes } from 'http-status-codes';
-import Stripe from 'stripe';
 import ApiError from '../errors/ApiErrors';
 import stripe from '../config/stripe';
 const User:any = "";
 const Subscription:any = "";
 
-export const handleSubscriptionDeleted = async (data: Stripe.Subscription) => {
+export const handleSubscriptionDeleted = async (data: any) => {
 
     // Retrieve the subscription from Stripe
     const subscription = await stripe.subscriptions.retrieve(data.id);

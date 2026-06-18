@@ -1,10 +1,11 @@
-import { Schema, model } from 'mongoose';
+import { Schema, model } from "mongoose";
+import { INotification } from "./notification.interface";
 
-const notificationSchema = new Schema(
+const notificationSchema = new Schema<INotification>(
   {
     user: {
       type: Schema.Types.ObjectId,
-      ref: 'User',
+      ref: "User",
       required: true,
     },
     title: String,
@@ -14,7 +15,12 @@ const notificationSchema = new Schema(
       default: false,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-export const Notification = model('Notification', notificationSchema);
+export const Notification = model<INotification>(
+  "Notification",
+  notificationSchema
+);

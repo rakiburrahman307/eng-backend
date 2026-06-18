@@ -2,10 +2,10 @@ import { z } from 'zod';
 
 const createAdminZodSchema = z.object({
     body: z.object({
-        name: z.string({ required_error: 'Name is required' }),
-        email: z.string({ required_error: 'Email is required' }).email({ message: 'Invalid email address' }),
-        password: z.string({ required_error: 'Password is required' }),
-        role: z.string({ required_error: 'Role is required' }),
+        name: z.string().optional().refine((val) => val !== undefined, { message: 'Name is required' }),
+        email: z.string().email({ message: 'Invalid email address' }).refine((val) => val !== undefined, { message: 'Email is required' }),
+        password: z.string().refine((val) => val !== undefined, { message: 'Password is required' }),
+        role: z.string().refine((val) => val !== undefined, { message: 'Role is required' }),
     })
 });
 

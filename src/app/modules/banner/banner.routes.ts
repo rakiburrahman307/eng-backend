@@ -12,7 +12,7 @@ router.route('/')
         BannerController.createBanner
     )
     .get(
-        auth(USER_ROLES.USER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), 
+        auth(USER_ROLES.PLAYER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), 
         BannerController.getAllBanner
     );
 

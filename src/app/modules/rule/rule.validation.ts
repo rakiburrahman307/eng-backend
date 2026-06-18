@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 const createPrivacyPolicyZodSchema = z.object({
   body: z.object({
-    content: z.string({ required_error: 'Privacy policy is required' }),
+    content: z.string({ error: 'Privacy policy is required' }),
   }),
 })
 const updatePrivacyPolicyZodSchema = z.object({
@@ -13,7 +13,7 @@ const updatePrivacyPolicyZodSchema = z.object({
 
 const createTermsAndConditionZodSchema = z.object({
   body: z.object({
-    content: z.string({ required_error: 'Terms and conditions is required' }),
+    content: z.string({ error: 'Terms and conditions is required' }),
   }),
 })
 const updateTermsAndConditionZodSchema = z.object({
@@ -24,7 +24,7 @@ const updateTermsAndConditionZodSchema = z.object({
 
 const createAboutZodSchema = z.object({
   body: z.object({
-    content: z.string({ required_error: 'About is required' }),
+    content: z.string({ error: 'About is required' }),
   }),
 })
 

@@ -43,7 +43,7 @@ const getAllBanner = catchAsync(async (req:Request, res:Response) => {
   
 const updateBanner =catchAsync(async (req:Request, res:Response) => {
 
-    const id = req.params.id;
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const updateData = req.body;
     let image;
 
@@ -66,7 +66,7 @@ const updateBanner =catchAsync(async (req:Request, res:Response) => {
   
 const deleteBanner = catchAsync(async (req:Request, res:Response) => {
     
-    const id = req.params.id;
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const result = await BannerService.deleteBannerToDB(id);
   
     sendResponse(res, {

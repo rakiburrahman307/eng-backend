@@ -15,6 +15,13 @@ export interface IMatchResult {
     | 'foul'
     | 'substitution';
 
+  // 🔥 NEW: event details meta
+  eventMeta?: {
+    goalType?: 'normal' | 'penalty' | 'header' | 'own_goal' | 'free_kick';
+    cardType?: 'yellow' | 'red';
+    substitutionType?: 'in' | 'out';
+  };
+
   minute: number;
 
   addedBy: Types.ObjectId;

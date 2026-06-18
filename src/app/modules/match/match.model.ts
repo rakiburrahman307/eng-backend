@@ -43,7 +43,7 @@ const matchSchema = new Schema(
 
     status: {
       type: String,
-      enum: ['upcoming', 'live', 'finished', 'cancelled'],
+      enum: ['upcoming', 'live','half_time', 'finished', 'cancelled'],
       default: 'upcoming',
     },
 

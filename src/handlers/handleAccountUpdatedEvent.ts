@@ -1,10 +1,9 @@
 import { StatusCodes } from 'http-status-codes';
-import Stripe from 'stripe';
 import ApiError from '../errors/ApiErrors';
 import stripe from '../config/stripe';
 const User:any = "";
 
-export const handleAccountUpdatedEvent = async (data: Stripe.Account) => {
+export const handleAccountUpdatedEvent = async (data: { id: string; charges_enabled?: boolean }) => {
 
     // Find the user by Stripe account ID
     const existingUser = await User.findOne({ 'stripeAccountInfo.accountId': data.id });

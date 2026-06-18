@@ -49,7 +49,7 @@ router
 // TOGGLE STATUS
 router.patch(
   '/toggle-status/:id',
-  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.REFEREE),
   MatchController.toggleMatchStatus
 );
 

@@ -13,7 +13,7 @@ export interface IMatch {
 
   referee: Types.ObjectId;
 
-  status: 'upcoming' | 'live' | 'finished' | 'cancelled';
+  status: 'upcoming' | 'live' | 'half_time' | 'finished' | 'cancelled';
 
   homeScore: number;
 

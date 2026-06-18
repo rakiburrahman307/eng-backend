@@ -17,7 +17,7 @@ const subscriptions = catchAsync( async(req: Request, res: Response)=>{
 });
 
 const subscriptionDetails = catchAsync( async(req: Request, res: Response)=>{
-    const result = await SubscriptionService.subscriptionDetailsFromDB(req.user);
+    const result = await SubscriptionService.subscriptionDetailsFromDB(req.user!);
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
@@ -28,7 +28,8 @@ const subscriptionDetails = catchAsync( async(req: Request, res: Response)=>{
 });
 
 const companySubscriptionDetails= catchAsync( async(req: Request, res: Response)=>{
-    const result = await SubscriptionService.companySubscriptionDetailsFromDB(req.params.id);
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const result = await SubscriptionService.companySubscriptionDetailsFromDB(id);
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,

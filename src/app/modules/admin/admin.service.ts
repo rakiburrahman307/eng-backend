@@ -1,7 +1,8 @@
 import { StatusCodes } from 'http-status-codes';
-import ApiError from '../../../errors/ApiError';
+
 import { IUser } from '../user/user.interface';
 import { User } from '../user/user.model';
+import ApiError from '../../../errors/ApiErrors';
 
 const createAdminToDB = async (payload: IUser): Promise<IUser> => {
     const createAdmin: any = await User.create(payload);

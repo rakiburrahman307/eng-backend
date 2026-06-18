@@ -3,14 +3,9 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-
-if (!stripeSecretKey) {
-    throw new Error("STRIPE_SECRET_KEY is missing in environment variables");
-}
-
-const stripe = new Stripe(stripeSecretKey, {
-    apiVersion: "2024-06-20"
+const StripeCtor = (Stripe as any).default ?? Stripe;
+const stripe = new StripeCtor(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
 });
 
 export default stripe;

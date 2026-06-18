@@ -158,13 +158,19 @@ const getMatchWiseResultsFromDB = async (matchId: string) => {
 // 🔥 PLAYER STATS
 // ============================================================
 const applyPlayerStats = async (payload: any) => {
-  const { player, team, eventType } = payload;
+  const { player, team, eventType, eventMeta } = payload;
 
   if (!player) return;
 
   const inc: any = {};
 
-  if (eventType === 'goal') inc.goals = 1;
+  if (eventType === 'goal') {
+    // ❌ own goal player goal count করবে না
+    if (eventMeta?.goalType !== 'own_goal') {
+      inc.goals = 1;
+    }
+  }
+
   if (eventType === 'yellow_card') inc.yellowCards = 1;
   if (eventType === 'red_card') inc.redCards = 1;
 
@@ -200,20 +206,32 @@ const rollbackPlayerStats = async (payload: any) => {
 // 🔥 MATCH SCORE LOGIC (NEW)
 // ============================================================
 const applyMatchScore = async (payload: any) => {
-  const { match, team, eventType } = payload;
+  const { match, team, eventType, eventMeta } = payload;
 
   if (eventType !== 'goal') return;
 
   const matchData = await Match.findById(match);
   if (!matchData) return;
 
-  if (String(matchData.homeTeam) === String(team)) {
+  // ❌ own goal হলে score reverse team এ যাবে
+  const isOwnGoal = eventMeta?.goalType === 'own_goal';
+
+  let scoringTeam = team;
+
+  if (isOwnGoal) {
+    scoringTeam =
+      String(matchData.homeTeam) === String(team)
+        ? matchData.awayTeam
+        : matchData.homeTeam;
+  }
+
+  if (String(matchData.homeTeam) === String(scoringTeam)) {
     await Match.findByIdAndUpdate(match, {
       $inc: { homeScore: 1 },
     });
   }
 
-  if (String(matchData.awayTeam) === String(team)) {
+  if (String(matchData.awayTeam) === String(scoringTeam)) {
     await Match.findByIdAndUpdate(match, {
       $inc: { awayScore: 1 },
     });
@@ -221,20 +239,31 @@ const applyMatchScore = async (payload: any) => {
 };
 
 const rollbackMatchScore = async (payload: any) => {
-  const { match, team, eventType } = payload;
+  const { match, team, eventType, eventMeta } = payload;
 
   if (eventType !== 'goal') return;
 
   const matchData = await Match.findById(match);
   if (!matchData) return;
 
-  if (String(matchData.homeTeam) === String(team)) {
+  const isOwnGoal = eventMeta?.goalType === 'own_goal';
+
+  let scoringTeam = team;
+
+  if (isOwnGoal) {
+    scoringTeam =
+      String(matchData.homeTeam) === String(team)
+        ? matchData.awayTeam
+        : matchData.homeTeam;
+  }
+
+  if (String(matchData.homeTeam) === String(scoringTeam)) {
     await Match.findByIdAndUpdate(match, {
       $inc: { homeScore: -1 },
     });
   }
 
-  if (String(matchData.awayTeam) === String(team)) {
+  if (String(matchData.awayTeam) === String(scoringTeam)) {
     await Match.findByIdAndUpdate(match, {
       $inc: { awayScore: -1 },
     });

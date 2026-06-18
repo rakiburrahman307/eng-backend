@@ -189,22 +189,26 @@ const toggleMatchStatusToDB = async (id: string) => {
   if (match.status === 'upcoming') {
     match.status = 'live';
 
-    //  LIVE HAPPENED → GIVE BOTH TEAM 1000 COIN
+    // LIVE START → GIVE BOTH TEAM 1000 COIN
     await Team.updateMany(
       { _id: { $in: [match.homeTeam, match.awayTeam] } },
       { $inc: { coin: 1000 } }
     );
-
   } 
+  
   else if (match.status === 'live') {
+    match.status = 'half_time';
+  } 
+  
+  else if (match.status === 'half_time') {
     match.status = 'finished';
   } 
+  
   else {
     match.status = 'finished';
   }
 
   await match.save();
-
   return match;
 };
 
