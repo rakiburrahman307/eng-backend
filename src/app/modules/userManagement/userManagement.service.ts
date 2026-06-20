@@ -101,11 +101,53 @@ const getAllRefereesFromDB = async () => {
 
   return result;
 };
+const getAllManagersFromDB = async () => {
+  const result = await User.aggregate([
+    {
+      $match: {
+        role: USER_ROLES.MANAGER,
+      },
+    },
+
+    {
+      $lookup: {
+        from: "userdetails",
+        localField: "_id",
+        foreignField: "userId",
+        as: "details",
+      },
+    },
+
+    {
+      $unwind: {
+        path: "$details",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    {
+      $project: {
+        _id: 1,
+        userName: 1,
+        firstName: {
+          $ifNull: ["$details.firstName", null],
+        },
+        lastName: {
+          $ifNull: ["$details.lastName", null],
+        },
+
+      },
+    },
+  ]);
+
+  return result;
+};
 
 
 export const UserManagementService = {
   getAllUsersFromDB,
   toggleVerifiedToDB,
     deleteUserFromDB,
-  getAllRefereesFromDB
+  getAllRefereesFromDB,
+  getAllManagersFromDB
 };

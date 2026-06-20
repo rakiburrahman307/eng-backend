@@ -11,11 +11,12 @@ const managerTeamSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Team',
       required: true,
+      unique: true,
     },
   },
   { timestamps: true }
 );
 
-managerTeamSchema.index({ manager: 1, team: 1 }, { unique: true });
+
 
 export const ManagerTeam = model('ManagerTeam', managerTeamSchema);

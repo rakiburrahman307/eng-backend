@@ -5,40 +5,39 @@ import { User } from '../user/user.model';
 import { Team } from '../team/team.model';
 
 // ASSIGN MANAGER TO TEAM
-const assignManagerToTeamToDB = async (payload: any, adminId: string) => {
+const assignManagerToTeamToDB = async (
+  payload: any,
+  adminId: string
+) => {
   const { manager, team } = payload;
 
-  // check manager user exists
+  // Check manager exists
   const managerUser = await User.findById(manager);
 
   if (!managerUser) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Manager not found');
   }
 
-  // check team exists
+  // Check team exists
   const teamData = await Team.findById(team);
 
   if (!teamData) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Team not found');
   }
 
-  // check duplicate
-  const alreadyExists = await ManagerTeam.findOne({
-    manager,
-    team,
-  });
-
-  if (alreadyExists) {
-    throw new ApiError(
-      StatusCodes.BAD_REQUEST,
-      'Manager already assigned to this team'
-    );
-  }
-
-  const result = await ManagerTeam.create({
-    manager,
-    team,
-  });
+  // Create if not exists, otherwise replace manager
+  const result = await ManagerTeam.findOneAndUpdate(
+    { team },
+    {
+      manager,
+      team,
+    },
+    {
+      new: true,
+      upsert: true,
+      runValidators: true,
+    }
+  );
 
   return result;
 };

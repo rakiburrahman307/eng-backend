@@ -59,10 +59,22 @@ const getAllReferees = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getAllManagers = catchAsync(async (req: Request, res: Response) => {
+  const result = await UserManagementService.getAllManagersFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Referees retrieved successfully",
+    data: result,
+  });
+});
+
 
 export const UserManagementController = {
   getAllUsers,
   toggleVerified,
     deleteUser,
-  getAllReferees
+  getAllReferees,
+  getAllManagers
 };

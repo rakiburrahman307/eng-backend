@@ -165,41 +165,57 @@ const applyPlayerStats = async (payload: any) => {
   const inc: any = {};
 
   if (eventType === 'goal') {
-    // ❌ own goal player goal count করবে না
     if (eventMeta?.goalType !== 'own_goal') {
       inc.goals = 1;
+    }
+
+    // 🔥 ASSIST ADD
+    if (eventMeta?.assist) {
+      await PlayerStats.findOneAndUpdate(
+        { player: eventMeta.assist },
+        { $inc: { assists: 1 }, $set: { team } },
+        { upsert: true, new: true }
+      );
     }
   }
 
   if (eventType === 'yellow_card') inc.yellowCards = 1;
   if (eventType === 'red_card') inc.redCards = 1;
 
-  if (Object.keys(inc).length === 0) return;
-
-  await PlayerStats.findOneAndUpdate(
-    { player },
-    { $inc: inc, $set: { team } },
-    { upsert: true, new: true }
-  );
+  if (Object.keys(inc).length > 0) {
+    await PlayerStats.findOneAndUpdate(
+      { player },
+      { $inc: inc, $set: { team } },
+      { upsert: true, new: true }
+    );
+  }
 };
 
 const rollbackPlayerStats = async (payload: any) => {
-  const { player, eventType } = payload;
+  const { player, eventType, eventMeta } = payload;
 
   if (!player) return;
 
   const inc: any = {};
 
-  if (eventType === 'goal') inc.goals = -1;
+  if (eventType === 'goal') {
+    inc.goals = -1;
+
+    // 🔥 rollback assist
+    if (eventMeta?.assist) {
+      await PlayerStats.findOneAndUpdate(
+        { player: eventMeta.assist },
+        { $inc: { assists: -1 } }
+      );
+    }
+  }
+
   if (eventType === 'yellow_card') inc.yellowCards = -1;
   if (eventType === 'red_card') inc.redCards = -1;
 
-  if (Object.keys(inc).length === 0) return;
-
-  await PlayerStats.findOneAndUpdate(
-    { player },
-    { $inc: inc }
-  );
+  if (Object.keys(inc).length > 0) {
+    await PlayerStats.findOneAndUpdate({ player }, { $inc: inc });
+  }
 };
 
 // ============================================================

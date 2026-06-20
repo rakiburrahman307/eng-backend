@@ -39,7 +39,6 @@ const matchResultSchema = new Schema(
       required: true,
     },
 
-    // 🔥 Extra metadata for event details (scalable approach)
     eventMeta: {
       goalType: {
         type: String,
@@ -49,11 +48,21 @@ const matchResultSchema = new Schema(
         },
       },
 
+      // 🔥 NEW: optional assist
+      assist: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: false,
+      },
+
       cardType: {
         type: String,
         enum: ['yellow', 'red'],
         required: function () {
-          return this.eventType === 'yellow_card' || this.eventType === 'red_card';
+          return (
+            this.eventType === 'yellow_card' ||
+            this.eventType === 'red_card'
+          );
         },
       },
 

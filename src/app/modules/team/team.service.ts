@@ -2,6 +2,7 @@ import QueryBuilder from "../../../util/queryBuilder";
 import { Team } from "./team.model";
 import { UserDetails } from "../user/userDetails.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
+import { User } from "../user/user.model";
 
 // CREATE TEAM
 const createTeamToDB = async (payload: any) => {
@@ -22,7 +23,7 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
 
   const teamIds = teams.map((t) => t._id);
 
-  // 👥 players count
+  // 👥 MEMBERS COUNT
   const memberCounts = await UserDetails.aggregate([
     {
       $match: { selectTeam: { $in: teamIds } },
@@ -35,32 +36,53 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
     },
   ]);
 
-  // 🧑‍💼 managers count
-  const managerCounts = await ManagerTeam.aggregate([
-    {
-      $match: { team: { $in: teamIds } },
-    },
-    {
-      $group: {
-        _id: "$team",
-        totalManagers: { $sum: 1 },
-      },
-    },
-  ]);
+  // 🧑‍💼 MANAGER LINKS
+  const managerLinks = await ManagerTeam.find({
+    team: { $in: teamIds },
+  });
 
+  const managerUserIds = managerLinks.map((m) => m.manager);
+
+  // 🧑‍💼 USER DETAILS (PROFILE FROM USER MODEL)
+  const users = await User.find({
+    _id: { $in: managerUserIds },
+  }).select("profile");
+
+  // 🧑‍💼 USER DETAILS (NAME FROM USERDETAILS MODEL)
+  const userDetails = await UserDetails.find({
+    userId: { $in: managerUserIds },
+  }).select("userId firstName lastName");
+
+  // MAP RESULT
   const result = teams.map((team) => {
     const members = memberCounts.find(
-      (m) => m._id.toString() === team._id.toString(),
+      (m) => m._id.toString() === team._id.toString()
     );
 
-    const managers = managerCounts.find(
-      (m) => m._id.toString() === team._id.toString(),
-    );
+    const managers = managerLinks
+      .filter((m) => m.team.toString() === team._id.toString())
+      .map((m) => {
+        const user = users.find(
+          (u) => u._id.toString() === m.manager.toString()
+        );
+
+        const detail = userDetails.find(
+          (d) => d.userId.toString() === m.manager.toString()
+        );
+
+        return {
+          _id: m.manager,
+          firstName: detail?.firstName || null,
+          lastName: detail?.lastName || null,
+          profile: user?.profile || null,
+        };
+      });
 
     return {
       ...team.toObject(),
       totalMembers: members?.totalMembers || 0,
-      totalManagers: managers?.totalManagers || 0,
+      totalManagers: managers.length,
+      managers: managers[0] || null,
     };
   });
 
