@@ -14,12 +14,13 @@ router
     fileUploadHandler(),
     VideoController.createVideo
   )
-  .get(auth(), VideoController.getAllVideos);
+  .get(VideoController.getAllVideos);
+  router.route('/public').get(VideoController.getPublicVideos);
 
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')
-  .get(auth(), VideoController.getSingleVideo)
+  .get( VideoController.getSingleVideo)
   .patch(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
     fileUploadHandler(),

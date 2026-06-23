@@ -145,6 +145,19 @@ const toggleVideoStatus = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+
+const getPublicVideos = catchAsync(async (req: Request, res: Response) => {
+  const { result, meta } = await VideoService.getPublicVideosFromDB(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Public videos retrieved successfully',
+    data: result,
+    pagination: meta,
+  });
+});
+
 export const VideoController = {
   createVideo,
   getAllVideos,
@@ -152,4 +165,5 @@ export const VideoController = {
   updateVideo,
   deleteVideo,
   toggleVideoStatus,
+  getPublicVideos
 };

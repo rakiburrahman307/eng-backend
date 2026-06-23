@@ -111,6 +111,33 @@ const toggleVideoStatusToDB = async (id: string, user: any) => {
   return await video.save();
 };
 
+
+const getPublicVideosFromDB = async (query: Record<string, any>) => {
+  const now = new Date();
+
+  const baseQuery = {
+    $or: [
+      { status: 'publish' },
+      { status: 'schedule', publishDateTime: { $lte: now } },
+    ],
+  };
+
+  const videoQuery = new QueryBuilder(Video.find(baseQuery), query)
+    .search(['title', 'description'])
+    .filter()
+    .sort()
+    .paginate()
+    .fields();
+
+  const result = await videoQuery.modelQuery;
+  const meta = await videoQuery.getPaginationInfo();
+
+  return {
+    meta,
+    result,
+  };
+};
+
 export const VideoService = {
   createVideoToDB,
   getAllVideosFromDB,
@@ -118,4 +145,5 @@ export const VideoService = {
   updateVideoToDB,
   deleteVideoFromDB,
   toggleVideoStatusToDB,
+  getPublicVideosFromDB
 };

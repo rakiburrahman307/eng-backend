@@ -10,12 +10,12 @@ const router = express.Router();
 router
   .route('/')
   .post(auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),fileUploadHandler(), NewsController.createNews)
-  .get(auth(), NewsController.getAllNews);
+  .get( NewsController.getAllNews);
 
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')
-  .get(auth(), NewsController.getSingleNews)
+  .get( NewsController.getSingleNews)
   .patch(auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), fileUploadHandler(), NewsController.updateNews)
   .delete(auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), NewsController.deleteNews);
 
