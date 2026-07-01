@@ -57,7 +57,14 @@ const userDetailsSchema = new Schema<IUserDetails>(
       type: String,
       required: false,
     },
-
+    engCoine: {
+      type: Number,
+      default: 0,
+    },
+    debutDate: {
+      type: Date,
+      required: "null",
+    },
     status: {
       type: String,
       enum: ["PENDING", "APPROVED", "REJECTED"],

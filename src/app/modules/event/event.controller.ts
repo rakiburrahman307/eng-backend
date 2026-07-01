@@ -60,6 +60,18 @@ const getAllEvents = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getPublicEvents = catchAsync(async (req: Request, res: Response) => {
+  const result = await EventService.getPublicEventsFromDB(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Public events retrieved successfully',
+    pagination: result.meta,
+    data: result.result,
+  });
+});
+
 // GET SINGLE EVENT
 const getSingleEvent = catchAsync(async (req: Request, res: Response) => {
     if (!req.params.id) {
@@ -165,4 +177,5 @@ export const EventController = {
   getSingleEvent,
   updateEvent,
   deleteEvent,
+  getPublicEvents
 };

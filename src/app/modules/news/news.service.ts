@@ -58,6 +58,30 @@ const getAllNewsFromDB = async (
   };
 };
 
+
+// GET PUBLIC NEWS (NO TOKEN BASED)
+const getPublicNewsFromDB = async (
+  query: Record<string, any>
+) => {
+  const newsQuery = new QueryBuilder(
+    News.find({ status: 'publish' }),
+    query
+  )
+    .search(['title', 'description'])
+    .filter()
+    .sort()
+    .paginate()
+    .fields();
+
+  const result = await newsQuery.modelQuery;
+  const meta = await newsQuery.getPaginationInfo();
+
+  return {
+    meta,
+    result,
+  };
+};
+
 // GET SINGLE (NO PARAM ID VERSION -> optional, token based user flow if needed)
 const getMyNewsFromDB = async (userId: string) => {
   return await News.find({ createdBy: userId }).sort({ createdAt: -1 });
@@ -149,4 +173,5 @@ export const NewsService = {
   updateNewsToDB,
   deleteNewsFromDB,
   toggleNewsStatusToDB,
+  getPublicNewsFromDB
 };

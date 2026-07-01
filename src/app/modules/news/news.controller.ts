@@ -79,6 +79,18 @@ const getAllNews = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+
+const getPublicNews = catchAsync(async (req: Request, res: Response) => {
+  const result = await NewsService.getPublicNewsFromDB(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Published news retrieved successfully',
+    pagination: result.meta,
+    data: result.result,
+  });
+});
 // MY NEWS (TOKEN BASED)
 const getMyNews = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as any;
@@ -189,4 +201,5 @@ export const NewsController = {
   updateNews,
   deleteNews,
   toggleNewsStatus,
+  getPublicNews
 };

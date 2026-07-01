@@ -39,7 +39,46 @@ const getPlayerSeasonStats = catchAsync(
   }
 );
 
+
+
+const getLeagueSummary = catchAsync(async (req: Request, res: Response) => {
+  const { leagueName } = req.query;
+
+  const result = await StatisticService.getLeagueSummaryFromDB(
+    leagueName as string
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "League statistics fetched successfully",
+    data: result,
+  });
+});
+
+
+const getSeasonLeaderboard = catchAsync(
+  async (req: Request, res: Response) => {
+    const { season } = req.query;
+
+    const result = await StatisticService.getSeasonLeaderboardFromDB(
+      season as string
+    );
+
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "Season leaderboard fetched successfully",
+      data: result,
+    });
+  }
+);
+
+
+
 export const StatisticController = {
   getTopPlayer,
   getPlayerSeasonStats,
+  getLeagueSummary,
+  getSeasonLeaderboard
 };

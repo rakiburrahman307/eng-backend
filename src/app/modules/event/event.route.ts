@@ -14,12 +14,14 @@ router
     fileUploadHandler(),
     EventController.createEvent
   )
-  .get(EventController.getAllEvents);
+  .get(auth(), EventController.getAllEvents);
+
+  router.get('/public-events', EventController.getPublicEvents);
 
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')
-  .get(EventController.getSingleEvent)
+  .get( EventController.getSingleEvent)
   .patch(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
     fileUploadHandler(),

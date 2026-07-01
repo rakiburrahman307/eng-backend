@@ -32,6 +32,28 @@ const getAllEventsFromDB = async (query: Record<string, any>) => {
   };
 };
 
+
+const getPublicEventsFromDB = async (
+  query: Record<string, any>
+) => {
+  const eventQuery = new QueryBuilder(
+    Event.find(),
+    query
+  )
+    .search(['title', 'description', 'location'])
+    .filter()
+    .sort()
+    .paginate()
+    .fields();
+
+  const result = await eventQuery.modelQuery;
+  const meta = await eventQuery.getPaginationInfo();
+
+  return {
+    meta,
+    result,
+  };
+};
 // SINGLE
 const getSingleEventFromDB = async (id: string) => {
   return await Event.findById(id);
@@ -78,4 +100,5 @@ export const EventService = {
   getSingleEventFromDB,
   updateEventToDB,
   deleteEventFromDB,
+  getPublicEventsFromDB
 };

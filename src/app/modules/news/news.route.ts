@@ -10,8 +10,8 @@ const router = express.Router();
 router
   .route('/')
   .post(auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),fileUploadHandler(), NewsController.createNews)
-  .get( NewsController.getAllNews);
-
+  .get(auth(), NewsController.getAllNews);
+router.get('/public-news', NewsController.getPublicNews);
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')

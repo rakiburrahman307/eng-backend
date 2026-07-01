@@ -25,4 +25,6 @@ export type IUserDetails = {
   document?: string[]; // optional
   phone?: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
+  engCoine?: number; // optional
+  debutDate?: Date; // optional
 };
