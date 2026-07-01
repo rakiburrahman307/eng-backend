@@ -63,7 +63,7 @@ const userDetailsSchema = new Schema<IUserDetails>(
     },
     debutDate: {
       type: Date,
-      required: "null",
+      default: "null",
     },
     status: {
       type: String,
