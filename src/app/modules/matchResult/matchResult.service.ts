@@ -1,11 +1,12 @@
-import { MatchResult } from './matchResult.model';
-import { PlayerStats } from '../playerStats/playerStats.model';
+import { MatchResult } from "./matchResult.model";
+import { PlayerStats } from "../playerStats/playerStats.model";
 
-import { StatusCodes } from 'http-status-codes';
+import { StatusCodes } from "http-status-codes";
 import QueryBuilder from "../../../util/queryBuilder";
-import ApiError from '../../../errors/ApiErrors';
-import { Match } from '../match/match.model';
-import { Team } from '../team/team.model';
+import ApiError from "../../../errors/ApiErrors";
+import { Match } from "../match/match.model";
+import { Team } from "../team/team.model";
+import { UserDetails } from "../user/userDetails.model";
 
 // ========================== CREATE ==========================
 const createMatchResultToDB = async (payload: any) => {
@@ -14,12 +15,15 @@ const createMatchResultToDB = async (payload: any) => {
   // 1️⃣ VALIDATE MATCH
   const matchData = await Match.findById(match);
   if (!matchData) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Match not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "Match not found");
   }
 
   // 2️⃣ VALIDATE LEAGUE
   if (String(matchData.league) !== String(league)) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'League mismatch for this match');
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "League mismatch for this match",
+    );
   }
 
   // 3️⃣ VALIDATE TEAM IN MATCH
@@ -28,12 +32,15 @@ const createMatchResultToDB = async (payload: any) => {
     String(matchData.awayTeam) === String(team);
 
   if (!isTeamValid) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Team is not part of this match');
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Team is not part of this match",
+    );
   }
 
   // 4️⃣ CHECK MATCH STATUS
-  if (matchData.status !== 'live') {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Match is not running');
+  if (matchData.status !== "live") {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Match is not running");
   }
 
   // 5️⃣ TIME VALIDATION
@@ -44,12 +51,15 @@ const createMatchResultToDB = async (payload: any) => {
   matchEndPlusExtra.setHours(matchEndPlusExtra.getHours() + 2);
 
   if (now > matchEndPlusExtra) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Match time expired, cannot update score');
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Match time expired, cannot update score",
+    );
   }
 
   // 6️⃣ MINUTE VALIDATION
   if (minute < 0 || minute > 120) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid match minute');
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid match minute");
   }
 
   // 7️⃣ CREATE EVENT
@@ -76,10 +86,10 @@ const getAllMatchResultsFromDB = async (query: Record<string, any>) => {
     .fields();
 
   const result = await matchQuery.modelQuery
-    .populate('match')
-    .populate('team')
-    .populate('player')
-    .populate('addedBy');
+    .populate("match")
+    .populate("team")
+    .populate("player")
+    .populate("addedBy");
 
   const meta = await matchQuery.getPaginationInfo();
 
@@ -89,13 +99,13 @@ const getAllMatchResultsFromDB = async (query: Record<string, any>) => {
 // ========================== SINGLE ==========================
 const getSingleMatchResultFromDB = async (id: string) => {
   const result = await MatchResult.findById(id)
-    .populate('match')
-    .populate('team')
-    .populate('player')
-    .populate('addedBy');
+    .populate("match")
+    .populate("team")
+    .populate("player")
+    .populate("addedBy");
 
   if (!result) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Match event not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "Match event not found");
   }
 
   return result;
@@ -106,7 +116,7 @@ const updateMatchResultToDB = async (id: string, payload: any) => {
   const existing = await MatchResult.findById(id);
 
   if (!existing) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Match event not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "Match event not found");
   }
 
   // rollback old
@@ -132,7 +142,7 @@ const deleteMatchResultFromDB = async (id: string) => {
   const existing = await MatchResult.findById(id);
 
   if (!existing) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Match event not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "Match event not found");
   }
 
   await rollbackPlayerStats(existing);
@@ -148,9 +158,9 @@ const deleteMatchResultFromDB = async (id: string) => {
 // ========================== MATCH WISE ==========================
 const getMatchWiseResultsFromDB = async (matchId: string) => {
   return await MatchResult.find({ match: matchId })
-    .populate('team')
-    .populate('player')
-    .populate('addedBy')
+    .populate("team")
+    .populate("player")
+    .populate("addedBy")
     .sort({ minute: 1 });
 };
 
@@ -164,29 +174,105 @@ const applyPlayerStats = async (payload: any) => {
 
   const inc: any = {};
 
-  if (eventType === 'goal') {
-    if (eventMeta?.goalType !== 'own_goal') {
+  // ================= GOAL =================
+  if (eventType === "goal") {
+    if (eventMeta?.goalType !== "own_goal") {
       inc.goals = 1;
+
+      // Goal Reward +2000
+      await UserDetails.findOneAndUpdate(
+        { userId: player },
+        {
+          $inc: {
+            engCoine: 2000,
+          },
+        },
+      );
     }
 
-    // 🔥 ASSIST ADD
+    // Assist
     if (eventMeta?.assist) {
       await PlayerStats.findOneAndUpdate(
         { player: eventMeta.assist },
-        { $inc: { assists: 1 }, $set: { team } },
-        { upsert: true, new: true }
+        {
+          $inc: {
+            assists: 1,
+          },
+          $set: {
+            team,
+          },
+        },
+        {
+          upsert: true,
+          new: true,
+        },
+      );
+
+      // Assist Reward +1000
+      await UserDetails.findOneAndUpdate(
+        { userId: eventMeta.assist },
+        {
+          $inc: {
+            engCoine: 1000,
+          },
+        },
       );
     }
   }
 
-  if (eventType === 'yellow_card') inc.yellowCards = 1;
-  if (eventType === 'red_card') inc.redCards = 1;
+  // ================= YELLOW CARD =================
+  if (eventType === "yellow_card") {
+    inc.yellowCards = 1;
+
+    const user = await UserDetails.findOne({ userId: player });
+
+    if (user) {
+      const coins = Math.max(0, (user.engCoine ?? 0) - 500);
+
+      await UserDetails.findOneAndUpdate(
+        { userId: player },
+        {
+          $set: {
+            engCoine: coins,
+          },
+        },
+      );
+    }
+  }
+
+  // ================= RED CARD =================
+  if (eventType === "red_card") {
+    inc.redCards = 1;
+
+    const user = await UserDetails.findOne({ userId: player });
+
+    if (user) {
+      const coins = Math.max(0, (user.engCoine ?? 0) - 5000);
+
+      await UserDetails.findOneAndUpdate(
+        { userId: player },
+        {
+          $set: {
+            engCoine: coins,
+          },
+        },
+      );
+    }
+  }
 
   if (Object.keys(inc).length > 0) {
     await PlayerStats.findOneAndUpdate(
       { player },
-      { $inc: inc, $set: { team } },
-      { upsert: true, new: true }
+      {
+        $inc: inc,
+        $set: {
+          team,
+        },
+      },
+      {
+        upsert: true,
+        new: true,
+      },
     );
   }
 };
@@ -198,23 +284,93 @@ const rollbackPlayerStats = async (payload: any) => {
 
   const inc: any = {};
 
-  if (eventType === 'goal') {
-    inc.goals = -1;
+  // ================= GOAL =================
+  if (eventType === "goal") {
+    if (eventMeta?.goalType !== "own_goal") {
+      inc.goals = -1;
 
-    // 🔥 rollback assist
+      // Remove Goal Reward
+      const user = await UserDetails.findOne({ userId: player });
+
+      if (user) {
+        const coins = Math.max(0, (user.engCoine ?? 0) - 2000);
+
+        await UserDetails.findOneAndUpdate(
+          { userId: player },
+          {
+            $set: {
+              engCoine: coins,
+            },
+          },
+        );
+      }
+    }
+
+    // Rollback Assist
     if (eventMeta?.assist) {
       await PlayerStats.findOneAndUpdate(
         { player: eventMeta.assist },
-        { $inc: { assists: -1 } }
+        {
+          $inc: {
+            assists: -1,
+          },
+        },
       );
+
+      const assistUser = await UserDetails.findOne({
+        userId: eventMeta.assist,
+      });
+
+      if (assistUser) {
+        const coins = Math.max(0, (assistUser.engCoine ?? 0) - 1000);
+
+        await UserDetails.findOneAndUpdate(
+          { userId: eventMeta.assist },
+          {
+            $set: {
+              engCoine: coins,
+            },
+          },
+        );
+      }
     }
   }
 
-  if (eventType === 'yellow_card') inc.yellowCards = -1;
-  if (eventType === 'red_card') inc.redCards = -1;
+  // ================= YELLOW CARD =================
+  if (eventType === "yellow_card") {
+    inc.yellowCards = -1;
+
+    await UserDetails.findOneAndUpdate(
+      { userId: player },
+      {
+        $inc: {
+          engCoine: 500,
+        },
+      },
+    );
+  }
+
+  // ================= RED CARD =================
+  if (eventType === "red_card") {
+    inc.redCards = -1;
+
+    await UserDetails.findOneAndUpdate(
+      { userId: player },
+      {
+        $inc: {
+          engCoine: 5000,
+        },
+      },
+    );
+  }
 
   if (Object.keys(inc).length > 0) {
-    await PlayerStats.findOneAndUpdate({ player }, { $inc: inc });
+    await PlayerStats.findOneAndUpdate(
+      { player },
+      {
+        $inc: inc,
+      },
+    );
   }
 };
 
@@ -224,13 +380,13 @@ const rollbackPlayerStats = async (payload: any) => {
 const applyMatchScore = async (payload: any) => {
   const { match, team, eventType, eventMeta } = payload;
 
-  if (eventType !== 'goal') return;
+  if (eventType !== "goal") return;
 
   const matchData = await Match.findById(match);
   if (!matchData) return;
 
   // ❌ own goal হলে score reverse team এ যাবে
-  const isOwnGoal = eventMeta?.goalType === 'own_goal';
+  const isOwnGoal = eventMeta?.goalType === "own_goal";
 
   let scoringTeam = team;
 
@@ -257,12 +413,12 @@ const applyMatchScore = async (payload: any) => {
 const rollbackMatchScore = async (payload: any) => {
   const { match, team, eventType, eventMeta } = payload;
 
-  if (eventType !== 'goal') return;
+  if (eventType !== "goal") return;
 
   const matchData = await Match.findById(match);
   if (!matchData) return;
 
-  const isOwnGoal = eventMeta?.goalType === 'own_goal';
+  const isOwnGoal = eventMeta?.goalType === "own_goal";
 
   let scoringTeam = team;
 
