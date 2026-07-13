@@ -7,81 +7,102 @@ import { getRatingCoin } from "../../../util/getRatingCoin";
 import mongoose from "mongoose";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
 
-
-
 /* ---------------- RATING LOGIC ---------------- */
 
-
-
 const createMatchToDB = async (payload: any) => {
-  const { league, homeTeam, awayTeam, matchDate, referee, venueName } = payload;
+  // single object হলে array বানাবে
+  const matches = Array.isArray(payload) ? payload : [payload];
 
-  // 1️⃣ same team check
-  if (homeTeam === awayTeam) {
-    throw new Error("Same team cannot play match");
-  }
-
-  // 2️⃣ league team validation
-  const leagueTeams = await LeagueTeam.find({ league });
-
-  const teamIds = leagueTeams.map((t) => t.team.toString());
-
-  if (!teamIds.includes(homeTeam) || !teamIds.includes(awayTeam)) {
-    throw new Error("Both teams must belong to this league");
-  }
-
-  // 3️⃣ referee existence check
-  if (referee) {
-    const refereeExists = await User.findById(referee);
-    if (!refereeExists) {
-      throw new Error("Referee not found");
+  const createdMatches: any[] = [];
+  for (const matchData of matches) {
+    const { league, homeTeam, awayTeam, matchDate, referee, venueName } =
+      matchData;
+    // same team check
+    if (homeTeam === awayTeam) {
+      throw new Error("Same team cannot play match");
     }
-  }
+    // league team validation
+    const leagueTeams = await LeagueTeam.find({
+      league,
+    });
+    const teamIds = leagueTeams.map((t) => t.team.toString());
+    if (!teamIds.includes(homeTeam) || !teamIds.includes(awayTeam)) {
+      throw new Error("Both teams must belong to this league");
+    }
+    // referee check
+    if (referee) {
+      const refereeExists = await User.findById(referee);
+      if (!refereeExists) {
+        throw new Error("Referee not found");
+      }
+    }
 
-  // 4️⃣ time setup
-  const matchTime = new Date(matchDate).getTime();
-  const twoHours = 2 * 60 * 60 * 1000;
+    // time range
+    const matchTime = new Date(matchDate).getTime();
+    const twoHours = 2 * 60 * 60 * 1000;
+    const startWindow = new Date(matchTime - twoHours);
 
-  const startWindow = new Date(matchTime - twoHours);
-  const endWindow = new Date(matchTime + twoHours);
+    const endWindow = new Date(matchTime + twoHours);
 
-  // 5️⃣ TEAM conflict check (home + away overlap)
-  const teamConflict = await Match.findOne({
-    league,
-    matchDate: { $gte: startWindow, $lte: endWindow },
-    $or: [{ homeTeam }, { awayTeam }],
-  });
+    // team conflict
 
-  if (teamConflict) {
-    throw new Error("One of the teams already has a match in this time slot");
-  }
+    const teamConflict = await Match.findOne({
+      matchDate: {
+        $gte: startWindow,
+        $lte: endWindow,
+      },
 
-  // 6️⃣ REFEREE conflict check
-  if (referee) {
-    const refereeConflict = await Match.findOne({
-      referee,
-      matchDate: { $gte: startWindow, $lte: endWindow },
+      $or: [
+        {
+          homeTeam,
+        },
+        {
+          awayTeam,
+        },
+      ],
     });
 
-    if (refereeConflict) {
-      throw new Error("Referee already assigned in this time slot");
+    if (teamConflict) {
+      throw new Error("One of the teams already has a match in this time slot");
     }
-  }
 
-  // 7️⃣ VENUE conflict check (important for real system)
-  if (venueName) {
-    const venueConflict = await Match.findOne({
-      venueName,
-      matchDate: { $gte: startWindow, $lte: endWindow },
-    });
+    // referee conflict
 
-    if (venueConflict) {
-      throw new Error("Venue already booked in this time slot");
+    if (referee) {
+      const refereeConflict = await Match.findOne({
+        referee,
+
+        matchDate: {
+          $gte: startWindow,
+          $lte: endWindow,
+        },
+      });
+
+      if (refereeConflict) {
+        throw new Error("Referee already assigned in this time slot");
+      }
     }
-  }
 
-  // 8️⃣ create match
-  return await Match.create(payload);
+    // venue conflict
+
+    if (venueName) {
+      const venueConflict = await Match.findOne({
+        venueName,
+
+        matchDate: {
+          $gte: startWindow,
+          $lte: endWindow,
+        },
+      });
+      if (venueConflict) {
+        throw new Error("Venue already booked in this time slot");
+      }
+    }
+    // create
+    const match = await Match.create(matchData);
+    createdMatches.push(match);
+  }
+  return createdMatches;
 };
 
 // GET ALL
@@ -183,35 +204,28 @@ const toggleMatchStatusToDB = async (id: string) => {
   const match = await Match.findById(id);
 
   if (!match) {
-    throw new Error('Match not found');
+    throw new Error("Match not found");
   }
 
-  if (match.status === 'upcoming') {
-    match.status = 'live';
+  if (match.status === "upcoming") {
+    match.status = "live";
 
     // LIVE START → GIVE BOTH TEAM 1000 COIN
     await Team.updateMany(
       { _id: { $in: [match.homeTeam, match.awayTeam] } },
-      { $inc: { coin: 1000 } }
+      { $inc: { coin: 1000 } },
     );
-  } 
-  
-  else if (match.status === 'live') {
-    match.status = 'half_time';
-  } 
-  
-  else if (match.status === 'half_time') {
-    match.status = 'finished';
-  } 
-  
-  else {
-    match.status = 'finished';
+  } else if (match.status === "live") {
+    match.status = "half_time";
+  } else if (match.status === "half_time") {
+    match.status = "finished";
+  } else {
+    match.status = "finished";
   }
 
   await match.save();
   return match;
 };
-
 
 const addMatchReviewToDB = async (
   matchId: string,
@@ -224,10 +238,10 @@ const addMatchReviewToDB = async (
 ) => {
   const match = await Match.findById(matchId);
 
-  if (!match) throw new Error('Match not found');
+  if (!match) throw new Error("Match not found");
 
-  if (match.status !== 'finished') {
-    throw new Error('Only finished matches can be reviewed');
+  if (match.status !== "finished") {
+    throw new Error("Only finished matches can be reviewed");
   }
 
   const reviewsWithCoin = payload.reviews.map((r) => ({
@@ -249,27 +263,20 @@ const addMatchReviewToDB = async (
   return match;
 };
 
-
-
 const getUpcomingMatchesForManagerFromDB = async (
   managerId: string,
   query: Record<string, any>,
 ) => {
-
   const managerTeams = await ManagerTeam.find({
     manager: new mongoose.Types.ObjectId(managerId),
   });
 
   const teamIds = managerTeams.map((item) => item.team);
 
-
   const matchQuery = new QueryBuilder(
     Match.find({
-      status: 'upcoming',
-      $or: [
-        { homeTeam: { $in: teamIds } },
-        { awayTeam: { $in: teamIds } },
-      ],
+      status: "upcoming",
+      $or: [{ homeTeam: { $in: teamIds } }, { awayTeam: { $in: teamIds } }],
     }),
     query,
   )
@@ -279,11 +286,11 @@ const getUpcomingMatchesForManagerFromDB = async (
     .fields();
 
   const result = await matchQuery.modelQuery
-    .populate('league')
-    .populate('homeTeam')
-    .populate('awayTeam')
-    .populate('referee')
-    .populate('winnerTeam');
+    .populate("league")
+    .populate("homeTeam")
+    .populate("awayTeam")
+    .populate("referee")
+    .populate("winnerTeam");
 
   const meta = await matchQuery.getPaginationInfo();
 
@@ -292,7 +299,6 @@ const getUpcomingMatchesForManagerFromDB = async (
     result,
   };
 };
-
 
 export const MatchService = {
   createMatchToDB,
@@ -303,5 +309,5 @@ export const MatchService = {
   toggleMatchStatusToDB,
   getMatchesByRefereeFromDB,
   addMatchReviewToDB,
-  getUpcomingMatchesForManagerFromDB
+  getUpcomingMatchesForManagerFromDB,
 };

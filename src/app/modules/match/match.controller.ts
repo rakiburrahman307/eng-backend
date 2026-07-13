@@ -6,9 +6,12 @@ import { MatchService } from './match.service';
 
 // CREATE
 const createMatch = catchAsync(async (req: Request, res: Response) => {
+
   const payload = req.body;
 
-  const result = await MatchService.createMatchToDB(payload);
+  const result =
+    await MatchService.createMatchToDB(payload);
+
 
   sendResponse(res, {
     success: true,
@@ -16,7 +19,9 @@ const createMatch = catchAsync(async (req: Request, res: Response) => {
     message: 'Match created successfully',
     data: result,
   });
+
 });
+
 
 // GET ALL
 const getAllMatches = catchAsync(async (req: Request, res: Response) => {
