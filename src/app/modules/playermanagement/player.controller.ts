@@ -5,7 +5,7 @@ import sendResponse from "../../../shared/sendResponse";
 import { PlayerService } from "./player.service";
 
 
-// GET PLAYER DASHBOARD
+// GET ALL PLAYERS
 const getAllPlayers = catchAsync(async (req: Request, res: Response) => {
   const result = await PlayerService.getAllPlayersFromDB(req.query);
 
@@ -17,7 +17,22 @@ const getAllPlayers = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+
+// ✅ GET FILTERED PLAYERS BY TEAM AND/OR POSITION
+const getFilteredPlayers = catchAsync(async (req: Request, res: Response) => {
+  const result = await PlayerService.getFilteredPlayersFromDB(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Filtered players retrieved successfully",
+    data: result,
+  });
+});
+
+
 export const PlayerController = {
   getAllPlayers,
+  getFilteredPlayers,
 };
 
