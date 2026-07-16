@@ -5,6 +5,8 @@ import QueryBuilder from "../../../util/queryBuilder";
 import { User } from '../user/user.model';
 import { RewardProduct } from '../rewardProduct/rewardProduct.model';
 import { RewardOrder } from './rewardOrder.model';
+import { sendNotification, sendNotificationToAdmins } from '../../../helpers/notificationsHelper';
+import { NOTIFICATION_TYPE } from '../notification/notification.interface';
 
 // CREATE ORDER
 const createRewardOrderToDB = async (
@@ -75,6 +77,23 @@ const createRewardOrderToDB = async (
 
     await session.commitTransaction();
     session.endSession();
+
+    // 🔔 Notify player: order placed
+    await sendNotification({
+      receiver: userId,
+      title: 'Reward Order Placed 🎁',
+      message: `Your reward order has been placed successfully. ${rewardProduct.point} points have been deducted.`,
+      type: NOTIFICATION_TYPE.REWARD_ORDER_PLACED,
+      metadata: { orderId: order[0]._id, productId: rewardProduct._id },
+    });
+
+    // 🔔 Notify admins: new order
+    await sendNotificationToAdmins({
+      title: 'New Reward Order',
+      message: `A player has placed a new reward order. Please review and approve.`,
+      type: NOTIFICATION_TYPE.REWARD_ORDER_PLACED,
+      metadata: { orderId: order[0]._id },
+    });
 
     return order[0];
   } catch (error) {
@@ -170,6 +189,15 @@ const approveRewardOrderToDB = async (
 
   await order.save();
 
+  // 🔔 Notify player: order approved
+  await sendNotification({
+    receiver: order.user.toString(),
+    title: '✅ Reward Order Approved!',
+    message: 'Your reward order has been approved! It will be delivered to you soon.',
+    type: NOTIFICATION_TYPE.REWARD_ORDER_APPROVED,
+    metadata: { orderId: order._id },
+  });
+
   return order;
 };
 
@@ -229,6 +257,15 @@ const rejectRewardOrderToDB = async (
     await session.commitTransaction();
     session.endSession();
 
+    // 🔔 Notify player: order rejected + points refunded
+    await sendNotification({
+      receiver: order.user.toString(),
+      title: 'Reward Order Rejected',
+      message: `Your reward order has been rejected. ${order.pointUsed} points have been refunded to your account. Reason: ${rejectReason || 'N/A'}`,
+      type: NOTIFICATION_TYPE.REWARD_ORDER_REJECTED,
+      metadata: { orderId: order._id, pointsRefunded: order.pointUsed },
+    });
+
     return order;
   } catch (error) {
     await session.abortTransaction();
@@ -261,6 +298,15 @@ const deliveredRewardOrderToDB = async (
   order.status = 'delivered';
 
   await order.save();
+
+  // 🔔 Notify player: order delivered
+  await sendNotification({
+    receiver: order.user.toString(),
+    title: '🚚 Reward Order Delivered!',
+    message: 'Your reward order has been delivered! Enjoy your reward.',
+    type: NOTIFICATION_TYPE.REWARD_ORDER_DELIVERED,
+    metadata: { orderId: order._id },
+  });
 
   return order;
 };

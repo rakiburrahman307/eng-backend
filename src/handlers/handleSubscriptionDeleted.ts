@@ -1,8 +1,10 @@
 import { StatusCodes } from 'http-status-codes';
 import ApiError from '../errors/ApiErrors';
 import stripe from '../config/stripe';
-const User:any = "";
-const Subscription:any = "";
+import { User } from '../app/modules/user/user.model';
+import { Subscription } from '../app/modules/subscription/subscription.model';
+import { sendNotification } from '../helpers/notificationsHelper';
+import { NOTIFICATION_TYPE } from '../app/modules/notification/notification.interface';
 
 export const handleSubscriptionDeleted = async (data: any) => {
 
@@ -17,15 +19,15 @@ export const handleSubscriptionDeleted = async (data: any) => {
 
     if (userSubscription) {
 
-        // Deactivate the subscription
+        // Cancel the subscription
         await Subscription.findByIdAndUpdate(
             userSubscription._id,
-            { status: 'deactivated' },
+            { status: 'cancel' },
             { new: true }
         );
     
         // Find the user associated with the subscription
-        const existingUser = await User.findById(userSubscription?.userId);
+        const existingUser = await User.findById(userSubscription?.user);
     
         if (existingUser) {
             await User.findByIdAndUpdate(
@@ -33,6 +35,15 @@ export const handleSubscriptionDeleted = async (data: any) => {
                 { hasAccess: false },
                 { new: true },
             );
+
+            // 🔔 Send notification to User about subscription cancellation
+            await sendNotification({
+                receiver: existingUser._id.toString(),
+                title: "Subscription Cancelled",
+                message: "Your subscription has been cancelled/deleted. You no longer have access to premium features.",
+                type: NOTIFICATION_TYPE.SUBSCRIPTION_CANCELLED,
+            });
+
         } else {
             throw new ApiError(StatusCodes.NOT_FOUND, `User not found.`);
         }

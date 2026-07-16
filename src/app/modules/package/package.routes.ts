@@ -31,4 +31,11 @@ router
 
     router.get("/all", PackageController.getActivePackages)
 
+// Auto-generate checkout URL with client_reference_id from logged-in user's token
+router.get(
+    "/:id/checkout",
+    auth(USER_ROLES.PLAYER, USER_ROLES.REFEREE, USER_ROLES.MANAGER),
+    PackageController.getCheckoutUrl
+);
+
 export default router;

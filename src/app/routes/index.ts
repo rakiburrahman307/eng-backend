@@ -29,6 +29,7 @@ import OverviewRoute from "../modules/overview/overview.route"
 import PushNotificationRoute from "../modules/pushNotification/pushNotification.route"
 import StatisticRoute from "../modules/statistic/statistic.route"
 import RefereeRatingRoute from "../modules/refereeRating/refereeRating.route"
+import CoinAndBudgetRoute from "../modules/coinAndBudget/coinAndBudget.route"
 const router = express.Router();
 
 const apiRoutes = [
@@ -62,6 +63,7 @@ const apiRoutes = [
     { path: "/push-notification", route: PushNotificationRoute },
     { path: "/statistic", route: StatisticRoute },
     { path: "/referee", route: RefereeRatingRoute },
+    { path: "/coin-budget", route: CoinAndBudgetRoute },
 ]
 
 apiRoutes.forEach(route => router.use(route.path, route.route));

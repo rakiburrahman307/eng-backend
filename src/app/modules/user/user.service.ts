@@ -10,6 +10,11 @@ import { emailHelper } from "../../../helpers/emailHelper";
 import unlinkFile from "../../../shared/unlinkFile";
 import { UserDetails } from "./userDetails.model";
 import { Subscription } from "../subscription/subscription.model";
+import {
+  sendNotificationToAdmins,
+  sendNotification,
+} from "../../../helpers/notificationsHelper";
+import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 
 const createAdminToDB = async (payload: any): Promise<IUser> => {
 
@@ -58,6 +63,18 @@ const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
         { _id: createUser._id },
         { $set: { authentication } }
     );
+
+    // 🔔 Notify all admins: new user registered
+    await sendNotificationToAdmins({
+      title: "New User Registered",
+      message: `A new user (${createUser.email}) has registered on the platform.`,
+      type: NOTIFICATION_TYPE.USER_REGISTERED,
+      metadata: {
+        userId: createUser._id,
+        email: createUser.email,
+        role: createUser.role,
+      },
+    });
 
     return createUser;
 };
@@ -148,6 +165,21 @@ const createPlayerToDB = async (payload: any) => {
   if (!result) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create player");
   }
+
+  // Find the user to get their role
+  const user = await User.findById(payload.userId);
+  const role = user?.role || "USER";
+
+  // 🔔 Notify all admins: new player/referee/manager/club profile created
+  await sendNotificationToAdmins({
+    title: `New ${role} Profile Submitted`,
+    message: `A ${role.toLowerCase()} (${result.firstName} ${result.lastName}) has submitted their profile for review.`,
+    type: NOTIFICATION_TYPE.PLAYER_PROFILE_CREATED,
+    metadata: {
+      userId: payload.userId,
+      role: role,
+    },
+  });
 
   return result;
 };

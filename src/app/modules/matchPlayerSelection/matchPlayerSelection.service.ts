@@ -1,6 +1,9 @@
 import ApiError from "../../../errors/ApiErrors";
 import { UserDetails } from "../user/userDetails.model";
 import { MatchPlayerSelection } from "./matchPlayerSelection.model";
+import { Team } from "../team/team.model";
+import { sendNotification } from "../../../helpers/notificationsHelper";
+import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 
 // CREATE
 const createSelectionIntoDB = async (payload: any) => {
@@ -19,10 +22,10 @@ const createSelectionIntoDB = async (payload: any) => {
     throw new ApiError(400, "Duplicate players not allowed");
   }
 
-  return await MatchPlayerSelection.create({
+  const result = await MatchPlayerSelection.create({
     match,
     team,
-    teamFormation, // ✅ ADD THIS
+    teamFormation,
     players: players.map((p: any) => ({
       player: p.player,
       position: p.position,
@@ -30,6 +33,25 @@ const createSelectionIntoDB = async (payload: any) => {
       substitute: p.substitute ?? false,
     })),
   });
+
+  // Get Team info
+  const teamData = await Team.findById(team);
+  const teamName = teamData?.teamName || "your team";
+
+  // 🔔 Send notification to selected players
+  for (const p of players) {
+    if (p.player) {
+      await sendNotification({
+        receiver: p.player.toString(),
+        title: "You are Selected! 🏃‍♂️",
+        message: `You have been selected to play as a ${p.position} ${p.substitute ? "(Substitute)" : "(Starting Lineup)"} for ${teamName} in the upcoming match.`,
+        type: NOTIFICATION_TYPE.GENERAL,
+        metadata: { matchId: match, selectionId: result._id },
+      });
+    }
+  }
+
+  return result;
 };
 
 // GET ALL

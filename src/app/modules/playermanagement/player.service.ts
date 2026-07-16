@@ -47,17 +47,18 @@ const getAllPlayersFromDB = async (query: Record<string, any>) => {
 const getFilteredPlayersFromDB = async (query: Record<string, any>) => {
   const { team, position, page = 1, limit = 10 } = query;
 
-  // Build the filter object
+  // Build filter
   const filter: Record<string, any> = {};
 
-  // Filter by team (expects team ObjectId)
   if (team) {
     filter.selectTeam = team;
   }
 
-  // Filter by position (case-insensitive partial match)
   if (position) {
-    filter.position = { $regex: position, $options: "i" };
+    filter.position = {
+      $regex: position,
+      $options: "i",
+    };
   }
 
   const pageNum = Number(page);
@@ -67,25 +68,28 @@ const getFilteredPlayersFromDB = async (query: Record<string, any>) => {
   const result = await UserDetails.find(filter)
     .populate({
       path: "userId",
-      select: "profile",
+      select: "_id profile",
     })
     .populate({
       path: "selectTeam",
       select: "teamName shortName teamLogo",
     })
+    .sort({ createdAt: -1 })
     .skip(skip)
-    .limit(limitNum)
-    .sort("-createdAt");
+    .limit(limitNum);
 
   const total = await UserDetails.countDocuments(filter);
-  const totalPage = Math.ceil(total / limitNum);
 
   const players = result.map((player: any) => ({
-    _id: player._id,
+    // ✅ Return User model _id instead of UserDetails _id
+    _id: player.userId?._id || null,
+
     firstName: player.firstName,
     lastName: player.lastName,
     position: player.position,
+
     profile: player.userId?.profile || null,
+
     teamName: player.selectTeam?.teamName || null,
     shortName: player.selectTeam?.shortName || null,
     teamLogo: player.selectTeam?.teamLogo || null,
@@ -97,7 +101,7 @@ const getFilteredPlayersFromDB = async (query: Record<string, any>) => {
       total,
       page: pageNum,
       limit: limitNum,
-      totalPage,
+      totalPage: Math.ceil(total / limitNum),
     },
   };
 };

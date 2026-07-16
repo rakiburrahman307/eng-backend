@@ -7,6 +7,8 @@ import { ManagerTeam } from '../managerTeam/managerTeam.model';
 import { UserDetails } from '../user/userDetails.model';
 import { USER_ROLES } from '../../../enums/user';
 import mongoose from 'mongoose';
+import { sendNotification, sendNotificationToAdmins } from '../../../helpers/notificationsHelper';
+import { NOTIFICATION_TYPE } from '../notification/notification.interface';
 
 // CREATE
 const createTransferToDB = async (payload: any, userId: string) => {
@@ -65,7 +67,22 @@ const createTransferToDB = async (payload: any, userId: string) => {
     transferType,
   });
 
+  // 🔔 Notify player: transfer request submitted
+  await sendNotification({
+    receiver: payload.player,
+    title: 'Transfer Request Submitted',
+    message: 'A transfer request has been submitted for you. Awaiting admin approval.',
+    type: NOTIFICATION_TYPE.TRANSFER_REQUESTED,
+    metadata: { transferId: transfer._id, transferType },
+  });
 
+  // 🔔 Notify admins: new transfer request
+  await sendNotificationToAdmins({
+    title: 'New Transfer Request',
+    message: `A new transfer request has been submitted (${transferType}). Please review.`,
+    type: NOTIFICATION_TYPE.TRANSFER_REQUESTED,
+    metadata: { transferId: transfer._id, transferType },
+  });
 
   return transfer;
 };
@@ -326,6 +343,14 @@ const approveTransferToDB = async (id: string, adminId: string) => {
 
   await transfer.save();
 
+  // 🔔 Notify player: transfer approved
+  await sendNotification({
+    receiver: transfer.player.toString(),
+    title: '🎉 Transfer Approved!',
+    message: 'Congratulations! Your transfer request has been approved. You are now part of the new team.',
+    type: NOTIFICATION_TYPE.TRANSFER_APPROVED,
+    metadata: { transferId: transfer._id },
+  });
 
   return transfer;
 };
@@ -347,6 +372,15 @@ const rejectTransferToDB = async (
   transfer.approvedBy = adminId as any;
 
   await transfer.save();
+
+  // 🔔 Notify player: transfer rejected
+  await sendNotification({
+    receiver: transfer.player.toString(),
+    title: 'Transfer Request Rejected',
+    message: `Your transfer request has been rejected. Reason: ${reason || 'No reason provided.'}`,
+    type: NOTIFICATION_TYPE.TRANSFER_REJECTED,
+    metadata: { transferId: transfer._id, reason },
+  });
 
   return transfer;
 };

@@ -6,6 +6,7 @@ import {
   handleSubscriptionCreated,
   handleSubscriptionUpdated,
   handleSubscriptionDeleted,
+  handleCheckoutSessionCompleted,
 } from "../handlers";
 
 import stripe from "../config/stripe";
@@ -16,11 +17,7 @@ import { logger } from "../shared/logger";
 const handleStripeWebhook = async (req: Request, res: Response) => {
   const signature = req.headers["stripe-signature"] as string;
   const webhookSecret = config.stripe.webhookSecret as string;
-
-
-
   let event: any;
-
   try {
     event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
 
@@ -36,12 +33,15 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
   const eventType = event.type;
   const data = event.data.object;
 
-
-
   try {
     switch (eventType) {
+      case "checkout.session.completed":
+
+        await handleCheckoutSessionCompleted(data);
+        break;
+
       case "customer.subscription.created":
-     
+
         await handleSubscriptionCreated(data);
         break;
 

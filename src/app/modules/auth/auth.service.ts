@@ -19,6 +19,8 @@ import { User } from '../user/user.model';
 import { IUser } from '../user/user.interface';
 import { UserDetails } from '../user/userDetails.model';
 import { Subscription } from '../subscription/subscription.model';
+import { sendNotification } from '../../../helpers/notificationsHelper';
+import { NOTIFICATION_TYPE } from '../notification/notification.interface';
 
 //login
 const loginUserFromDB = async (payload: ILoginData) => {
@@ -173,6 +175,14 @@ const verifyEmailToDB = async (payload: IVerifyEmail) => {
             process.env.JWT_SECRET as string,
             { expiresIn: "7d" }
         );
+
+        // 🔔 Notify user: email verified
+        await sendNotification({
+            receiver: isExistUser._id.toString(),
+            title: "Email Verified Successfully!",
+            message: "Welcome! Your email has been verified. You can now access your account.",
+            type: NOTIFICATION_TYPE.EMAIL_VERIFIED,
+        });
 
         message = "Email verified successfully";
     }

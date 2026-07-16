@@ -14,7 +14,7 @@ router
     fileUploadHandler(),
     VideoController.createVideo
   )
-  .get(VideoController.getAllVideos);
+  .get(auth(),VideoController.getAllVideos);
   router.route('/public').get(VideoController.getPublicVideos);
 
 // SINGLE + UPDATE + DELETE

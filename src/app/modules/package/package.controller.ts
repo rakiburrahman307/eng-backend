@@ -3,6 +3,7 @@ import catchAsync from "../../../shared/catchAsync";
 import { PackageService } from "./package.service";
 import sendResponse from "../../../shared/sendResponse";
 import { StatusCodes } from "http-status-codes";
+import ApiError from "../../../errors/ApiErrors";
 
 const createPackage = catchAsync(async (req: Request, res: Response) => {
     const result = await PackageService.createPackageToDB(req.body);
@@ -96,6 +97,27 @@ const getActivePackages = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getCheckoutUrl = catchAsync(async (req: Request, res: Response) => {
+    const user = req.user as any;
+    
+    if (!user || !user.email) {
+        throw new ApiError(StatusCodes.BAD_REQUEST, 'User email is required');
+    }
+
+    const result = await PackageService.getCheckoutUrlFromDB(
+        req.params.id as string,
+        user._id.toString(),
+        user.email
+    );
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: 'Checkout URL generated successfully',
+        data: result,
+    });
+});
+
 export const PackageController = {
     createPackage,
     updatePackage,
@@ -103,5 +125,6 @@ export const PackageController = {
     packageDetails,
     deletePackage,
     togglePackageStatus,
-    getActivePackages
+    getActivePackages,
+    getCheckoutUrl,
 }

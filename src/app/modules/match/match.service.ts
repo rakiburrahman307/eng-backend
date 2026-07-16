@@ -6,6 +6,9 @@ import { Team } from "../team/team.model";
 import { getRatingCoin } from "../../../util/getRatingCoin";
 import mongoose from "mongoose";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
+import { UserDetails } from "../user/userDetails.model";
+import { sendNotification } from "../../../helpers/notificationsHelper";
+import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 
 /* ---------------- RATING LOGIC ---------------- */
 
@@ -207,6 +210,8 @@ const toggleMatchStatusToDB = async (id: string) => {
     throw new Error("Match not found");
   }
 
+  const oldStatus = match.status;
+
   if (match.status === "upcoming") {
     match.status = "live";
 
@@ -224,6 +229,38 @@ const toggleMatchStatusToDB = async (id: string) => {
   }
 
   await match.save();
+
+  // Send notifications if status has changed significantly
+  if (match.status === "live" || match.status === "finished") {
+    const homeTeam = await Team.findById(match.homeTeam);
+    const awayTeam = await Team.findById(match.awayTeam);
+    const matchName = `${homeTeam?.teamName || "Home Team"} vs ${awayTeam?.teamName || "Away Team"}`;
+    
+    // Find all users (players, managers, etc.) belonging to both teams
+    const userDetails = await UserDetails.find({
+      selectTeam: { $in: [match.homeTeam, match.awayTeam] }
+    });
+
+    if (userDetails.length > 0) {
+      const title = match.status === "live" ? "Match is Live! ⚽" : "Match Finished! 🏁";
+      const message = match.status === "live" 
+        ? `The match ${matchName} has officially started and is now live!` 
+        : `The match ${matchName} has finished. Check the final match results and ratings.`;
+
+      for (const details of userDetails) {
+        if (details.userId) {
+          await sendNotification({
+            receiver: details.userId.toString(),
+            title,
+            message,
+            type: NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,
+            metadata: { matchId: match._id, status: match.status }
+          });
+        }
+      }
+    }
+  }
+
   return match;
 };
 

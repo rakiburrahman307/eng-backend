@@ -146,6 +146,32 @@ const getActivePackagesFromDB = async (
 
   return result;
 };
+// GET CHECKOUT URL — automatically appends client_reference_id + prefilled_email from logged-in user
+const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail: string): Promise<{ checkoutUrl: string }> => {
+    if (!mongoose.Types.ObjectId.isValid(packageId)) {
+        throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid package ID');
+    }
+
+    if (!userEmail) {
+        throw new ApiError(StatusCodes.BAD_REQUEST, 'User email is required');
+    }
+
+    const pkg = await Package.findById(packageId);
+
+    if (!pkg) {
+        throw new ApiError(StatusCodes.NOT_FOUND, 'Package not found');
+    }
+
+    if (!pkg.paymentLink) {
+        throw new ApiError(StatusCodes.BAD_REQUEST, 'Package does not have a payment link');
+    }
+
+    // Append client_reference_id + prefilled_email — user never has to touch it
+    const checkoutUrl = `${pkg.paymentLink}?client_reference_id=${userId}&prefilled_email=${encodeURIComponent(userEmail)}`;
+
+    return { checkoutUrl };
+};
+
 export const PackageService = {
     createPackageToDB,
     updatePackageToDB,
@@ -153,5 +179,6 @@ export const PackageService = {
     getPackageDetailsFromDB,
     deletePackageToDB,
     togglePackageStatusToDB,
-    getActivePackagesFromDB
+    getActivePackagesFromDB,
+    getCheckoutUrlFromDB,
 }
