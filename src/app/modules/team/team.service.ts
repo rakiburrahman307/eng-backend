@@ -3,9 +3,13 @@ import { Team } from "./team.model";
 import { UserDetails } from "../user/userDetails.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
 import { User } from "../user/user.model";
+import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 
 // CREATE TEAM
 const createTeamToDB = async (payload: any) => {
+  // Always assign starting budget from ClubEconomy config in DB
+  const clubEconomy = await ClubEconomy.findOne();
+  payload.coin = clubEconomy ? clubEconomy.startingBudget : 100000;
   return await Team.create(payload);
 };
 

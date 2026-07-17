@@ -1,19 +1,21 @@
 import { Team } from "../team/team.model";
 import { MatchEvaluation } from "./refereeRating.model";
+import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 
-// Rating (1-100) -> Coin Reward
-const getConductReward = (rating: number): number => {
-  if (rating >= 90) return 2500;      // 90-100
-  if (rating >= 80) return 1500;      // 80-89
-  if (rating >= 60) return 500;       // 60-79
-  if (rating >= 50) return 0;         // 50-59
-  if (rating >= 30) return -1000;     // 30-49
-  return -3000;                       // 0-29
+// Dynamically get coin reward based on rating from ClubEconomy config
+const getConductReward = async (rating: number): Promise<number> => {
+  const ce = await ClubEconomy.findOne();
+
+  if (rating >= 90) return ce?.exceptionalConduct?.coin ?? 2500;
+  if (rating >= 80) return ce?.goodConduct?.coin ?? 1500;
+  if (rating >= 60) return ce?.satisfactoryConduct?.coin ?? 500;
+  if (rating >= 50) return ce?.averageConduct?.coin ?? 0;
+  if (rating >= 30) return ce?.poorConduct?.coin ?? -1000;
+  return ce?.unprofessionalConduct?.coin ?? -3000;
 };
+
 // CREATE EVALUATION
-
 const createEvaluationIntoDB = async (payload: any) => {
-
   const result = await MatchEvaluation.create(payload);
 
   const teams = [
@@ -27,11 +29,10 @@ const createEvaluationIntoDB = async (payload: any) => {
     },
   ];
 
-
   for (const item of teams) {
     if (!item.teamId || item.rating == null) continue;
 
-    const coin = getConductReward(item.rating);
+    const coin = await getConductReward(item.rating);
 
     await Team.findByIdAndUpdate(item.teamId, {
       $inc: {

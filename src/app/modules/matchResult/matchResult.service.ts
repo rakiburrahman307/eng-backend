@@ -7,6 +7,8 @@ import ApiError from "../../../errors/ApiErrors";
 import { Match } from "../match/match.model";
 import { Team } from "../team/team.model";
 import { UserDetails } from "../user/userDetails.model";
+import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
+import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 
 // ========================== CREATE ==========================
 const createMatchResultToDB = async (payload: any) => {
@@ -172,6 +174,9 @@ const applyPlayerStats = async (payload: any) => {
 
   if (!player) return;
 
+  // Fetch PlayerEconomy config from DB (fallback to defaults if not configured)
+  const pe = await PlayerEconomy.findOne();
+
   const inc: any = {};
 
   // ================= GOAL =================
@@ -179,14 +184,11 @@ const applyPlayerStats = async (payload: any) => {
     if (eventMeta?.goalType !== "own_goal") {
       inc.goals = 1;
 
-      // Goal Reward +2000
+      // Goal Reward — dynamic from DB
+      const goalCoin = pe?.goal?.coin ?? 2000;
       await UserDetails.findOneAndUpdate(
         { userId: player },
-        {
-          $inc: {
-            engCoine: 2000,
-          },
-        },
+        { $inc: { engCoine: goalCoin } },
       );
     }
 
@@ -194,28 +196,15 @@ const applyPlayerStats = async (payload: any) => {
     if (eventMeta?.assist) {
       await PlayerStats.findOneAndUpdate(
         { player: eventMeta.assist },
-        {
-          $inc: {
-            assists: 1,
-          },
-          $set: {
-            team,
-          },
-        },
-        {
-          upsert: true,
-          new: true,
-        },
+        { $inc: { assists: 1 }, $set: { team } },
+        { upsert: true, new: true },
       );
 
-      // Assist Reward +1000
+      // Assist Reward — dynamic from DB
+      const assistCoin = pe?.assist?.coin ?? 1000;
       await UserDetails.findOneAndUpdate(
         { userId: eventMeta.assist },
-        {
-          $inc: {
-            engCoine: 1000,
-          },
-        },
+        { $inc: { engCoine: assistCoin } },
       );
     }
   }
@@ -224,18 +213,14 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "yellow_card") {
     inc.yellowCards = 1;
 
+    // yellowCard.coin is stored as negative (e.g. -500) in DB
+    const yellowCardCoin = pe?.yellowCard?.coin ?? -500;
     const user = await UserDetails.findOne({ userId: player });
-
     if (user) {
-      const coins = Math.max(0, (user.engCoine ?? 0) - 500);
-
+      const newCoins = Math.max(0, (user.engCoine ?? 0) + yellowCardCoin);
       await UserDetails.findOneAndUpdate(
         { userId: player },
-        {
-          $set: {
-            engCoine: coins,
-          },
-        },
+        { $set: { engCoine: newCoins } },
       );
     }
   }
@@ -244,18 +229,14 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "red_card") {
     inc.redCards = 1;
 
+    // redCard.coin is stored as negative (e.g. -5000) in DB
+    const redCardCoin = pe?.redCard?.coin ?? -5000;
     const user = await UserDetails.findOne({ userId: player });
-
     if (user) {
-      const coins = Math.max(0, (user.engCoine ?? 0) - 5000);
-
+      const newCoins = Math.max(0, (user.engCoine ?? 0) + redCardCoin);
       await UserDetails.findOneAndUpdate(
         { userId: player },
-        {
-          $set: {
-            engCoine: coins,
-          },
-        },
+        { $set: { engCoine: newCoins } },
       );
     }
   }
@@ -263,16 +244,8 @@ const applyPlayerStats = async (payload: any) => {
   if (Object.keys(inc).length > 0) {
     await PlayerStats.findOneAndUpdate(
       { player },
-      {
-        $inc: inc,
-        $set: {
-          team,
-        },
-      },
-      {
-        upsert: true,
-        new: true,
-      },
+      { $inc: inc, $set: { team } },
+      { upsert: true, new: true },
     );
   }
 };
@@ -282,6 +255,9 @@ const rollbackPlayerStats = async (payload: any) => {
 
   if (!player) return;
 
+  // Fetch PlayerEconomy config from DB for rollback reversal
+  const pe = await PlayerEconomy.findOne();
+
   const inc: any = {};
 
   // ================= GOAL =================
@@ -289,19 +265,14 @@ const rollbackPlayerStats = async (payload: any) => {
     if (eventMeta?.goalType !== "own_goal") {
       inc.goals = -1;
 
-      // Remove Goal Reward
+      // Rollback goal coins — reverse of what was added
+      const goalCoin = pe?.goal?.coin ?? 2000;
       const user = await UserDetails.findOne({ userId: player });
-
       if (user) {
-        const coins = Math.max(0, (user.engCoine ?? 0) - 2000);
-
+        const newCoins = Math.max(0, (user.engCoine ?? 0) - goalCoin);
         await UserDetails.findOneAndUpdate(
           { userId: player },
-          {
-            $set: {
-              engCoine: coins,
-            },
-          },
+          { $set: { engCoine: newCoins } },
         );
       }
     }
@@ -310,27 +281,17 @@ const rollbackPlayerStats = async (payload: any) => {
     if (eventMeta?.assist) {
       await PlayerStats.findOneAndUpdate(
         { player: eventMeta.assist },
-        {
-          $inc: {
-            assists: -1,
-          },
-        },
+        { $inc: { assists: -1 } },
       );
 
-      const assistUser = await UserDetails.findOne({
-        userId: eventMeta.assist,
-      });
-
+      // Rollback assist coins
+      const assistCoin = pe?.assist?.coin ?? 1000;
+      const assistUser = await UserDetails.findOne({ userId: eventMeta.assist });
       if (assistUser) {
-        const coins = Math.max(0, (assistUser.engCoine ?? 0) - 1000);
-
+        const newCoins = Math.max(0, (assistUser.engCoine ?? 0) - assistCoin);
         await UserDetails.findOneAndUpdate(
           { userId: eventMeta.assist },
-          {
-            $set: {
-              engCoine: coins,
-            },
-          },
+          { $set: { engCoine: newCoins } },
         );
       }
     }
@@ -340,13 +301,11 @@ const rollbackPlayerStats = async (payload: any) => {
   if (eventType === "yellow_card") {
     inc.yellowCards = -1;
 
+    // yellowCard.coin is negative — rollback by adding back absolute value
+    const yellowCardCoin = Math.abs(pe?.yellowCard?.coin ?? -500);
     await UserDetails.findOneAndUpdate(
       { userId: player },
-      {
-        $inc: {
-          engCoine: 500,
-        },
-      },
+      { $inc: { engCoine: yellowCardCoin } },
     );
   }
 
@@ -354,22 +313,18 @@ const rollbackPlayerStats = async (payload: any) => {
   if (eventType === "red_card") {
     inc.redCards = -1;
 
+    // redCard.coin is negative — rollback by adding back absolute value
+    const redCardCoin = Math.abs(pe?.redCard?.coin ?? -5000);
     await UserDetails.findOneAndUpdate(
       { userId: player },
-      {
-        $inc: {
-          engCoine: 5000,
-        },
-      },
+      { $inc: { engCoine: redCardCoin } },
     );
   }
 
   if (Object.keys(inc).length > 0) {
     await PlayerStats.findOneAndUpdate(
       { player },
-      {
-        $inc: inc,
-      },
+      { $inc: inc },
     );
   }
 };
@@ -453,7 +408,6 @@ const updateMatchWinner = async (matchId: any) => {
 
   const homeTeamId = match.homeTeam;
   const awayTeamId = match.awayTeam;
-
   const homeScore = match.homeScore;
   const awayScore = match.awayScore;
 
@@ -464,32 +418,27 @@ const updateMatchWinner = async (matchId: any) => {
     winnerTeam = awayTeamId;
   }
 
-  // update match winner
-  await Match.findByIdAndUpdate(matchId, {
-    winnerTeam,
-  });
+  // Update match winner
+  await Match.findByIdAndUpdate(matchId, { winnerTeam });
+
+  // Fetch ClubEconomy config from DB for coin distribution
+  const ce = await ClubEconomy.findOne();
 
   // ===============================
   // 💰 COIN DISTRIBUTION LOGIC
   // ===============================
 
   if (homeScore === awayScore) {
-    // 🔵 DRAW CASE → both team get 2k
-    await Team.findByIdAndUpdate(homeTeamId, {
-      $inc: { coins: 2000 },
-    });
-
-    await Team.findByIdAndUpdate(awayTeamId, {
-      $inc: { coins: 2000 },
-    });
-
+    // 🔵 DRAW — both teams get drawMatch.coin
+    const drawCoin = ce?.drawMatch?.coin ?? 2000;
+    await Team.findByIdAndUpdate(homeTeamId, { $inc: { coin: drawCoin } });
+    await Team.findByIdAndUpdate(awayTeamId, { $inc: { coin: drawCoin } });
     return;
   }
 
-  // 🟢 WIN CASE → winner gets 5000
-  await Team.findByIdAndUpdate(winnerTeam, {
-    $inc: { coins: 5000 },
-  });
+  // 🟢 WIN — winner gets winMatch.coin
+  const winCoin = ce?.winMatch?.coin ?? 5000;
+  await Team.findByIdAndUpdate(winnerTeam, { $inc: { coin: winCoin } });
 };
 
 // ============================================================
