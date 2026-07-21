@@ -186,9 +186,10 @@ const applyPlayerStats = async (payload: any) => {
 
       // Goal Reward — dynamic from DB
       const goalCoin = pe?.goal?.coin ?? 2000;
+      const goalMV = pe?.goal?.marketValue ?? 20000;
       await UserDetails.findOneAndUpdate(
         { userId: player },
-        { $inc: { engCoine: goalCoin } },
+        { $inc: { engCoine: goalCoin, marketValue: goalMV } },
       );
     }
 
@@ -202,9 +203,10 @@ const applyPlayerStats = async (payload: any) => {
 
       // Assist Reward — dynamic from DB
       const assistCoin = pe?.assist?.coin ?? 1000;
+      const assistMV = pe?.assist?.marketValue ?? 10000;
       await UserDetails.findOneAndUpdate(
         { userId: eventMeta.assist },
-        { $inc: { engCoine: assistCoin } },
+        { $inc: { engCoine: assistCoin, marketValue: assistMV } },
       );
     }
   }
@@ -213,14 +215,16 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "yellow_card") {
     inc.yellowCards = 1;
 
-    // yellowCard.coin is stored as negative (e.g. -500) in DB
+    // yellowCard.coin and yellowCard.marketValue are stored as negative in DB
     const yellowCardCoin = pe?.yellowCard?.coin ?? -500;
+    const yellowCardMV = pe?.yellowCard?.marketValue ?? -5000;
     const user = await UserDetails.findOne({ userId: player });
     if (user) {
       const newCoins = Math.max(0, (user.engCoine ?? 0) + yellowCardCoin);
+      const newMV = Math.max(0, (user.marketValue ?? 0) + yellowCardMV);
       await UserDetails.findOneAndUpdate(
         { userId: player },
-        { $set: { engCoine: newCoins } },
+        { $set: { engCoine: newCoins, marketValue: newMV } },
       );
     }
   }
@@ -229,14 +233,16 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "red_card") {
     inc.redCards = 1;
 
-    // redCard.coin is stored as negative (e.g. -5000) in DB
+    // redCard.coin and redCard.marketValue are stored as negative in DB
     const redCardCoin = pe?.redCard?.coin ?? -5000;
+    const redCardMV = pe?.redCard?.marketValue ?? -50000;
     const user = await UserDetails.findOne({ userId: player });
     if (user) {
       const newCoins = Math.max(0, (user.engCoine ?? 0) + redCardCoin);
+      const newMV = Math.max(0, (user.marketValue ?? 0) + redCardMV);
       await UserDetails.findOneAndUpdate(
         { userId: player },
-        { $set: { engCoine: newCoins } },
+        { $set: { engCoine: newCoins, marketValue: newMV } },
       );
     }
   }
@@ -265,14 +271,16 @@ const rollbackPlayerStats = async (payload: any) => {
     if (eventMeta?.goalType !== "own_goal") {
       inc.goals = -1;
 
-      // Rollback goal coins — reverse of what was added
+      // Rollback goal coins and market value
       const goalCoin = pe?.goal?.coin ?? 2000;
+      const goalMV = pe?.goal?.marketValue ?? 20000;
       const user = await UserDetails.findOne({ userId: player });
       if (user) {
         const newCoins = Math.max(0, (user.engCoine ?? 0) - goalCoin);
+        const newMV = Math.max(0, (user.marketValue ?? 0) - goalMV);
         await UserDetails.findOneAndUpdate(
           { userId: player },
-          { $set: { engCoine: newCoins } },
+          { $set: { engCoine: newCoins, marketValue: newMV } },
         );
       }
     }
@@ -284,14 +292,16 @@ const rollbackPlayerStats = async (payload: any) => {
         { $inc: { assists: -1 } },
       );
 
-      // Rollback assist coins
+      // Rollback assist coins and market value
       const assistCoin = pe?.assist?.coin ?? 1000;
+      const assistMV = pe?.assist?.marketValue ?? 10000;
       const assistUser = await UserDetails.findOne({ userId: eventMeta.assist });
       if (assistUser) {
         const newCoins = Math.max(0, (assistUser.engCoine ?? 0) - assistCoin);
+        const newMV = Math.max(0, (assistUser.marketValue ?? 0) - assistMV);
         await UserDetails.findOneAndUpdate(
           { userId: eventMeta.assist },
-          { $set: { engCoine: newCoins } },
+          { $set: { engCoine: newCoins, marketValue: newMV } },
         );
       }
     }
@@ -303,9 +313,10 @@ const rollbackPlayerStats = async (payload: any) => {
 
     // yellowCard.coin is negative — rollback by adding back absolute value
     const yellowCardCoin = Math.abs(pe?.yellowCard?.coin ?? -500);
+    const yellowCardMV = Math.abs(pe?.yellowCard?.marketValue ?? -5000);
     await UserDetails.findOneAndUpdate(
       { userId: player },
-      { $inc: { engCoine: yellowCardCoin } },
+      { $inc: { engCoine: yellowCardCoin, marketValue: yellowCardMV } },
     );
   }
 
@@ -315,9 +326,10 @@ const rollbackPlayerStats = async (payload: any) => {
 
     // redCard.coin is negative — rollback by adding back absolute value
     const redCardCoin = Math.abs(pe?.redCard?.coin ?? -5000);
+    const redCardMV = Math.abs(pe?.redCard?.marketValue ?? -50000);
     await UserDetails.findOneAndUpdate(
       { userId: player },
-      { $inc: { engCoine: redCardCoin } },
+      { $inc: { engCoine: redCardCoin, marketValue: redCardMV } },
     );
   }
 
@@ -429,16 +441,18 @@ const updateMatchWinner = async (matchId: any) => {
   // ===============================
 
   if (homeScore === awayScore) {
-    // 🔵 DRAW — both teams get drawMatch.coin
+    // 🔵 DRAW — both teams get drawMatch.coin and drawMatch.budgetValue as market value
     const drawCoin = ce?.drawMatch?.coin ?? 2000;
-    await Team.findByIdAndUpdate(homeTeamId, { $inc: { coin: drawCoin } });
-    await Team.findByIdAndUpdate(awayTeamId, { $inc: { coin: drawCoin } });
+    const drawMV = ce?.drawMatch?.budgetValue ?? 20000;
+    await Team.findByIdAndUpdate(homeTeamId, { $inc: { coin: drawCoin, marketValue: drawMV } });
+    await Team.findByIdAndUpdate(awayTeamId, { $inc: { coin: drawCoin, marketValue: drawMV } });
     return;
   }
 
-  // 🟢 WIN — winner gets winMatch.coin
+  // 🟢 WIN — winner gets winMatch.coin and winMatch.budgetValue as market value
   const winCoin = ce?.winMatch?.coin ?? 5000;
-  await Team.findByIdAndUpdate(winnerTeam, { $inc: { coin: winCoin } });
+  const winMV = ce?.winMatch?.budgetValue ?? 50000;
+  await Team.findByIdAndUpdate(winnerTeam, { $inc: { coin: winCoin, marketValue: winMV } });
 };
 
 // ============================================================

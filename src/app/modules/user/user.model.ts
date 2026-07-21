@@ -36,6 +36,10 @@ const userSchema = new Schema<IUser, UserModal>(
       type: Number,
       required:false
     },
+    fcmToken: {
+      type: String,
+    default: null,
+    },
     location: {
       type: String,
       required: false,

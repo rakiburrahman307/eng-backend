@@ -10,4 +10,5 @@ export interface ITeam {
   country: string;
   manager?: Types.ObjectId | null;
   coin?: number;
+  marketValue?: number;
 }

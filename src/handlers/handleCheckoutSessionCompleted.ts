@@ -34,7 +34,7 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
   // Check if subscription already exists (idempotency guard)
   const alreadyExists = await Subscription.findOne({ subscriptionId });
   if (alreadyExists) {
-    console.log(`ℹ️ Subscription ${subscriptionId} already exists — skipping duplicate creation`);
+    
     return;
   }
 
@@ -44,7 +44,6 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
     status: 'active',
   });
   if (activeSubscription) {
-    console.log(`ℹ️ User ${userId} already has an active subscription — skipping`);
     return;
   }
 
@@ -112,8 +111,6 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
     message: `Your subscription for package "${pkg.title}" is now active. Enjoy all premium features!`,
     type: NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED,
   });
-
-  console.log(`✅ Subscription activated for user ${user._id} via checkout.session.completed`);
 
   return newSub;
 };

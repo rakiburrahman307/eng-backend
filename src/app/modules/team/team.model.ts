@@ -10,6 +10,7 @@ const teamSchema = new Schema(
     city: { type: String, required: true },
     country: { type: String, required: true },
     coin: { type: Number, default: 100000 },
+    marketValue: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

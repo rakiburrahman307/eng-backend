@@ -26,5 +26,6 @@ export type IUserDetails = {
   phone?: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
   engCoine?: number; // optional
+  marketValue?: number; // optional
   debutDate?: Date; // optional
 };

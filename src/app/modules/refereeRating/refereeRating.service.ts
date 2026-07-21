@@ -2,16 +2,44 @@ import { Team } from "../team/team.model";
 import { MatchEvaluation } from "./refereeRating.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 
-// Dynamically get coin reward based on rating from ClubEconomy config
-const getConductReward = async (rating: number): Promise<number> => {
+// Dynamically get coin and market value reward based on rating from ClubEconomy config
+const getConductReward = async (rating: number): Promise<{ coin: number; budgetValue: number }> => {
   const ce = await ClubEconomy.findOne();
 
-  if (rating >= 90) return ce?.exceptionalConduct?.coin ?? 2500;
-  if (rating >= 80) return ce?.goodConduct?.coin ?? 1500;
-  if (rating >= 60) return ce?.satisfactoryConduct?.coin ?? 500;
-  if (rating >= 50) return ce?.averageConduct?.coin ?? 0;
-  if (rating >= 30) return ce?.poorConduct?.coin ?? -1000;
-  return ce?.unprofessionalConduct?.coin ?? -3000;
+  if (rating >= 90) {
+    return {
+      coin: ce?.exceptionalConduct?.coin ?? 2500,
+      budgetValue: ce?.exceptionalConduct?.budgetValue ?? 25000,
+    };
+  }
+  if (rating >= 80) {
+    return {
+      coin: ce?.goodConduct?.coin ?? 1500,
+      budgetValue: ce?.goodConduct?.budgetValue ?? 15000,
+    };
+  }
+  if (rating >= 60) {
+    return {
+      coin: ce?.satisfactoryConduct?.coin ?? 500,
+      budgetValue: ce?.satisfactoryConduct?.budgetValue ?? 5000,
+    };
+  }
+  if (rating >= 50) {
+    return {
+      coin: ce?.averageConduct?.coin ?? 0,
+      budgetValue: ce?.averageConduct?.budgetValue ?? 0,
+    };
+  }
+  if (rating >= 30) {
+    return {
+      coin: ce?.poorConduct?.coin ?? -1000,
+      budgetValue: ce?.poorConduct?.budgetValue ?? -10000,
+    };
+  }
+  return {
+    coin: ce?.unprofessionalConduct?.coin ?? -3000,
+    budgetValue: ce?.unprofessionalConduct?.budgetValue ?? -30000,
+  };
 };
 
 // CREATE EVALUATION
@@ -32,11 +60,12 @@ const createEvaluationIntoDB = async (payload: any) => {
   for (const item of teams) {
     if (!item.teamId || item.rating == null) continue;
 
-    const coin = await getConductReward(item.rating);
+    const { coin, budgetValue } = await getConductReward(item.rating);
 
     await Team.findByIdAndUpdate(item.teamId, {
       $inc: {
         coin,
+        marketValue: budgetValue,
       },
     });
   }

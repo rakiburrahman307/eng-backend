@@ -7,9 +7,11 @@ import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 
 // CREATE TEAM
 const createTeamToDB = async (payload: any) => {
-  // Always assign starting budget from ClubEconomy config in DB
+  // Always assign starting budget and starting market value from ClubEconomy config in DB
   const clubEconomy = await ClubEconomy.findOne();
-  payload.coin = clubEconomy ? clubEconomy.startingBudget : 100000;
+  const startingBudget = clubEconomy ? clubEconomy.startingBudget : 100000;
+  payload.coin = startingBudget;
+  payload.marketValue = startingBudget;
   return await Team.create(payload);
 };
 

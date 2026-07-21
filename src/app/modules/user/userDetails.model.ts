@@ -61,6 +61,10 @@ const userDetailsSchema = new Schema<IUserDetails>(
       type: Number,
       default: 0,
     },
+    marketValue: {
+      type: Number,
+      default: 0,
+    },
     debutDate: {
       type: Date,
     },

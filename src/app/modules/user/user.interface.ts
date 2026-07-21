@@ -21,6 +21,7 @@ export type IUser = {
     email: string;
     password: string;
     rewardPoint: number;
+    fcmToken: string;
     location: string;
     profile: string;
     verified: boolean;

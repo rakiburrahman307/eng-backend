@@ -15,6 +15,11 @@ import {
   sendNotification,
 } from "../../../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
+import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
+
+
+
+
 
 const createAdminToDB = async (payload: any): Promise<IUser> => {
 
@@ -159,7 +164,14 @@ const updateProfileToDB = async (user: JwtPayload, payload: Partial<IUser>): Pro
     return updateDoc;
 };
 
+
+
 const createPlayerToDB = async (payload: any) => {
+  // Assign starting market value from PlayerEconomy config in DB
+  if (payload.marketValue === undefined) {
+    const pe = await PlayerEconomy.findOne();
+    payload.marketValue = pe ? pe.startingMarketValue : 100000;
+  }
   const result = await UserDetails.create(payload);
 
   if (!result) {
