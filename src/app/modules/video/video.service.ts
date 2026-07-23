@@ -62,17 +62,25 @@ const updateVideoToDB = async (
   userId: string,
   payload: Partial<IVideo>
 ) => {
+
   const video = await Video.findById(id);
 
+
+
   if (!video) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Video not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "Video not found");
   }
 
   if (video.createdBy?.toString() !== userId.toString()) {
-    throw new ApiError(StatusCodes.FORBIDDEN, 'Not allowed');
+    throw new ApiError(StatusCodes.FORBIDDEN, "Not allowed");
   }
 
-  return await Video.findByIdAndUpdate(id, payload, { new: true });
+  const updatedVideo = await Video.findByIdAndUpdate(id, payload, {
+    new: true,
+    runValidators: true,
+  });
+
+  return updatedVideo;
 };
 
 // DELETE

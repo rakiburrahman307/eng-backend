@@ -85,17 +85,38 @@ const updateVideo = catchAsync(async (req: Request, res: Response) => {
 
   const files = req.files as {
     video?: Express.Multer.File[];
+    image?: Express.Multer.File[];
   };
 
-  const video = files?.video?.[0];
 
-  const data = req.body?.data ? JSON.parse(req.body.data) : {};
+  const video = files?.video?.[0];
+  const thumbnail = files?.image?.[0];
+
+  const data = req.body?.data ? JSON.parse(req.body.data) : {}
 
   const payload: any = { ...data };
 
+  // 🎥 Video Upload
   if (video) {
-    payload.videoUrl = video.path.replace(/\\/g, '/').split('uploads')[1];
+    payload.videoUrl = video.path.replace(/\\/g, "/").split("uploads")[1];
   }
+
+  // 🖼️ Thumbnail Upload
+  if (thumbnail) {
+    payload.thumbnail = thumbnail.path
+      .replace(/\\/g, "/")
+      .split("uploads")[1];
+  }
+
+
+
+  // 📅 Publish Logic
+  if (payload.status === "publish") {
+    payload.publishDateTime = new Date();
+  } else if (payload.status === "draft") {
+    payload.publishDateTime = null;
+  }
+
 
   const result = await VideoService.updateVideoToDB(
     req.params.id as string,
@@ -106,7 +127,7 @@ const updateVideo = catchAsync(async (req: Request, res: Response) => {
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: 'Video updated successfully',
+    message: "Video updated successfully",
     data: result,
   });
 });
