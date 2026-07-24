@@ -90,14 +90,14 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
     status: 'active',
   });
 
-  // Activate user access, approve status, and add package credit to user's coin (engCoine)
+  // Activate user access and add package credit to coin (engCoine)
+  // ⚠️ status (APPROVED/REJECTED) is NOT changed here — admin must approve separately
   const creditToAdd = Number(pkg.credit) || 0;
 
   await User.findByIdAndUpdate(user._id, {
     $set: {
       isSubscribed: true,
       hasAccess: true,
-      status: 'APPROVED',
     },
     $inc: {
       engCoine: creditToAdd,

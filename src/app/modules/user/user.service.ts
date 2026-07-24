@@ -364,6 +364,42 @@ const updateUserCoinOrMarketValue = async (
   );
 };
 
+
+// APPROVE OR REJECT USER (Admin only)
+const approveOrRejectUser = async (
+  adminRole: string,
+  userId: string,
+  status: 'APPROVED' | 'REJECTED'
+) => {
+  // Only ADMIN and SUPER_ADMIN can perform this
+  const allowedAdminRoles = ['ADMIN', 'SUPER_ADMIN'];
+  if (!allowedAdminRoles.includes(adminRole)) {
+    throw new ApiError(StatusCodes.FORBIDDEN, 'Only admins can approve or reject users');
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+  }
+
+  // Only these roles need approval
+  const rolesRequiringApproval = ['PLAYER', 'MANAGER', 'REFEREE', 'OTHER_CLUBS'];
+  if (!rolesRequiringApproval.includes(user.role)) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      `Only PLAYER, MANAGER, REFEREE and OTHER_CLUBS accounts require approval. This user is a ${user.role}.`
+    );
+  }
+
+  const updated = await User.findByIdAndUpdate(
+    userId,
+    { $set: { status } },
+    { new: true }
+  );
+
+  return updated;
+};
+
 export const UserService = {
     createUserToDB,
     getUserProfileFromDB,
@@ -377,4 +413,5 @@ export const UserService = {
     getOtherClubByUserId,
     getOtherClubByUserIdUserId,
     updateUserCoinOrMarketValue,
+    approveOrRejectUser,
 };

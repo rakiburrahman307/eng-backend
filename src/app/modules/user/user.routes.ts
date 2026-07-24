@@ -123,4 +123,13 @@ router.patch(
   UserController.updateUserCoinOrMarketValue
 );
 
+// APPROVE OR REJECT USER (Admin / Super Admin only)
+// PATCH /api/v1/user/:userId/approve-status
+// Body: { "status": "APPROVED" }  OR  { "status": "REJECTED" }
+router.patch(
+  '/:userId/approve-status',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  UserController.approveOrRejectUser
+);
+
 export const UserRoutes = router;

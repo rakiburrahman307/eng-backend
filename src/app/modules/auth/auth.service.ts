@@ -40,6 +40,19 @@ const loginUserFromDB = async (payload: ILoginData) => {
     );
   }
 
+  // ✅ Block login if profile not yet approved by admin
+  // Only applies to PLAYER, MANAGER, REFEREE, OTHER_CLUBS
+  const rolesRequiringApproval = ['PLAYER', 'MANAGER', 'REFEREE', 'OTHER_CLUBS'];
+  if (
+    rolesRequiringApproval.includes(isExistUser.role) &&
+    isExistUser.status !== 'APPROVED'
+  ) {
+    throw new ApiError(
+      StatusCodes.FORBIDDEN,
+      'Your account is pending admin approval. Please wait for an admin to approve your profile before logging in.'
+    );
+  }
+
   // check password
   if (
     password &&

@@ -112,11 +112,12 @@ export const handleSubscriptionCreated = async (data: any) => {
 
   const creditToAdd = Number(pkg.credit) || 0;
 
+  // Activate user access and add coins
+  // ⚠️ status (APPROVED/REJECTED) is NOT changed here — admin must approve separately
   await User.findByIdAndUpdate(user._id, {
     $set: {
       isSubscribed: true,
       hasAccess: true,
-      status: "APPROVED",
     },
     $inc: {
       engCoine: creditToAdd,

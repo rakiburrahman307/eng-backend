@@ -404,6 +404,29 @@ const updateUserCoinOrMarketValue = catchAsync(async (req: Request, res: Respons
   });
 });
 
+// APPROVE OR REJECT USER (Admin / Super Admin only)
+const approveOrRejectUser = catchAsync(async (req: Request, res: Response) => {
+  const admin = req.user as any;
+  const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
+  const { status } = req.body;
+
+  if (!status || !['APPROVED', 'REJECTED'].includes(status)) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      'status must be either "APPROVED" or "REJECTED"'
+    );
+  }
+
+  const result = await UserService.approveOrRejectUser(admin.role, userId, status);
+
+  return sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: `User ${status === 'APPROVED' ? 'approved' : 'rejected'} successfully`,
+    data: result,
+  });
+});
+
 export const UserController = { 
     createUser, 
     createAdmin, 
@@ -417,4 +440,5 @@ export const UserController = {
     getOtherClub,
     getOtherClubByUserId,
     updateUserCoinOrMarketValue,
+    approveOrRejectUser,
 };
