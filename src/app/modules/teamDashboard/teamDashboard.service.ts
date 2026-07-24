@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { Team } from "../team/team.model";
 import { Match } from "../match/match.model";
 import { MatchResult } from "../matchResult/matchResult.model";
-import { UserDetails } from "../user/userDetails.model";
+import { User } from "../user/user.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
 
 
@@ -10,31 +10,17 @@ const getTeamDashboardFromDB = async (teamId: string) => {
   const teamObjectId = new mongoose.Types.ObjectId(teamId);
 
   // 👥 PLAYERS
-const playersAgg = await UserDetails.aggregate([
+const playersAgg = await User.aggregate([
   {
     $match: { selectTeam: teamObjectId },
-  },
-  {
-    $lookup: {
-      from: "users",
-      localField: "userId",
-      foreignField: "_id",
-      as: "user",
-    },
-  },
-  {
-    $unwind: {
-      path: "$user",
-      preserveNullAndEmptyArrays: true,
-    },
   },
   {
     $project: {
       _id: 1,
       firstName: 1,
       lastName: 1,
-      userId: 1, // 👈 add this
-      profile: "$user.profile",
+      userId: "$_id", // 👈 add this
+      profile: 1,
       position: 1,
     },
   },

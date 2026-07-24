@@ -1,13 +1,10 @@
 import QueryBuilder from "../../../util/queryBuilder";
-import { UserDetails } from "../user/userDetails.model";
+import { User } from "../user/user.model";
+import { USER_ROLES } from "../../../enums/user";
 
 
 const getAllPlayersFromDB = async (query: Record<string, any>) => {
-  const baseQuery = UserDetails.find()
-    .populate({
-      path: "userId",
-      select: "profile",
-    })
+  const baseQuery = User.find({ role: USER_ROLES.PLAYER })
     .populate({
       path: "selectTeam",
       select: "teamName shortName teamLogo",
@@ -29,7 +26,7 @@ const getAllPlayersFromDB = async (query: Record<string, any>) => {
     position: player.position,
     engCoine: player.engCoine || 0,
     marketValue: player.marketValue || 0,
-    profile: player.userId?.profile || null,
+    profile: player.profile || null,
     teamName: player.selectTeam?.teamName || null,
     shortName: player.selectTeam?.shortName || null,
     teamLogo: player.selectTeam?.teamLogo || null,
@@ -46,7 +43,7 @@ const getAllPlayersFromDB = async (query: Record<string, any>) => {
 const getFilteredPlayersFromDB = async (query: Record<string, any>) => {
   const { team, position, page = 1, limit = 10 } = query;
   // Build filter
-  const filter: Record<string, any> = {};
+  const filter: Record<string, any> = { role: USER_ROLES.PLAYER };
   if (team) {
     filter.selectTeam = team;
   }
@@ -59,11 +56,7 @@ const getFilteredPlayersFromDB = async (query: Record<string, any>) => {
   const pageNum = Number(page);
   const limitNum = Number(limit);
   const skip = (pageNum - 1) * limitNum;
-  const result = await UserDetails.find(filter)
-    .populate({
-      path: "userId",
-      select: "_id profile",
-    })
+  const result = await User.find(filter)
     .populate({
       path: "selectTeam",
       select: "teamName shortName teamLogo",
@@ -72,16 +65,15 @@ const getFilteredPlayersFromDB = async (query: Record<string, any>) => {
     .skip(skip)
     .limit(limitNum);
 
-  const total = await UserDetails.countDocuments(filter);
+  const total = await User.countDocuments(filter);
   const players = result.map((player: any) => ({
-    // ✅ Return User model _id instead of UserDetails _id
-    _id: player.userId?._id || null,
+    _id: player._id,
     firstName: player.firstName,
     lastName: player.lastName,
     position: player.position,
     engCoine: player.engCoine || 0,
     marketValue: player.marketValue || 0,
-    profile: player.userId?.profile || null,
+    profile: player.profile || null,
     teamName: player.selectTeam?.teamName || null,
     shortName: player.selectTeam?.shortName || null,
     teamLogo: player.selectTeam?.teamLogo || null,

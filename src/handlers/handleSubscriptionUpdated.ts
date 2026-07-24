@@ -75,6 +75,12 @@ export const handleSubscriptionUpdated = async (data: any) => {
             
                         await newSubscription.save();
 
+                        // Add package credit to user's coin (engCoine)
+                        const creditToAdd = Number(pkg.credit) || 0;
+                        await User.findByIdAndUpdate(existingUser._id, {
+                            $inc: { engCoine: creditToAdd },
+                        });
+
                         // 🔔 Send notification to User about subscription update
                         await sendNotification({
                             receiver: existingUser._id.toString(),
@@ -97,6 +103,11 @@ export const handleSubscriptionUpdated = async (data: any) => {
                             { status: 'active' },
                             { new: true }
                         );
+
+                        const creditToAdd = Number(pkg.credit) || 0;
+                        await User.findByIdAndUpdate(existingUser._id, {
+                            $inc: { engCoine: creditToAdd },
+                        });
 
                         // 🔔 Send notification to User about reactivation
                         await sendNotification({

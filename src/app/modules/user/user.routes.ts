@@ -113,8 +113,14 @@ router
     // auth(USER_ROLES.OTHER_CLUBS),
     UserController.getOtherClubByUserId
   );
-    
 
-
+// UPDATE USER COIN OR MARKET VALUE (Admin / Super Admin only)
+// PATCH /api/v1/user/:userId/economy
+// Body: { "engCoine": 500 }  OR  { "marketValue": 20000 }  OR both
+router.patch(
+  '/:userId/economy',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  UserController.updateUserCoinOrMarketValue
+);
 
 export const UserRoutes = router;

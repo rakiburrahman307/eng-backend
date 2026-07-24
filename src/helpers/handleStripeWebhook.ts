@@ -20,14 +20,12 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
   let event: any;
   try {
     event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
-
   } catch (err: any) {
     console.error("❌ Webhook signature verification failed:", err.message);
-
-    throw new ApiError(
-      StatusCodes.BAD_REQUEST,
-      `Webhook signature verification failed: ${err.message || err}`
-    );
+    return res.status(StatusCodes.BAD_REQUEST).json({
+      success: false,
+      message: `Webhook signature verification failed: ${err.message || err}`,
+    });
   }
 
   const eventType = event.type;
@@ -36,22 +34,18 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
   try {
     switch (eventType) {
       case "checkout.session.completed":
-
         await handleCheckoutSessionCompleted(data);
         break;
 
       case "customer.subscription.created":
-
         await handleSubscriptionCreated(data);
         break;
 
       case "customer.subscription.updated":
-
         await handleSubscriptionUpdated(data);
         break;
 
       case "customer.subscription.deleted":
-
         await handleSubscriptionDeleted(data);
         break;
 
@@ -60,14 +54,12 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
         logger.warn(colors.yellow(`Unhandled event: ${eventType}`));
         break;
     }
-
   } catch (error: any) {
     console.error("❌ Webhook handler error:", error);
-
-    throw new ApiError(
-      StatusCodes.INTERNAL_SERVER_ERROR,
-      `Webhook handler error: ${error.message || error}`
-    );
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: `Webhook handler error: ${error.message || error}`,
+    });
   }
 
 

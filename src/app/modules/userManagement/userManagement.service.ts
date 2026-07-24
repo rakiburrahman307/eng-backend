@@ -67,34 +67,16 @@ const getAllRefereesFromDB = async () => {
         role: USER_ROLES.REFEREE,
       },
     },
-
-    {
-      $lookup: {
-        from: "userdetails",
-        localField: "_id",
-        foreignField: "userId",
-        as: "details",
-      },
-    },
-
-    {
-      $unwind: {
-        path: "$details",
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-
     {
       $project: {
         _id: 1,
         userName: 1,
         firstName: {
-          $ifNull: ["$details.firstName", null],
+          $ifNull: ["$firstName", null],
         },
         lastName: {
-          $ifNull: ["$details.lastName", null],
+          $ifNull: ["$lastName", null],
         },
-
       },
     },
   ]);
@@ -108,34 +90,16 @@ const getAllManagersFromDB = async () => {
         role: USER_ROLES.MANAGER,
       },
     },
-
-    {
-      $lookup: {
-        from: "userdetails",
-        localField: "_id",
-        foreignField: "userId",
-        as: "details",
-      },
-    },
-
-    {
-      $unwind: {
-        path: "$details",
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-
     {
       $project: {
         _id: 1,
         userName: 1,
         firstName: {
-          $ifNull: ["$details.firstName", null],
+          $ifNull: ["$firstName", null],
         },
         lastName: {
-          $ifNull: ["$details.lastName", null],
+          $ifNull: ["$lastName", null],
         },
-
       },
     },
   ]);

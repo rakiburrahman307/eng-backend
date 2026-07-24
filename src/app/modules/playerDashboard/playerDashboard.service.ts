@@ -2,20 +2,14 @@ import mongoose from "mongoose";
 
 import { MatchResult } from "../matchResult/matchResult.model";
 import { Team } from "../team/team.model";
-import { UserDetails } from "../user/userDetails.model";
+import { User } from "../user/user.model";
 
 const getPlayerDashboardFromDB = async (playerId: string) => {
   const playerObjectId = new mongoose.Types.ObjectId(playerId);
 
   // 👤 PLAYER INFO
-  const player = await UserDetails.findOne({
-    userId: playerObjectId,
-  })
-    .populate("selectTeam")
-    .populate({
-      path: "userId",
-      select: "profile",
-    });
+  const player = await User.findById(playerObjectId)
+    .populate("selectTeam");
 
   if (!player) {
     throw new Error("Player not found");
@@ -23,7 +17,7 @@ const getPlayerDashboardFromDB = async (playerId: string) => {
 
   // Calculate age
   const today = new Date();
-  const dob = new Date(player.dateOfBirth);
+  const dob = player.dateOfBirth ? new Date(player.dateOfBirth) : today;
 
   let age = today.getFullYear() - dob.getFullYear();
   const monthDiff = today.getMonth() - dob.getMonth();
@@ -38,10 +32,10 @@ const getPlayerDashboardFromDB = async (playerId: string) => {
   const playerData: any = player.toObject();
 
   // Add profile and age separately
-  playerData.profile = playerData.userId?.profile || null;
+  playerData.profile = playerData.profile || null;
 //   playerData.age = age;
 
-  // Optional: remove populated user object
+  // Optional: mapping _id to userId for consistency
   playerData.userId = playerObjectId;
 
   // ⚽ MATCH STATS

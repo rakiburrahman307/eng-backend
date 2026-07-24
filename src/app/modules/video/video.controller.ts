@@ -9,23 +9,16 @@ const createVideo = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as any;
 
   const files = req.files as {
-    video?: Express.Multer.File[];
     image?: Express.Multer.File[];
   };
 
-  const video = files?.video?.[0];
   const thumbnail = files?.image?.[0];
 
   const data = req.body?.data ? JSON.parse(req.body.data) : {};
 
   const payload: any = { ...data };
 
-  // 🎥 Video Upload
-  if (video) {
-    payload.videoUrl = video.path.replace(/\\/g, '/').split('uploads')[1];
-  }
-
-  // 🖼️ Thumbnail Upload
+  // 🖼️ Thumbnail Upload (still local)
   if (thumbnail) {
     payload.thumbnail = thumbnail.path
       .replace(/\\/g, '/')
@@ -84,31 +77,21 @@ const updateVideo = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as any;
 
   const files = req.files as {
-    video?: Express.Multer.File[];
     image?: Express.Multer.File[];
   };
 
-
-  const video = files?.video?.[0];
   const thumbnail = files?.image?.[0];
 
   const data = req.body?.data ? JSON.parse(req.body.data) : {}
 
   const payload: any = { ...data };
 
-  // 🎥 Video Upload
-  if (video) {
-    payload.videoUrl = video.path.replace(/\\/g, "/").split("uploads")[1];
-  }
-
-  // 🖼️ Thumbnail Upload
+  // 🖼️ Thumbnail Upload (still local)
   if (thumbnail) {
     payload.thumbnail = thumbnail.path
       .replace(/\\/g, "/")
       .split("uploads")[1];
   }
-
-
 
   // 📅 Publish Logic
   if (payload.status === "publish") {
@@ -179,6 +162,32 @@ const getPublicVideos = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// GET PRE-SIGNED URL
+const getPresignedUrl = catchAsync(async (req: Request, res: Response) => {
+  const { fileName, contentType } = req.query;
+
+  if (!fileName || !contentType) {
+    return sendResponse(res, {
+      success: false,
+      statusCode: 400,
+      message: 'fileName and contentType are required',
+      data: null,
+    });
+  }
+
+  const result = await VideoService.generatePresignedUrl(
+    fileName as string,
+    contentType as string
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Pre-signed URL generated successfully',
+    data: result,
+  });
+});
+
 export const VideoController = {
   createVideo,
   getAllVideos,
@@ -186,5 +195,6 @@ export const VideoController = {
   updateVideo,
   deleteVideo,
   toggleVideoStatus,
-  getPublicVideos
+  getPublicVideos,
+  getPresignedUrl,
 };

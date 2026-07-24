@@ -6,7 +6,7 @@ import QueryBuilder from "../../../util/queryBuilder";
 import ApiError from "../../../errors/ApiErrors";
 import { Match } from "../match/match.model";
 import { Team } from "../team/team.model";
-import { UserDetails } from "../user/userDetails.model";
+import { User } from "../user/user.model";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 
@@ -187,8 +187,8 @@ const applyPlayerStats = async (payload: any) => {
       // Goal Reward — dynamic from DB
       const goalCoin = pe?.goal?.coin ?? 2000;
       const goalMV = pe?.goal?.marketValue ?? 20000;
-      await UserDetails.findOneAndUpdate(
-        { userId: player },
+      await User.findOneAndUpdate(
+        { _id: player },
         { $inc: { engCoine: goalCoin, marketValue: goalMV } },
       );
     }
@@ -204,8 +204,8 @@ const applyPlayerStats = async (payload: any) => {
       // Assist Reward — dynamic from DB
       const assistCoin = pe?.assist?.coin ?? 1000;
       const assistMV = pe?.assist?.marketValue ?? 10000;
-      await UserDetails.findOneAndUpdate(
-        { userId: eventMeta.assist },
+      await User.findOneAndUpdate(
+        { _id: eventMeta.assist },
         { $inc: { engCoine: assistCoin, marketValue: assistMV } },
       );
     }
@@ -218,12 +218,12 @@ const applyPlayerStats = async (payload: any) => {
     // yellowCard.coin and yellowCard.marketValue are stored as negative in DB
     const yellowCardCoin = pe?.yellowCard?.coin ?? -500;
     const yellowCardMV = pe?.yellowCard?.marketValue ?? -5000;
-    const user = await UserDetails.findOne({ userId: player });
+    const user = await User.findById(player);
     if (user) {
       const newCoins = Math.max(0, (user.engCoine ?? 0) + yellowCardCoin);
       const newMV = Math.max(0, (user.marketValue ?? 0) + yellowCardMV);
-      await UserDetails.findOneAndUpdate(
-        { userId: player },
+      await User.findOneAndUpdate(
+        { _id: player },
         { $set: { engCoine: newCoins, marketValue: newMV } },
       );
     }
@@ -236,12 +236,12 @@ const applyPlayerStats = async (payload: any) => {
     // redCard.coin and redCard.marketValue are stored as negative in DB
     const redCardCoin = pe?.redCard?.coin ?? -5000;
     const redCardMV = pe?.redCard?.marketValue ?? -50000;
-    const user = await UserDetails.findOne({ userId: player });
+    const user = await User.findById(player);
     if (user) {
       const newCoins = Math.max(0, (user.engCoine ?? 0) + redCardCoin);
       const newMV = Math.max(0, (user.marketValue ?? 0) + redCardMV);
-      await UserDetails.findOneAndUpdate(
-        { userId: player },
+      await User.findOneAndUpdate(
+        { _id: player },
         { $set: { engCoine: newCoins, marketValue: newMV } },
       );
     }
@@ -274,12 +274,12 @@ const rollbackPlayerStats = async (payload: any) => {
       // Rollback goal coins and market value
       const goalCoin = pe?.goal?.coin ?? 2000;
       const goalMV = pe?.goal?.marketValue ?? 20000;
-      const user = await UserDetails.findOne({ userId: player });
+      const user = await User.findById(player);
       if (user) {
         const newCoins = Math.max(0, (user.engCoine ?? 0) - goalCoin);
         const newMV = Math.max(0, (user.marketValue ?? 0) - goalMV);
-        await UserDetails.findOneAndUpdate(
-          { userId: player },
+        await User.findOneAndUpdate(
+          { _id: player },
           { $set: { engCoine: newCoins, marketValue: newMV } },
         );
       }
@@ -295,12 +295,12 @@ const rollbackPlayerStats = async (payload: any) => {
       // Rollback assist coins and market value
       const assistCoin = pe?.assist?.coin ?? 1000;
       const assistMV = pe?.assist?.marketValue ?? 10000;
-      const assistUser = await UserDetails.findOne({ userId: eventMeta.assist });
+      const assistUser = await User.findById(eventMeta.assist);
       if (assistUser) {
         const newCoins = Math.max(0, (assistUser.engCoine ?? 0) - assistCoin);
         const newMV = Math.max(0, (assistUser.marketValue ?? 0) - assistMV);
-        await UserDetails.findOneAndUpdate(
-          { userId: eventMeta.assist },
+        await User.findOneAndUpdate(
+          { _id: eventMeta.assist },
           { $set: { engCoine: newCoins, marketValue: newMV } },
         );
       }
@@ -314,8 +314,8 @@ const rollbackPlayerStats = async (payload: any) => {
     // yellowCard.coin is negative — rollback by adding back absolute value
     const yellowCardCoin = Math.abs(pe?.yellowCard?.coin ?? -500);
     const yellowCardMV = Math.abs(pe?.yellowCard?.marketValue ?? -5000);
-    await UserDetails.findOneAndUpdate(
-      { userId: player },
+    await User.findOneAndUpdate(
+      { _id: player },
       { $inc: { engCoine: yellowCardCoin, marketValue: yellowCardMV } },
     );
   }
@@ -327,8 +327,8 @@ const rollbackPlayerStats = async (payload: any) => {
     // redCard.coin is negative — rollback by adding back absolute value
     const redCardCoin = Math.abs(pe?.redCard?.coin ?? -5000);
     const redCardMV = Math.abs(pe?.redCard?.marketValue ?? -50000);
-    await UserDetails.findOneAndUpdate(
-      { userId: player },
+    await User.findOneAndUpdate(
+      { _id: player },
       { $inc: { engCoine: redCardCoin, marketValue: redCardMV } },
     );
   }

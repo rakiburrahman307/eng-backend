@@ -26,7 +26,7 @@ async function main() {
         
         mongoose.connect(config.database_url as string);
         logger.info(colors.green('🚀 Database connected successfully'));
-        seedSuperAdmin();
+        await seedSuperAdmin();
 
         const port = typeof config.port === 'number' ? config.port : Number(config.port);
 
@@ -46,29 +46,42 @@ async function main() {
         global.io = io;
 
     } catch (error) {
-        errorLogger.error(colors.red('🤢 Failed to connect Database'));
+        errorLogger.error(colors.red('🤢 Failed to connect Database'), error);
         process.exit(1);
     }
 
-    //handle unhandledRejection
+    //handle unhandledRejection safely without crashing server
     process.on('unhandledRejection', error => {
-        if (server) {
-            server.close(() => {
-                errorLogger.error('UnhandledRejection Detected', error);
-                process.exit(1);
-            });
-        } else {
-            process.exit(1);
-        }
+        errorLogger.error('UnhandledRejection Detected:', error);
     });
 }
 
 main();
 
-//SIGTERM
+// ─────────────────────────────────────────────────────────────────────────────
+// SIGTERM — sent by ts-node-dev when a file changes (hot-reload)
+// server.close() stops new connections but WAITS for keep-alive connections.
+// Without a timeout the process hangs → fixed with a 5-second force-exit.
+// ─────────────────────────────────────────────────────────────────────────────
 process.on('SIGTERM', () => {
-    logger.info('SIGTERM IS RECEIVE');
+    logger.info('SIGTERM received — gracefully shutting down...');
+
     if (server) {
-        server.close();
+        // Force-close all idle keep-alive sockets immediately (Node ≥ 18.2)
+        server.closeAllConnections?.();
+
+        server.close(() => {
+            logger.info('HTTP server closed cleanly.');
+            process.exit(0); // ✅ clean exit → ts-node-dev restarts
+        });
+
+        // Safety net: force-exit after 3 s so ts-node-dev can restart
+        // exit(0) — NOT exit(1) — otherwise ts-node-dev stops restarting
+        setTimeout(() => {
+            logger.info('Force exit after 3 s timeout on SIGTERM');
+            process.exit(0); // ✅ must be 0 for ts-node-dev auto-restart
+        }, 3000).unref();
+    } else {
+        process.exit(0);
     }
-});  
+});

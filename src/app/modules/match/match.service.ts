@@ -6,7 +6,6 @@ import { Team } from "../team/team.model";
 import { getRatingCoin } from "../../../util/getRatingCoin";
 import mongoose from "mongoose";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
-import { UserDetails } from "../user/userDetails.model";
 import { sendNotification } from "../../../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 
@@ -237,7 +236,7 @@ const toggleMatchStatusToDB = async (id: string) => {
     const matchName = `${homeTeam?.teamName || "Home Team"} vs ${awayTeam?.teamName || "Away Team"}`;
     
     // Find all users (players, managers, etc.) belonging to both teams
-    const userDetails = await UserDetails.find({
+    const userDetails = await User.find({
       selectTeam: { $in: [match.homeTeam, match.awayTeam] }
     });
 
@@ -248,9 +247,9 @@ const toggleMatchStatusToDB = async (id: string) => {
         : `The match ${matchName} has finished. Check the final match results and ratings.`;
 
       for (const details of userDetails) {
-        if (details.userId) {
+        if (details._id) {
           await sendNotification({
-            receiver: details.userId.toString(),
+            receiver: details._id.toString(),
             title,
             message,
             type: NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,

@@ -8,7 +8,6 @@ import generateOTP from "../../../util/generateOTP";
 import { emailTemplate } from "../../../shared/emailTemplate";
 import { emailHelper } from "../../../helpers/emailHelper";
 import unlinkFile from "../../../shared/unlinkFile";
-import { UserDetails } from "./userDetails.model";
 import { Subscription } from "../subscription/subscription.model";
 import {
   sendNotificationToAdmins,
@@ -103,10 +102,8 @@ const getUserProfileFromDB = async (user: JwtPayload) => {
     return null;
   }
 
-  // user details
-  const userDetails = await UserDetails.findOne({ userId: id }).select(
-    "firstName lastName status"
-  );
+  // user details are merged into user
+  const userDetails = isExistUser;
 
 
 
@@ -172,14 +169,20 @@ const createPlayerToDB = async (payload: any) => {
     const pe = await PlayerEconomy.findOne();
     payload.marketValue = pe ? pe.startingMarketValue : 100000;
   }
-  const result = await UserDetails.create(payload);
+  // Find the user to get their role
+  const user = await User.findById(payload.userId);
+  if (!user) throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
+
+  const result = await User.findOneAndUpdate(
+    { _id: payload.userId },
+    payload,
+    { new: true, runValidators: true }
+  );
 
   if (!result) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create player");
   }
 
-  // Find the user to get their role
-  const user = await User.findById(payload.userId);
   const role = user?.role || "USER";
 
   // 🔔 Notify all admins: new player/referee/manager/club profile created
@@ -201,14 +204,14 @@ const updatePlayerByUserId = async (
   userId: string,
   payload: any
 ) => {
-  const isExist = await UserDetails.findOne({ userId });
+  const isExist = await User.findById(userId);
 
   if (!isExist) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Player not found");
   }
 
-  const result = await UserDetails.findOneAndUpdate(
-    { userId },
+  const result = await User.findByIdAndUpdate(
+    userId,
     payload,
     {
       new: true,
@@ -222,12 +225,10 @@ const updatePlayerByUserId = async (
 
 
 const getPlayerByUserId = async (userId: string) => {
-  const result = await UserDetails.findOne({
-    userId,
-  }).populate({
+  const result = await User.findById(userId).populate({
     path: "selectTeam",
     select: "teamName", // Team model e jei field e team name ache
-  });
+  }).lean();
 
   if (!result) {
     throw new ApiError(
@@ -236,16 +237,14 @@ const getPlayerByUserId = async (userId: string) => {
     );
   }
 
-  return result;
+  return { ...result, userId: result._id };
 };
 
 
 const getManagerByUserId = async (
   userId: string
 ) => {
-  const result = await UserDetails.findOne({
-    userId,
-  })
+  const result = await User.findById(userId)
     .populate('selectTeam', 'teamName')
     .lean();
 
@@ -258,6 +257,7 @@ const getManagerByUserId = async (
 
   return {
     ...result,
+    userId: result._id,
     selectTeam: result.selectTeam
       ? {
           id: (result.selectTeam as any)._id,
@@ -271,9 +271,7 @@ const getManagerByUserId = async (
 const getRefereeByUserId = async (
   userId: string
 ) => {
-  const result = await UserDetails.findOne({
-    userId,
-  });
+  const result = await User.findById(userId).lean();
 
   if (!result) {
     throw new ApiError(
@@ -282,7 +280,7 @@ const getRefereeByUserId = async (
     );
   }
 
-  return result;
+  return { ...result, userId: result?._id };
 };
 
 
@@ -290,9 +288,7 @@ const getRefereeByUserId = async (
 const getOtherClubByUserId = async (
   userId: string
 ) => {
-  const result = await UserDetails.findOne({
-    userId,
-  });
+  const result = await User.findById(userId).lean();
 
   if (!result) {
     throw new ApiError(
@@ -301,20 +297,16 @@ const getOtherClubByUserId = async (
     );
   }
 
-  return result;
+  return { ...result, userId: result?._id };
 };
 
 
 
 const getOtherClubByUserIdUserId = async (userId: string) => {
-  const result = await UserDetails.findOne({ userId })
+  const result = await User.findById(userId)
     .populate({
       path: 'selectTeam',
       select: 'teamName _id',
-    })
-    .populate({
-      path: 'userId',
-      select: 'profile',
     })
     .lean();
 
@@ -329,12 +321,47 @@ const getOtherClubByUserIdUserId = async (userId: string) => {
       selectTeam: (result.selectTeam as any)?.teamName || null,
       selectTeamId: (result.selectTeam as any)?._id || null,
 
-    // flatten user profile (NO userId object)
-    profile: (result.userId as any)?.profile || null,
-
-    // remove full user object
-    userId: undefined,
+    userId: result._id,
   };
+};
+
+
+// UPDATE USER COIN OR MARKET VALUE (Admin only)
+const updateUserCoinOrMarketValue = async (
+  userId: string,
+  payload: { engCoine?: number; marketValue?: number }
+) => {
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+  }
+
+  const updateData: Record<string, number> = {};
+
+  if (payload.engCoine !== undefined) {
+    if (typeof payload.engCoine !== 'number' || payload.engCoine < 0) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'engCoine must be a non-negative number');
+    }
+    updateData.engCoine = payload.engCoine;
+  }
+
+  if (payload.marketValue !== undefined) {
+    if (typeof payload.marketValue !== 'number' || payload.marketValue < 0) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'marketValue must be a non-negative number');
+    }
+    updateData.marketValue = payload.marketValue;
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'At least one field (engCoine or marketValue) must be provided');
+  }
+
+  return await User.findByIdAndUpdate(
+    userId,
+    { $set: updateData },
+    { new: true, runValidators: true }
+  );
 };
 
 export const UserService = {
@@ -348,5 +375,6 @@ export const UserService = {
     getManagerByUserId,
     getRefereeByUserId,
     getOtherClubByUserId,
-    getOtherClubByUserIdUserId
+    getOtherClubByUserIdUserId,
+    updateUserCoinOrMarketValue,
 };

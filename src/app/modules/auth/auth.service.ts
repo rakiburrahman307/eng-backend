@@ -17,7 +17,6 @@ import generateOTP from '../../../util/generateOTP';
 import { ResetToken } from '../resetToken/resetToken.model';
 import { User } from '../user/user.model';
 import { IUser } from '../user/user.interface';
-import { UserDetails } from '../user/userDetails.model';
 import { Subscription } from '../subscription/subscription.model';
 import { sendNotification } from '../../../helpers/notificationsHelper';
 import { NOTIFICATION_TYPE } from '../notification/notification.interface';
@@ -49,10 +48,8 @@ const loginUserFromDB = async (payload: ILoginData) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Password is incorrect!');
   }
 
-  // get user details
-  const userDetails = await UserDetails.findOne({
-    userId: isExistUser._id,
-  });
+  // user details are merged into user
+  const userDetails = isExistUser;
 
   // check active subscription
   const subscription = await Subscription.findOne({

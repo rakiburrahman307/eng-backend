@@ -6,7 +6,6 @@ import stripe from "../config/stripe";
 import { User } from "../app/modules/user/user.model";
 import { Package } from "../app/modules/package/package.model";
 import { Subscription } from "../app/modules/subscription/subscription.model";
-import { UserDetails } from "../app/modules/user/userDetails.model";
 import { sendNotification } from "../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../app/modules/notification/notification.interface";
 
@@ -111,18 +110,18 @@ export const handleSubscriptionCreated = async (data: any) => {
 
 
 
+  const creditToAdd = Number(pkg.credit) || 0;
+
   await User.findByIdAndUpdate(user._id, {
-    isSubscribed: true,
-    hasAccess: true,
+    $set: {
+      isSubscribed: true,
+      hasAccess: true,
+      status: "APPROVED",
+    },
+    $inc: {
+      engCoine: creditToAdd,
+    },
   });
-
-
-
-  await UserDetails.findOneAndUpdate(
-    { userId: user._id },
-    { status: "APPROVED" },
-    { new: true }
-  );
 
 
 
@@ -131,7 +130,7 @@ export const handleSubscriptionCreated = async (data: any) => {
   // 🔔 Send notification to User about subscription activation
   await sendNotification({
     receiver: user._id.toString(),
-    title: "Subscription Activated! 🚀",
+    title: "Subscription Activated! ",
     message: `Your subscription for package "${pkg.title}" is now active. Enjoy all premium features!`,
     type: NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED,
   });

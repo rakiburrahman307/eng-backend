@@ -239,24 +239,11 @@ const getLeagueSummaryFromDB = async (leagueName?: string) => {
     },
 
     {
-      $lookup: {
-        from: "userdetails",
-        localField: "_id",
-        foreignField: "userId",
-        as: "details",
-      },
-    },
-
-    {
-      $unwind: "$details",
-    },
-
-    {
       $project: {
         _id: 0,
         totalGoals: 1,
-        firstName: "$details.firstName",
-        lastName: "$details.lastName",
+        firstName: "$user.firstName",
+        lastName: "$user.lastName",
         profile: "$user.profile",
       },
     },
@@ -307,24 +294,11 @@ const getLeagueSummaryFromDB = async (leagueName?: string) => {
     },
 
     {
-      $lookup: {
-        from: "userdetails",
-        localField: "_id",
-        foreignField: "userId",
-        as: "details",
-      },
-    },
-
-    {
-      $unwind: "$details",
-    },
-
-    {
       $project: {
         _id: 0,
         totalAssists: 1,
-        firstName: "$details.firstName",
-        lastName: "$details.lastName",
+        firstName: "$user.firstName",
+        lastName: "$user.lastName",
         profile: "$user.profile",
       },
     },
@@ -516,23 +490,10 @@ const getSeasonLeaderboardFromDB = async (season?: string) => {
     },
 
     {
-      $lookup: {
-        from: "userdetails",
-        localField: "_id",
-        foreignField: "userId",
-        as: "details",
-      },
-    },
-
-    {
-      $unwind: "$details",
-    },
-
-    {
       $project: {
         _id: 0,
-        firstName: "$details.firstName",
-        lastName: "$details.lastName",
+        firstName: "$user.firstName",
+        lastName: "$user.lastName",
         profile: "$user.profile",
         totalGoals: 1,
       },
@@ -589,23 +550,10 @@ const getSeasonLeaderboardFromDB = async (season?: string) => {
     },
 
     {
-      $lookup: {
-        from: "userdetails",
-        localField: "_id",
-        foreignField: "userId",
-        as: "details",
-      },
-    },
-
-    {
-      $unwind: "$details",
-    },
-
-    {
       $project: {
         _id: 0,
-        firstName: "$details.firstName",
-        lastName: "$details.lastName",
+        firstName: "$user.firstName",
+        lastName: "$user.lastName",
         profile: "$user.profile",
         totalAssists: 1,
       },

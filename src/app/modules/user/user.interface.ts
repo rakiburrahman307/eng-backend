@@ -1,6 +1,19 @@
 import { Model, Types } from 'mongoose';
 import { USER_ROLES } from '../../../enums/user';
 
+export enum AGE_GROUP {
+  U16 = "U16",
+  U18 = "U18",
+  U21 = "U21",
+  SENIOR = "SENIOR",
+}
+
+export enum SELECT_GROUP {
+  A = "A",
+  B = "B",
+  C = "C",
+}
+
 interface IStripeAccountInfo {
     status: string;
     stripeAccountId: string;
@@ -27,6 +40,21 @@ export type IUser = {
     verified: boolean;
     authentication?: IAuthenticationProps;
     accountInformation?: IStripeAccountInfo;
+
+    // UserDetails properties
+    firstName?: string;
+    lastName?: string;
+    dateOfBirth?: Date;
+    strongFoot?: string;
+    ageGroup?: AGE_GROUP;
+    selectTeam?: Types.ObjectId;
+    position?: string;
+    document?: string[];
+    phone?: string;
+    status?: "PENDING" | "APPROVED" | "REJECTED";
+    engCoine?: number;
+    marketValue?: number;
+    debutDate?: Date;
 }
 
 export type UserModal = {

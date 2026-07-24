@@ -1,6 +1,5 @@
 import QueryBuilder from "../../../util/queryBuilder";
 import { Team } from "./team.model";
-import { UserDetails } from "../user/userDetails.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
 import { User } from "../user/user.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
@@ -30,7 +29,7 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
   const teamIds = teams.map((t) => t._id);
 
   // 👥 MEMBERS COUNT
-  const memberCounts = await UserDetails.aggregate([
+  const memberCounts = await User.aggregate([
     {
       $match: { selectTeam: { $in: teamIds } },
     },
@@ -52,12 +51,7 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
   // 🧑‍💼 USER DETAILS (PROFILE FROM USER MODEL)
   const users = await User.find({
     _id: { $in: managerUserIds },
-  }).select("profile");
-
-  // 🧑‍💼 USER DETAILS (NAME FROM USERDETAILS MODEL)
-  const userDetails = await UserDetails.find({
-    userId: { $in: managerUserIds },
-  }).select("userId firstName lastName");
+  }).select("profile firstName lastName");
 
   // MAP RESULT
   const result = teams.map((team) => {
@@ -72,14 +66,10 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
           (u) => u._id.toString() === m.manager.toString()
         );
 
-        const detail = userDetails.find(
-          (d) => d.userId.toString() === m.manager.toString()
-        );
-
         return {
           _id: m.manager,
-          firstName: detail?.firstName || null,
-          lastName: detail?.lastName || null,
+          firstName: user?.firstName || null,
+          lastName: user?.lastName || null,
           profile: user?.profile || null,
         };
       });
@@ -106,7 +96,7 @@ const getSingleTeamFromDB = async (id: string) => {
     throw new Error("Team not found");
   }
 
-  const members = await UserDetails.find({ selectTeam: id }).select(
+  const members = await User.find({ selectTeam: id }).select(
     "firstName lastName document position",
   );
 
@@ -149,10 +139,49 @@ const deleteTeamFromDB = async (id: string) => {
   return await Team.findByIdAndDelete(id);
 };
 
+// UPDATE TEAM COIN OR MARKET VALUE (Admin only)
+const updateTeamCoinOrMarketValue = async (
+  id: string,
+  payload: { coin?: number; marketValue?: number }
+) => {
+  const team = await Team.findById(id);
+
+  if (!team) {
+    throw new Error("Team not found");
+  }
+
+  const updateData: Record<string, number> = {};
+
+  if (payload.coin !== undefined) {
+    if (typeof payload.coin !== 'number' || payload.coin < 0) {
+      throw new Error("coin must be a non-negative number");
+    }
+    updateData.coin = payload.coin;
+  }
+
+  if (payload.marketValue !== undefined) {
+    if (typeof payload.marketValue !== 'number' || payload.marketValue < 0) {
+      throw new Error("marketValue must be a non-negative number");
+    }
+    updateData.marketValue = payload.marketValue;
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    throw new Error("At least one field (coin or marketValue) must be provided");
+  }
+
+  return await Team.findByIdAndUpdate(
+    id,
+    { $set: updateData },
+    { new: true, runValidators: true }
+  );
+};
+
 export const TeamService = {
   createTeamToDB,
   getAllTeamsFromDB,
   getSingleTeamFromDB,
   updateTeamToDB,
   deleteTeamFromDB,
+  updateTeamCoinOrMarketValue,
 };

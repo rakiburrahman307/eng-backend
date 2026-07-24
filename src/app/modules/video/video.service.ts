@@ -3,6 +3,9 @@ import ApiError from '../../../errors/ApiErrors';
 import { IVideo } from './video.interface';
 import { Video } from './video.model';
 import QueryBuilder from "../../../util/queryBuilder";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { s3, AWS_S3_BUCKET } from "../../../config/aws";
 
 // CREATE
 const createVideoToDB = async (payload: IVideo, userId: string) => {
@@ -146,6 +149,23 @@ const getPublicVideosFromDB = async (query: Record<string, any>) => {
   };
 };
 
+// GENERATE PRE-SIGNED URL FOR S3 UPLOAD
+const generatePresignedUrl = async (fileName: string, contentType: string) => {
+  const key = `videos/${Date.now()}-${fileName}`;
+
+  const command = new PutObjectCommand({
+    Bucket: AWS_S3_BUCKET,
+    Key: key,
+    ContentType: contentType,
+  });
+
+  const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 600 }); // 10 minutes
+
+  const videoUrl = `https://${AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+
+  return { uploadUrl, videoUrl, key };
+};
+
 export const VideoService = {
   createVideoToDB,
   getAllVideosFromDB,
@@ -153,5 +173,6 @@ export const VideoService = {
   updateVideoToDB,
   deleteVideoFromDB,
   toggleVideoStatusToDB,
-  getPublicVideosFromDB
+  getPublicVideosFromDB,
+  generatePresignedUrl,
 };

@@ -103,10 +103,26 @@ const deleteTeam = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// UPDATE TEAM COIN OR MARKET VALUE
+const updateTeamCoinOrMarketValue = catchAsync(async (req: Request, res: Response) => {
+  const teamId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const { coin, marketValue } = req.body;
+
+  const result = await TeamService.updateTeamCoinOrMarketValue(teamId, { coin, marketValue });
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Team coin/marketValue updated successfully',
+    data: result,
+  });
+});
+
 export const TeamController = {
   createTeam,
   getAllTeams,
   getSingleTeam,
   updateTeam,
   deleteTeam,
+  updateTeamCoinOrMarketValue,
 };

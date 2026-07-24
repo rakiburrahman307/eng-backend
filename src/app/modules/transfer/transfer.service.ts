@@ -4,7 +4,6 @@ import { Transfer } from './transfer.model';
 import { User } from '../user/user.model';
 
 import { ManagerTeam } from '../managerTeam/managerTeam.model';
-import { UserDetails } from '../user/userDetails.model';
 import { USER_ROLES } from '../../../enums/user';
 import mongoose from 'mongoose';
 import { sendNotification, sendNotificationToAdmins } from '../../../helpers/notificationsHelper';
@@ -25,9 +24,7 @@ const createTransferToDB = async (payload: any, userId: string) => {
   }
 
   // 2. Get player details
-  const userDetails = await UserDetails.findOne({
-    userId: payload.player,
-  });
+  const userDetails = await User.findById(payload.player);
 
 
 
@@ -135,12 +132,12 @@ const getAllTransfersFromDB = async (query: Record<string, any>) => {
   ]).filter(Boolean);
 
   // 🔥 STEP 2: get UserDetails (firstName + lastName)
-  const details = await UserDetails.find({
-    userId: { $in: userIds },
+  const details = await User.find({
+    _id: { $in: userIds },
   });
 
   const getDetails = (id: string) =>
-    details.find((d) => d.userId.toString() === id?.toString());
+    details.find((d) => d._id.toString() === id?.toString());
 
   // 🔥 STEP 3: FLAT RESPONSE
   const result = transfers.map((t: any) => {
@@ -201,21 +198,7 @@ const getMyTransfersFromDB = async (userId: string) => {
       },
     },
 
-    // User Details
-    {
-      $lookup: {
-        from: 'userdetails',
-        localField: 'player',
-        foreignField: 'userId',
-        as: 'playerDetails',
-      },
-    },
-    {
-      $unwind: {
-        path: '$playerDetails',
-        preserveNullAndEmptyArrays: true,
-      },
-    },
+
 
     // User Profile
     {
@@ -269,8 +252,8 @@ const getMyTransfersFromDB = async (userId: string) => {
       $addFields: {
         player: {
           _id: '$player',
-          firstName: '$playerDetails.firstName',
-          lastName: '$playerDetails.lastName',
+          firstName: '$playerUser.firstName',
+          lastName: '$playerUser.lastName',
           profile: '$playerUser.profile',
         },
       },
@@ -278,7 +261,6 @@ const getMyTransfersFromDB = async (userId: string) => {
 
     {
       $project: {
-        playerDetails: 0,
         playerUser: 0,
       },
     },
@@ -317,15 +299,11 @@ const approveTransferToDB = async (id: string, adminId: string) => {
 
 
   // 2. Find user details
-  const userDetails = await UserDetails.findOne({
-    userId: transfer.player,
-  });
-
-
+  const userDetails = await User.findById(transfer.player);
 
   if (!userDetails) {
 
-    throw new ApiError(StatusCodes.NOT_FOUND, "UserDetails not found");
+    throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
   }
 
   // 3. Update team
@@ -487,22 +465,7 @@ const getAvailablePlayersFromDB = async (
       },
     },
 
-    // 6️⃣ Join details
-    {
-      $lookup: {
-        from: "userdetails",
-        localField: "_id",
-        foreignField: "userId",
-        as: "details",
-      },
-    },
 
-    {
-      $unwind: {
-        path: "$details",
-        preserveNullAndEmptyArrays: true,
-      },
-    },
 
     // 7️⃣ Final projection
     {
@@ -514,10 +477,10 @@ const getAvailablePlayersFromDB = async (
         role: 1,
         createdAt: 1,
 
-        firstName: "$details.firstName",
-        lastName: "$details.lastName",
-        phone: "$details.phone",
-        selectTeam: "$details.selectTeam",
+        firstName: 1,
+        lastName: 1,
+        phone: 1,
+        selectTeam: 1,
 
         isApproved: 1,
         isMyPending: 1,
@@ -595,12 +558,12 @@ const getManagerTransferRequestsFromDB = async (
   // 🔥 ADD USERDETAILS MANUALLY
   const userIds = transfers.map((t) => t.player?._id);
 
-  const details = await UserDetails.find({
-    userId: { $in: userIds },
+  const details = await User.find({
+    _id: { $in: userIds },
   });
 
   const detailsMap = new Map(
-    details.map((d) => [d.userId.toString(), d])
+    details.map((d) => [d._id.toString(), d])
   );
 
   const result = transfers.map((t) => {

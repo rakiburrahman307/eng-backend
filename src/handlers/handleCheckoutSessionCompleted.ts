@@ -4,7 +4,6 @@ import stripe from '../config/stripe';
 import { User } from '../app/modules/user/user.model';
 import { Package } from '../app/modules/package/package.model';
 import { Subscription } from '../app/modules/subscription/subscription.model';
-import { UserDetails } from '../app/modules/user/userDetails.model';
 import { sendNotification } from '../helpers/notificationsHelper';
 import { NOTIFICATION_TYPE } from '../app/modules/notification/notification.interface';
 
@@ -91,18 +90,19 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
     status: 'active',
   });
 
-  // Activate user access
-  await User.findByIdAndUpdate(user._id, {
-    isSubscribed: true,
-    hasAccess: true,
-  });
+  // Activate user access, approve status, and add package credit to user's coin (engCoine)
+  const creditToAdd = Number(pkg.credit) || 0;
 
-  // Approve user profile if pending
-  await UserDetails.findOneAndUpdate(
-    { userId: user._id },
-    { status: 'APPROVED' },
-    { new: true }
-  );
+  await User.findByIdAndUpdate(user._id, {
+    $set: {
+      isSubscribed: true,
+      hasAccess: true,
+      status: 'APPROVED',
+    },
+    $inc: {
+      engCoine: creditToAdd,
+    },
+  });
 
   // Send notification
   await sendNotification({

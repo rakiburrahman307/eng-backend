@@ -11,24 +11,29 @@ export const sendNotification = async (data: {
   message: string;
   type?: NOTIFICATION_TYPE;
   metadata?: Record<string, any>;
-}): Promise<INotification> => {
-  const notification = await Notification.create({
-    receiver: data.receiver,
-    title: data.title,
-    message: data.message,
-    type: data.type || NOTIFICATION_TYPE.GENERAL,
-    isRead: false,
-    metadata: data.metadata || {},
-  }) as INotification;
+}): Promise<INotification | null> => {
+  try {
+    const notification = await Notification.create({
+      receiver: data.receiver,
+      title: data.title,
+      message: data.message,
+      type: data.type || NOTIFICATION_TYPE.GENERAL,
+      isRead: false,
+      metadata: data.metadata || {},
+    }) as INotification;
 
-  // Emit to user-specific socket room
-  //@ts-ignore
-  const io = global.io;
-  if (io) {
-    io.to(`user-${data.receiver}`).emit("notification", notification);
+    // Emit to user-specific socket room
+    //@ts-ignore
+    const io = global.io;
+    if (io) {
+      io.to(`user-${data.receiver}`).emit("notification", notification);
+    }
+
+    return notification;
+  } catch (error) {
+    console.error("❌ sendNotification error:", error);
+    return null;
   }
-
-  return notification;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,36 +45,40 @@ export const sendNotificationToAdmins = async (data: {
   type?: NOTIFICATION_TYPE;
   metadata?: Record<string, any>;
 }): Promise<void> => {
-  // Find all admin users
-  const admins = await User.find(
-    { role: { $in: ["ADMIN", "SUPER_ADMIN"] } },
-    "_id"
-  );
+  try {
+    // Find all admin users
+    const admins = await User.find(
+      { role: { $in: ["ADMIN", "SUPER_ADMIN"] } },
+      "_id"
+    );
 
-  if (!admins.length) return;
+    if (!admins.length) return;
 
-  const notifications = admins.map((admin) => ({
-    receiver: admin._id,
-    title: data.title,
-    message: data.message,
-    type: data.type || NOTIFICATION_TYPE.GENERAL,
-    isRead: false,
-    metadata: data.metadata || {},
-  }));
+    const notifications = admins.map((admin) => ({
+      receiver: admin._id,
+      title: data.title,
+      message: data.message,
+      type: data.type || NOTIFICATION_TYPE.GENERAL,
+      isRead: false,
+      metadata: data.metadata || {},
+    }));
 
-  await Notification.insertMany(notifications);
+    await Notification.insertMany(notifications);
 
-  // Emit real-time socket to each admin
-  //@ts-ignore
-  const io = global.io;
-  if (io) {
-    admins.forEach((admin) => {
-      io.to(`user-${admin._id}`).emit("notification", {
-        title: data.title,
-        message: data.message,
-        type: data.type || NOTIFICATION_TYPE.GENERAL,
+    // Emit real-time socket to each admin
+    //@ts-ignore
+    const io = global.io;
+    if (io) {
+      admins.forEach((admin) => {
+        io.to(`user-${admin._id}`).emit("notification", {
+          title: data.title,
+          message: data.message,
+          type: data.type || NOTIFICATION_TYPE.GENERAL,
+        });
       });
-    });
+    }
+  } catch (error) {
+    console.error("❌ sendNotificationToAdmins error:", error);
   }
 };
 

@@ -8,74 +8,54 @@ import { IErrorMessage } from '../../types/errors.types';
 import { StatusCodes } from 'http-status-codes';
 
 const globalErrorHandler: ErrorRequestHandler = (error, req, res, next) => {
- 
+    errorLogger.error(`[GlobalErrorHandler] API Error on ${req.method} ${req.originalUrl}`, error);
 
     let statusCode = 500;
     let message = 'Something went wrong';
     let errorMessages: IErrorMessage[] = [];
 
-    if (error.name === 'ZodError') {
-        const simplifiedError = handleZodError(error);
-        statusCode = simplifiedError.statusCode;
-        message = simplifiedError.message;
-        errorMessages = simplifiedError.errorMessages;
-    }else if (error.name === 'ValidationError') {
-        const simplifiedError = handleValidationError(error);
-        statusCode = simplifiedError.statusCode;
-        message = simplifiedError.message;
-        errorMessages = simplifiedError.errorMessages;
-    } else if (error.name === 'TokenExpiredError') {
-        statusCode = StatusCodes.UNAUTHORIZED
-        message = 'Session Expired'
-        errorMessages = error?.message
-            ? 
-            [
+    try {
+        if (error?.name === 'ZodError') {
+            const simplifiedError = handleZodError(error);
+            statusCode = simplifiedError.statusCode;
+            message = simplifiedError.message;
+            errorMessages = simplifiedError.errorMessages;
+        } else if (error?.name === 'ValidationError') {
+            const simplifiedError = handleValidationError(error);
+            statusCode = simplifiedError.statusCode;
+            message = simplifiedError.message;
+            errorMessages = simplifiedError.errorMessages;
+        } else if (error?.name === 'TokenExpiredError') {
+            statusCode = StatusCodes.UNAUTHORIZED;
+            message = 'Session Expired';
+            errorMessages = [
                 {
                     path: '',
                     message: 'Your session has expired. Please log in again to continue.',
                 }
-            ]
-            : 
-            []
-    }
-    else if (error.name === 'JsonWebTokenError') {
-        statusCode = StatusCodes.UNAUTHORIZED
-        message = 'Invalid Token'
-        errorMessages = error?.message
-            ? 
-            [
+            ];
+        } else if (error?.name === 'JsonWebTokenError') {
+            statusCode = StatusCodes.UNAUTHORIZED;
+            message = 'Invalid Token';
+            errorMessages = [
                 {
                     path: '',
                     message: 'Your token is invalid. Please log in again to continue.'
                 }
-            ]
-            : []
-    } 
-    else if (error instanceof ApiError) {
-        statusCode = error.statusCode;
-        message = error.message;
-        errorMessages = error.message
-            ? 
-            [
-                {
-                    path: '',
-                    message: error.message,
-                }
-            ]
-            : 
-            [];
-    } else if (error instanceof Error) {
-        message = error.message;
-        errorMessages = error.message
-            ? 
-            [
-                {
-                    path: '',
-                    message: error?.message,
-                }
-            ]
-            : 
-            [];
+            ];
+        } else if (error instanceof ApiError) {
+            statusCode = error.statusCode;
+            message = error.message;
+            errorMessages = error.message ? [{ path: '', message: error.message }] : [];
+        } else if (error instanceof Error) {
+            message = error.message;
+            errorMessages = error.message ? [{ path: '', message: error.message }] : [];
+        } else if (typeof error === 'string') {
+            message = error;
+            errorMessages = [{ path: '', message: error }];
+        }
+    } catch (err) {
+        errorLogger.error('[GlobalErrorHandler] Error while parsing error:', err);
     }
 
     res.status(statusCode).json({
@@ -84,6 +64,6 @@ const globalErrorHandler: ErrorRequestHandler = (error, req, res, next) => {
         errorMessages,
         stack: config.node_env !== 'production' ? error?.stack : undefined,
     });
-}
+};
 
 export default globalErrorHandler;

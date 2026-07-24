@@ -17,6 +17,12 @@ router
   .get(auth(),VideoController.getAllVideos);
   router.route('/public').get(VideoController.getPublicVideos);
 
+// PRE-SIGNED URL FOR S3 UPLOAD
+router.route('/presigned-url').get(
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  VideoController.getPresignedUrl
+);
+
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')

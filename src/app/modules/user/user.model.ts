@@ -1,6 +1,6 @@
 import { model, Schema } from "mongoose";
 import { USER_ROLES } from "../../../enums/user";
-import { IUser, UserModal } from "./user.interface";
+import { IUser, UserModal, AGE_GROUP } from "./user.interface";
 import bcrypt from "bcrypt";
 import config from "../../../config";
 
@@ -9,7 +9,7 @@ const userSchema = new Schema<IUser, UserModal>(
     userName: {
       type: String,
       required: false,
-        },
+    },
     appId: {
       type: String,
       required: false,
@@ -78,6 +78,63 @@ const userSchema = new Schema<IUser, UserModal>(
       stripeAccountId: String,
       externalAccountId: String,
       currency: String,
+    },
+    // UserDetails properties
+    firstName: {
+      type: String,
+      required: false,
+      trim: true,
+    },
+    lastName: {
+      type: String,
+      required: false,
+      trim: true,
+    },
+    dateOfBirth: {
+      type: Date,
+      required: false,
+    },
+    ageGroup: {
+      type: String,
+      enum: Object.values(AGE_GROUP),
+      required: false,
+    },
+    selectTeam: {
+      type: Schema.Types.ObjectId,
+      ref: "Team",
+      required: false,
+    },
+    strongFoot: {
+      type: String,
+      default: null,
+    },
+    position: {
+      type: String,
+      default: null,
+    },
+    document: {
+      type: [String],
+      default: []
+    },
+    phone: {
+      type: String,
+      required: false,
+    },
+    engCoine: {
+      type: Number,
+      default: 0,
+    },
+    marketValue: {
+      type: Number,
+      default: 0,
+    },
+    debutDate: {
+      type: Date,
+    },
+    status: {
+      type: String,
+      enum: ["PENDING", "APPROVED", "REJECTED"],
+      default: "PENDING",
     },
   },
   {

@@ -389,6 +389,21 @@ const getOtherClubByUserId = catchAsync(
 
 
 
+// UPDATE USER COIN OR MARKET VALUE (Admin / Super Admin only)
+const updateUserCoinOrMarketValue = catchAsync(async (req: Request, res: Response) => {
+  const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
+  const { engCoine, marketValue } = req.body;
+
+  const result = await UserService.updateUserCoinOrMarketValue(userId, { engCoine, marketValue });
+
+  return sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'User coin/marketValue updated successfully',
+    data: result,
+  });
+});
+
 export const UserController = { 
     createUser, 
     createAdmin, 
@@ -400,5 +415,6 @@ export const UserController = {
     getManager,
     getReferee,
     getOtherClub,
-    getOtherClubByUserId
+    getOtherClubByUserId,
+    updateUserCoinOrMarketValue,
 };

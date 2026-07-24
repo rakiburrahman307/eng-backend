@@ -1,5 +1,4 @@
 import ApiError from "../../../errors/ApiErrors";
-import { UserDetails } from "../user/userDetails.model";
 import { MatchPlayerSelection } from "./matchPlayerSelection.model";
 import { Team } from "../team/team.model";
 import { sendNotification } from "../../../helpers/notificationsHelper";
@@ -108,38 +107,21 @@ const createSelectionIntoDB = async (payload: any) => {
 // };
 
 const getAllSelectionsFromDB = async () => {
-  // STEP 1: get selections + user IDs
   const result = await MatchPlayerSelection.find()
     .populate({
       path: "players.player",
       model: "User",
-      select: "_id profile",
+      select: "_id profile firstName lastName",
     })
     .lean();
 
   if (!result.length) return [];
-
-  // STEP 2: collect userIds
-  const userIds = result.flatMap((r: any) =>
-    r.players.map((p: any) => p.player?._id),
-  );
-
-  // STEP 3: get UserDetails (name info)
-  const userDetails = await UserDetails.find({
-    userId: { $in: userIds },
-  }).lean();
-
-  // STEP 4: map UserDetails by userId
-  const detailsMap = new Map(
-    userDetails.map((d: any) => [d.userId.toString(), d]),
-  );
 
   // STEP 5: merge both User + UserDetails
   const formattedResult = result.map((match: any) => ({
     ...match,
     players: match.players.map((p: any) => {
       const user = p.player;
-      const details = detailsMap.get(user?._id?.toString());
 
       return {
         position: p.position,
@@ -149,8 +131,8 @@ const getAllSelectionsFromDB = async () => {
         // ✅ FLAT OUTPUT (NO nested object)
         _id: user?._id,
         profile: user?.profile,
-        firstName: details?.firstName,
-        lastName: details?.lastName,
+        firstName: user?.firstName,
+        lastName: user?.lastName,
       };
     }),
   }));
@@ -230,7 +212,7 @@ const getPlayersByMatchAndTeamFromDB = async (
     .populate({
       path: "players.player",
       model: "User",
-      select: "_id profile",
+      select: "_id profile firstName lastName",
     })
     .lean();
 
@@ -239,19 +221,6 @@ const getPlayersByMatchAndTeamFromDB = async (
   if (!result) {
     throw new ApiError(404, "No players found for this match and team");
   }
-
-  // STEP 2: collect userIds
-  const userIds = result.players.map((p: any) => p.player?._id);
-
-  // STEP 3: get UserDetails
-  const userDetails = await UserDetails.find({
-    userId: { $in: userIds },
-  }).lean();
-
-  // STEP 4: map for quick lookup
-  const detailsMap = new Map(
-    userDetails.map((d: any) => [d.userId.toString(), d]),
-  );
 
   // STEP 5: FORMAT RESPONSE
   const formattedResult = {
@@ -262,7 +231,6 @@ const getPlayersByMatchAndTeamFromDB = async (
 
     players: result.players.map((p: any) => {
       const user = p.player;
-      const details = detailsMap.get(user?._id?.toString());
 
       return {
         position: p.position,
@@ -271,8 +239,8 @@ const getPlayersByMatchAndTeamFromDB = async (
 
         _id: user?._id,
         profile: user?.profile,
-        firstName: details?.firstName || null,
-        lastName: details?.lastName || null,
+        firstName: user?.firstName || null,
+        lastName: user?.lastName || null,
       };
     }),
   };
