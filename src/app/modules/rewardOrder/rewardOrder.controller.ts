@@ -111,7 +111,7 @@ const rejectRewardOrder = catchAsync(
     const result =
       await RewardOrderService.rejectRewardOrderToDB(
         req.params.id as string,
-        req.body.rejectReason,
+        req.body?.rejectReason,
         user._id
       );
 

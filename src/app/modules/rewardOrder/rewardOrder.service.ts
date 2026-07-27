@@ -18,52 +18,52 @@ const createRewardOrderToDB = async (
   try {
     session.startTransaction();
 
-    const user = await User.findById(userId).session(
-      session
-    );
+    const user = await User.findById(userId).session(session);
 
     if (!user) {
       throw new ApiError(
         StatusCodes.NOT_FOUND,
-        'User not found'
+        "User not found"
       );
     }
 
-    const rewardProduct =
-      await RewardProduct.findById(
-        payload.rewardProduct
-      ).session(session);
+    const rewardProduct = await RewardProduct.findById(
+      payload.rewardProduct
+    ).session(session);
 
     if (!rewardProduct) {
       throw new ApiError(
         StatusCodes.NOT_FOUND,
-        'Reward product not found'
+        "Reward product not found"
       );
     }
 
-    if (rewardProduct.status !== 'publish') {
+    if (rewardProduct.status !== "publish") {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
-        'Reward product is not available'
+        "Reward product is not available"
       );
     }
 
-    const userPoint = user.rewardPoint || 0;
+    // User current ENG Coins
+    const userCoin = user.engCoine || 0;
 
-    if (userPoint < rewardProduct.point) {
+    if (userCoin < rewardProduct.point) {
+
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
-        'Insufficient reward points'
+        "Insufficient reward points"
       );
     }
 
-    // DEDUCT POINT
-    user.rewardPoint =
-      userPoint - rewardProduct.point;
+    // Deduct ENG Coins
+    user.engCoine = userCoin - rewardProduct.point;
 
     await user.save({ session });
 
-    // CREATE ORDER
+
+
+    // Create Reward Order
     const order = await RewardOrder.create(
       [
         {
@@ -75,30 +75,51 @@ const createRewardOrderToDB = async (
       { session }
     );
 
+
+
     await session.commitTransaction();
     session.endSession();
 
-    // 🔔 Notify player: order placed
+
+
+    // Notify Player
+
     await sendNotification({
       receiver: userId,
-      title: 'Reward Order Placed 🎁',
-      message: `Your reward order has been placed successfully. ${rewardProduct.point} points have been deducted.`,
+      title: "Reward Order Placed 🎁",
+      message: `Your reward order has been placed successfully. ${rewardProduct.point} points have been deducted from your ENG Coins.`,
       type: NOTIFICATION_TYPE.REWARD_ORDER_PLACED,
-      metadata: { orderId: order[0]._id, productId: rewardProduct._id },
+      metadata: {
+        orderId: order[0]._id,
+        productId: rewardProduct._id,
+      },
     });
 
-    // 🔔 Notify admins: new order
+
+    // Notify Admins
+    console.log("Sending notification to admins...");
     await sendNotificationToAdmins({
-      title: 'New Reward Order',
-      message: `A player has placed a new reward order. Please review and approve.`,
+      title: "New Reward Order",
+      message:
+        "A player has placed a new reward order. Please review and approve.",
       type: NOTIFICATION_TYPE.REWARD_ORDER_PLACED,
-      metadata: { orderId: order[0]._id },
+      metadata: {
+        orderId: order[0]._id,
+      },
     });
+
+    console.log("✅ Admin notification sent");
+    console.log("========== SUCCESS ==========");
 
     return order[0];
   } catch (error) {
+    console.log("========== ERROR ==========");
+    console.error(error);
+
     await session.abortTransaction();
     session.endSession();
+
+    console.log("❌ Transaction aborted");
 
     throw error;
   }
@@ -110,9 +131,18 @@ const getAllRewardOrdersFromDB = async (
 ) => {
   const rewardOrderQuery = new QueryBuilder(
     RewardOrder.find()
-      .populate('user')
-      .populate('rewardProduct')
-      .populate('approvedBy'),
+      .populate({
+        path: 'user',
+        select: 'userName firstName lastName',
+      })
+      .populate({
+        path: 'rewardProduct',
+        select: 'brand point',
+      })
+      .populate({
+        path: 'approvedBy',
+        select: 'firstName lastName',
+      }),
     query
   )
     .filter()
@@ -120,11 +150,24 @@ const getAllRewardOrdersFromDB = async (
     .paginate()
     .fields();
 
-  const result =
-    await rewardOrderQuery.modelQuery;
+  const orders = await rewardOrderQuery.modelQuery;
 
-  const meta =
-    await rewardOrderQuery.getPaginationInfo();
+  const meta = await rewardOrderQuery.getPaginationInfo();
+
+  const result = orders.map(
+    (order: any, index: number) => ({
+      id: order._id,
+      userId: order.user?._id,
+      userName: order.user?.userName,
+      firstName: order.user?.firstName,
+      lastName: order.user?.lastName,
+      brandName: order.rewardProduct?.brand,
+      point: order.rewardProduct?.point,
+      pointUsed: order.pointUsed,
+      status: order.status,
+      updatedAt: order.updatedAt,
+    })
+  );
 
   return {
     meta,
@@ -204,7 +247,7 @@ const approveRewardOrderToDB = async (
 // REJECT
 const rejectRewardOrderToDB = async (
   id: string,
-  rejectReason: string,
+  rejectReason: string | undefined,
   adminId: string
 ) => {
   const session = await mongoose.startSession();
@@ -242,14 +285,17 @@ const rejectRewardOrderToDB = async (
       );
     }
 
-    user.rewardPoint =
-      (user.rewardPoint || 0) + order.pointUsed;
+    // Refund points to user's ENG Coins (primary) and reward points (legacy)
+    user.engCoine = (user.engCoine || 0) + order.pointUsed;
+    user.rewardPoint = (user.rewardPoint || 0) + order.pointUsed;
 
     await user.save({ session });
 
     // UPDATE ORDER
     order.status = 'rejected';
-    order.rejectReason = rejectReason;
+    if (rejectReason) {
+      order.rejectReason = rejectReason;
+    }
     order.approvedBy = adminId as any;
 
     await order.save({ session });
@@ -257,11 +303,12 @@ const rejectRewardOrderToDB = async (
     await session.commitTransaction();
     session.endSession();
 
+    const reasonText = rejectReason ? ` Reason: ${rejectReason}` : '';
     // 🔔 Notify player: order rejected + points refunded
     await sendNotification({
       receiver: order.user.toString(),
       title: 'Reward Order Rejected',
-      message: `Your reward order has been rejected. ${order.pointUsed} points have been refunded to your account. Reason: ${rejectReason || 'N/A'}`,
+      message: `Your reward order has been rejected. ${order.pointUsed} points have been refunded to your account.${reasonText}`,
       type: NOTIFICATION_TYPE.REWARD_ORDER_REJECTED,
       metadata: { orderId: order._id, pointsRefunded: order.pointUsed },
     });

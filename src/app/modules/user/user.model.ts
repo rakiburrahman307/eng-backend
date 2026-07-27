@@ -136,6 +136,10 @@ const userSchema = new Schema<IUser, UserModal>(
       enum: ["PENDING", "APPROVED", "REJECTED"],
       default: "PENDING",
     },
+    blueTick: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

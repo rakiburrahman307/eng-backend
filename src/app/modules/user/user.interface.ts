@@ -55,6 +55,7 @@ export type IUser = {
     engCoine?: number;
     marketValue?: number;
     debutDate?: Date;
+    blueTick?: boolean;
 }
 
 export type UserModal = {

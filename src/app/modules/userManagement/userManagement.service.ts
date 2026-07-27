@@ -9,7 +9,7 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
   const userQuery = new QueryBuilder(
     User.find({
       role: { $ne: USER_ROLES.SUPER_ADMIN },
-    }).select('userName role profile verified'),
+    }).select('userName role profile verified status'),
     query
   )
     .search(['userName', 'email', 'location'])

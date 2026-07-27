@@ -427,6 +427,28 @@ const approveOrRejectUser = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// TOGGLE BLUE TICK VERIFICATION FOR USER (Admin / Super Admin only)
+const toggleBlueTickUser = catchAsync(async (req: Request, res: Response) => {
+  const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
+  const { blueTick } = req.body;
+
+  if (typeof blueTick !== 'boolean') {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      'blueTick must be a boolean (true or false)'
+    );
+  }
+
+  const result = await UserService.toggleBlueTickUser(userId, blueTick);
+
+  return sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: `User blue tick verification updated to ${blueTick}`,
+    data: result,
+  });
+});
+
 export const UserController = { 
     createUser, 
     createAdmin, 
@@ -441,4 +463,5 @@ export const UserController = {
     getOtherClubByUserId,
     updateUserCoinOrMarketValue,
     approveOrRejectUser,
+    toggleBlueTickUser,
 };

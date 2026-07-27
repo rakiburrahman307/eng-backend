@@ -132,4 +132,13 @@ router.patch(
   UserController.approveOrRejectUser
 );
 
+// TOGGLE BLUE TICK VERIFICATION FOR USER (Admin / Super Admin only)
+// PATCH /api/v1/user/:userId/blue-tick
+// Body: { "blueTick": true }  OR  { "blueTick": false }
+router.patch(
+  '/:userId/blue-tick',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  UserController.toggleBlueTickUser
+);
+
 export const UserRoutes = router;

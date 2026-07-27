@@ -30,6 +30,11 @@ import PushNotificationRoute from "../modules/pushNotification/pushNotification.
 import StatisticRoute from "../modules/statistic/statistic.route"
 import RefereeRatingRoute from "../modules/refereeRating/refereeRating.route"
 import CoinAndBudgetRoute from "../modules/coinAndBudget/coinAndBudget.route"
+import GalleryRoutes from "../modules/gallery/gallery.route";
+import SocialMediaRoutes from "../modules/socialMedia/socialMedia.route";
+import EngTvCategoryRoutes from "../modules/engTvCategory/engTvCategory.route";
+import VenueRoutes from "../modules/venue/venue.route";
+
 const router = express.Router();
 
 const apiRoutes = [
@@ -64,6 +69,10 @@ const apiRoutes = [
     { path: "/statistic", route: StatisticRoute },
     { path: "/referee", route: RefereeRatingRoute },
     { path: "/coin-budget", route: CoinAndBudgetRoute },
+    { path: "/gallery", route: GalleryRoutes },
+    { path: "/social-media", route: SocialMediaRoutes },
+    { path: "/eng-tv-category", route: EngTvCategoryRoutes },
+    { path: "/venue", route: VenueRoutes },
 ]
 
 apiRoutes.forEach(route => router.use(route.path, route.route));

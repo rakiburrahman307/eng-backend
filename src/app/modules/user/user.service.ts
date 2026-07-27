@@ -400,6 +400,22 @@ const approveOrRejectUser = async (
   return updated;
 };
 
+// TOGGLE BLUE TICK VERIFICATION FOR USER (Admin only)
+const toggleBlueTickUser = async (userId: string, blueTick: boolean) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+  }
+
+  const updated = await User.findByIdAndUpdate(
+    userId,
+    { $set: { blueTick } },
+    { new: true }
+  );
+
+  return updated;
+};
+
 export const UserService = {
     createUserToDB,
     getUserProfileFromDB,
@@ -414,4 +430,5 @@ export const UserService = {
     getOtherClubByUserIdUserId,
     updateUserCoinOrMarketValue,
     approveOrRejectUser,
+    toggleBlueTickUser,
 };
