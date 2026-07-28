@@ -1,9 +1,11 @@
 import { Model, Types } from 'mongoose';
+import { IEngTvCategory } from '../engTvCategory/engTvCategory.interface';
 
 export type IVideo = {
   createdBy?: Types.ObjectId | string;
   title: string;
-  category: string;
+  category: Types.ObjectId | string | IEngTvCategory;
+  subCategory?: Types.ObjectId | string | IEngTvCategory;
   thumbnail?: string;
   description: string;
   videoUrl: string;

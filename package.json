@@ -39,6 +39,7 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.6.1",
     "express-session": "^1.19.0",
     "firebase-admin": "^13.7.0",
     "google-gax": "^5.0.6",

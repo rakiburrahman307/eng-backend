@@ -2,7 +2,6 @@ import { Schema, model } from 'mongoose';
 
 const matchSchema = new Schema(
   {
-
     league: {
       type: Schema.Types.ObjectId,
       ref: 'League',
@@ -13,7 +12,6 @@ const matchSchema = new Schema(
       ref: 'Team',
       required: true,
     },
-
     awayTeam: {
       type: Schema.Types.ObjectId,
       ref: 'Team',
@@ -32,7 +30,19 @@ const matchSchema = new Schema(
 
     venueName: {
       type: String,
-      required: true,
+      default: '',
+    },
+
+    venueCategory: {
+      type: Schema.Types.ObjectId,
+      ref: 'VenueCategory',
+      default: null,
+    },
+
+    venueSubCategory: {
+      type: Schema.Types.ObjectId,
+      ref: 'VenueCategory',
+      default: null,
     },
 
     referee: {
@@ -43,7 +53,7 @@ const matchSchema = new Schema(
 
     status: {
       type: String,
-      enum: ['upcoming', 'live','half_time', 'finished', 'cancelled'],
+      enum: ['upcoming', 'live', 'half_time', 'finished', 'cancelled'],
       default: 'upcoming',
     },
 
@@ -62,12 +72,12 @@ const matchSchema = new Schema(
       ref: 'Team',
       default: null,
     },
- 
+
     notes: {
       type: String,
       default: null,
     },
-     matchReview: [
+    matchReview: [
       {
         team: {
           type: Schema.Types.ObjectId,

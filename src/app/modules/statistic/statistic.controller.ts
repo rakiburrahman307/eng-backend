@@ -42,11 +42,7 @@ const getPlayerSeasonStats = catchAsync(
 
 
 const getLeagueSummary = catchAsync(async (req: Request, res: Response) => {
-  const { leagueName } = req.query;
-
-  const result = await StatisticService.getLeagueSummaryFromDB(
-    leagueName as string
-  );
+  const result = await StatisticService.getLeagueSummaryFromDB(req.query);
 
   sendResponse(res, {
     success: true,

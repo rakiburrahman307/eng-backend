@@ -1,8 +1,7 @@
 import express from 'express';
 import { USER_ROLES } from '../../../enums/user';
 import auth from '../../middlewares/auth';
-import fileUploadHandler from '../../middlewares/fileUploaderHandler';
-import { VenueController } from './venue.controller';
+import { VenueCategoryController } from './venueCategory.controller';
 
 const router = express.Router();
 
@@ -10,22 +9,26 @@ router
   .route('/')
   .post(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    fileUploadHandler(),
-    VenueController.createVenue
+    VenueCategoryController.createCategory
   )
-  .get(VenueController.getAllVenues);
+  .get(VenueCategoryController.getAllCategories);
+
+router.get(
+  '/admin',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  VenueCategoryController.getAllCategoriesForAdmin
+);
 
 router
   .route('/:id')
-  .get(VenueController.getSingleVenue)
+  .get(VenueCategoryController.getSingleCategory)
   .patch(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    fileUploadHandler(),
-    VenueController.updateVenue
+    VenueCategoryController.updateCategory
   )
   .delete(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    VenueController.deleteVenue
+    VenueCategoryController.deleteCategory
   );
 
 export default router;

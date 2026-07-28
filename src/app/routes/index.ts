@@ -33,7 +33,10 @@ import CoinAndBudgetRoute from "../modules/coinAndBudget/coinAndBudget.route"
 import GalleryRoutes from "../modules/gallery/gallery.route";
 import SocialMediaRoutes from "../modules/socialMedia/socialMedia.route";
 import EngTvCategoryRoutes from "../modules/engTvCategory/engTvCategory.route";
-import VenueRoutes from "../modules/venue/venue.route";
+import VenueCategoryRoutes from "../modules/venueCategory/venueCategory.route";
+import PlayTimeCategoryRoutes from "../modules/playTimeCategory/playTimeCategory.route";
+import AgeGroupCategoryRoutes from "../modules/ageGroupCategory/ageGroupCategory.route";
+import GalleryCategoryRoutes from "../modules/galleryCategory/galleryCategory.route";
 
 const router = express.Router();
 
@@ -72,7 +75,10 @@ const apiRoutes = [
     { path: "/gallery", route: GalleryRoutes },
     { path: "/social-media", route: SocialMediaRoutes },
     { path: "/eng-tv-category", route: EngTvCategoryRoutes },
-    { path: "/venue", route: VenueRoutes },
+    { path: "/venue-category", route: VenueCategoryRoutes },
+    { path: "/playtime-category", route: PlayTimeCategoryRoutes },
+    { path: "/age-group-category", route: AgeGroupCategoryRoutes },
+    { path: "/gallery-category", route: GalleryCategoryRoutes },
 ]
 
 apiRoutes.forEach(route => router.use(route.path, route.route));

@@ -10,18 +10,20 @@ const createGalleryToDB = async (payload: Partial<IGallery>): Promise<IGallery> 
   }
 
   const result = await Gallery.create(payload);
-  return result;
+  return (await result.populate('category')).populate('subCategory');
 };
 
 const getAllGalleriesFromDB = async (query: Record<string, any>) => {
   const galleryQuery = new QueryBuilder(Gallery.find(), query)
-    .search(['title', 'description', 'category'])
+    .search(['title', 'description'])
     .filter()
     .sort()
     .paginate()
     .fields();
 
-  const result = await galleryQuery.modelQuery;
+  const result = await galleryQuery.modelQuery
+    .populate('category')
+    .populate('subCategory');
   const meta = await galleryQuery.getPaginationInfo();
 
   return {
@@ -31,7 +33,9 @@ const getAllGalleriesFromDB = async (query: Record<string, any>) => {
 };
 
 const getSingleGalleryFromDB = async (id: string): Promise<IGallery | null> => {
-  const result = await Gallery.findById(id);
+  const result = await Gallery.findById(id)
+    .populate('category')
+    .populate('subCategory');
   if (!result) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Gallery item not found');
   }
@@ -50,7 +54,9 @@ const updateGalleryInDB = async (
   const result = await Gallery.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
-  });
+  })
+    .populate('category')
+    .populate('subCategory');
 
   return result;
 };

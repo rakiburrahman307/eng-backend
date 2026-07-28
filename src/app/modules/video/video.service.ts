@@ -9,10 +9,11 @@ import { s3, AWS_S3_BUCKET } from "../../../config/aws";
 
 // CREATE
 const createVideoToDB = async (payload: IVideo, userId: string) => {
-  return await Video.create({
+  const result = await Video.create({
     ...payload,
     createdBy: userId,
   });
+  return (await result.populate('category')).populate('subCategory');
 };
 
 // GET ALL
@@ -40,7 +41,9 @@ const getAllVideosFromDB = async (
     .paginate()
     .fields();
 
-  const result = await videoQuery.modelQuery;
+  const result = await videoQuery.modelQuery
+    .populate('category')
+    .populate('subCategory');
   const meta = await videoQuery.getPaginationInfo();
 
   return {
@@ -48,9 +51,12 @@ const getAllVideosFromDB = async (
     result,
   };
 };
+
 // SINGLE
 const getSingleVideoFromDB = async (id: string) => {
-  const video = await Video.findById(id);
+  const video = await Video.findById(id)
+    .populate('category')
+    .populate('subCategory');
 
   if (!video) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Video not found');
@@ -65,10 +71,7 @@ const updateVideoToDB = async (
   userId: string,
   payload: Partial<IVideo>
 ) => {
-
   const video = await Video.findById(id);
-
-
 
   if (!video) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Video not found");
@@ -81,7 +84,9 @@ const updateVideoToDB = async (
   const updatedVideo = await Video.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
-  });
+  })
+    .populate('category')
+    .populate('subCategory');
 
   return updatedVideo;
 };
@@ -122,7 +127,6 @@ const toggleVideoStatusToDB = async (id: string, user: any) => {
   return await video.save();
 };
 
-
 const getPublicVideosFromDB = async (query: Record<string, any>) => {
   const now = new Date();
 
@@ -140,7 +144,9 @@ const getPublicVideosFromDB = async (query: Record<string, any>) => {
     .paginate()
     .fields();
 
-  const result = await videoQuery.modelQuery;
+  const result = await videoQuery.modelQuery
+    .populate('category')
+    .populate('subCategory');
   const meta = await videoQuery.getPaginationInfo();
 
   return {

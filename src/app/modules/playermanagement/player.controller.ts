@@ -4,10 +4,9 @@ import catchAsync from "../../../shared/catchAsync";
 import sendResponse from "../../../shared/sendResponse";
 import { PlayerService } from "./player.service";
 
-
 // GET ALL PLAYERS
 const getAllPlayers = catchAsync(async (req: Request, res: Response) => {
-  const result = await PlayerService.getAllPlayersFromDB(req.query);
+  const result = await PlayerService.getAllPlayersFromDB(req.query, req.user);
 
   sendResponse(res, {
     success: true,
@@ -17,10 +16,9 @@ const getAllPlayers = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-
 // ✅ GET FILTERED PLAYERS BY TEAM AND/OR POSITION
 const getFilteredPlayers = catchAsync(async (req: Request, res: Response) => {
-  const result = await PlayerService.getFilteredPlayersFromDB(req.query);
+  const result = await PlayerService.getFilteredPlayersFromDB(req.query, req.user);
 
   sendResponse(res, {
     success: true,
@@ -30,9 +28,7 @@ const getFilteredPlayers = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-
 export const PlayerController = {
   getAllPlayers,
   getFilteredPlayers,
 };
-

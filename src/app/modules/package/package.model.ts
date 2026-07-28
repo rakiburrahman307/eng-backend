@@ -11,6 +11,32 @@ const packageSchema = new Schema<IPackage, PackageModel>({
         required: true
     },
 
+    packageType: {
+        type: String,
+        enum: ['Semi Pro', 'Professional', 'Other'],
+        default: 'Professional'
+    },
+
+    canViewOtherPlayers: {
+        type: Boolean,
+        default: true
+    },
+
+    canRedeemPoints: {
+        type: Boolean,
+        default: true
+    },
+
+    canViewOtherPlayerStats: {
+        type: Boolean,
+        default: true
+    },
+
+    canEarnPoints: {
+        type: Boolean,
+        default: true
+    },
+
     price: { type: Number, required: true },
 
     duration: {
@@ -25,7 +51,6 @@ const packageSchema = new Schema<IPackage, PackageModel>({
         required: true
     },
 
-    // ✅ FIX HERE (IMPORTANT)
     stripeProductId: {
         type: String,
         required: true
@@ -48,4 +73,4 @@ const packageSchema = new Schema<IPackage, PackageModel>({
     }
 }, { timestamps: true });
 
-export const Package = model<IPackage, PackageModel>("Package", packageSchema)
+export const Package = model<IPackage, PackageModel>("Package", packageSchema);

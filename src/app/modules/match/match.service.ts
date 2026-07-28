@@ -3,6 +3,7 @@ import { Match } from "./match.model";
 import { LeagueTeam } from "../leagueTeam/leagueTeam.model";
 import { User } from "../user/user.model";
 import { Team } from "../team/team.model";
+import { League } from "../league/league.model";
 import { getRatingCoin } from "../../../util/getRatingCoin";
 import mongoose from "mongoose";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
@@ -107,19 +108,68 @@ const createMatchToDB = async (payload: any) => {
   return createdMatches;
 };
 
-// GET ALL
 const getAllMatchesFromDB = async (query: Record<string, any>) => {
-  const matchQuery = new QueryBuilder(Match.find(), query)
+  const { team, teamName, leagueName, startDate, endDate, ...otherQuery } = query;
+  const initialFilter: Record<string, any> = {};
+
+  if (leagueName) {
+    const leagues = await League.find({
+      leagueName: {
+        $regex: leagueName,
+        $options: "i",
+      },
+    }).select("_id");
+
+    initialFilter.league = {
+      $in: leagues.map((l) => l._id),
+    };
+  }
+
+  const searchTeam = teamName || team;
+
+  if (searchTeam) {
+    if (mongoose.Types.ObjectId.isValid(searchTeam)) {
+      initialFilter.$or = [
+        { homeTeam: searchTeam },
+        { awayTeam: searchTeam },
+      ];
+    } else {
+      const teams = await Team.find({
+        teamName: {
+          $regex: searchTeam,
+          $options: "i",
+        },
+      }).select("_id");
+
+      const teamIds = teams.map((t) => t._id);
+      initialFilter.$or = [
+        { homeTeam: { $in: teamIds } },
+        { awayTeam: { $in: teamIds } },
+      ];
+    }
+  }
+
+  if (startDate || endDate) {
+    initialFilter.matchDate = {};
+    if (startDate) initialFilter.matchDate.$gte = new Date(startDate);
+    if (endDate) initialFilter.matchDate.$lte = new Date(endDate);
+  }
+
+  const matchQuery = new QueryBuilder(Match.find(initialFilter), otherQuery)
+    .search(["venueName", "status", "notes"])
     .filter()
     .sort()
     .paginate()
     .fields();
 
   const result = await matchQuery.modelQuery
+    .populate("league")
     .populate("homeTeam")
     .populate("awayTeam")
     .populate("referee")
-    .populate("winnerTeam");
+    .populate("winnerTeam")
+    .populate("venueCategory")
+    .populate("venueSubCategory");
 
   const meta = await matchQuery.getPaginationInfo();
 
@@ -140,10 +190,13 @@ const getMatchesByRefereeFromDB = async (
     .fields();
 
   const result = await matchQuery.modelQuery
+    .populate("league")
     .populate("homeTeam")
     .populate("awayTeam")
     .populate("referee")
-    .populate("winnerTeam");
+    .populate("winnerTeam")
+    .populate("venueCategory")
+    .populate("venueSubCategory");
 
   const meta = await matchQuery.getPaginationInfo();
 
@@ -156,10 +209,13 @@ const getMatchesByRefereeFromDB = async (
 // SINGLE
 const getSingleMatchFromDB = async (id: string) => {
   const match = await Match.findById(id)
+    .populate("league")
     .populate("homeTeam")
     .populate("awayTeam")
     .populate("referee")
-    .populate("winnerTeam");
+    .populate("winnerTeam")
+    .populate("venueCategory")
+    .populate("venueSubCategory");
 
   if (!match) {
     throw new Error("Match not found");
@@ -326,7 +382,9 @@ const getUpcomingMatchesForManagerFromDB = async (
     .populate("homeTeam")
     .populate("awayTeam")
     .populate("referee")
-    .populate("winnerTeam");
+    .populate("winnerTeam")
+    .populate("venueCategory")
+    .populate("venueSubCategory");
 
   const meta = await matchQuery.getPaginationInfo();
 

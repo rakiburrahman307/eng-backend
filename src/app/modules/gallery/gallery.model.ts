@@ -8,8 +8,13 @@ const gallerySchema = new Schema<IGallery, GalleryModel>(
       required: true,
     },
     category: {
-      type: String,
-      default: 'General',
+      type: Schema.Types.ObjectId,
+      ref: 'GalleryCategory',
+    },
+    subCategory: {
+      type: Schema.Types.ObjectId,
+      ref: 'GalleryCategory',
+      default: null,
     },
     status: {
       type: String,

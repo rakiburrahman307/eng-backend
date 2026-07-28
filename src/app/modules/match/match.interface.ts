@@ -1,6 +1,8 @@
 import { Types } from 'mongoose';
 
 export interface IMatch {
+  league?: Types.ObjectId | string;
+
   homeTeam: Types.ObjectId;
 
   awayTeam: Types.ObjectId;
@@ -9,7 +11,11 @@ export interface IMatch {
 
   durationMinutes: number;
 
-  venueName: string;
+  venueName?: string;
+
+  venueCategory?: Types.ObjectId | string;
+
+  venueSubCategory?: Types.ObjectId | string;
 
   referee: Types.ObjectId;
 
@@ -20,6 +26,7 @@ export interface IMatch {
   awayScore: number;
 
   winnerTeam?: Types.ObjectId | null;
+
   matchReview?: {
     team?: Types.ObjectId;
     rating?: number; // 1-10

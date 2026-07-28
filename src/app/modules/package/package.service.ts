@@ -7,6 +7,18 @@ import { createSubscriptionProduct } from "../../../helpers/createSubscriptionPr
 import stripe from "../../../config/stripe";
 
 const createPackageToDB = async (payload: IPackage): Promise<IPackage | null> => {
+    // Set default permissions based on packageType if not explicitly passed
+    if (payload.packageType === 'Semi Pro') {
+        if (payload.canViewOtherPlayers === undefined) payload.canViewOtherPlayers = false;
+        if (payload.canRedeemPoints === undefined) payload.canRedeemPoints = false;
+        if (payload.canViewOtherPlayerStats === undefined) payload.canViewOtherPlayerStats = false;
+        if (payload.canEarnPoints === undefined) payload.canEarnPoints = true;
+    } else if (payload.packageType === 'Professional') {
+        if (payload.canViewOtherPlayers === undefined) payload.canViewOtherPlayers = true;
+        if (payload.canRedeemPoints === undefined) payload.canRedeemPoints = true;
+        if (payload.canViewOtherPlayerStats === undefined) payload.canViewOtherPlayerStats = true;
+        if (payload.canEarnPoints === undefined) payload.canEarnPoints = true;
+    }
 
     const productPayload = {
         title: payload.title,

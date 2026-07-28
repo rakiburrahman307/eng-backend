@@ -1,7 +1,7 @@
 import express from 'express';
 import { USER_ROLES } from '../../../enums/user';
 import auth from '../../middlewares/auth';
-import { EngTvCategoryController } from './engTvCategory.controller';
+import { AgeGroupCategoryController } from './ageGroupCategory.controller';
 
 const router = express.Router();
 
@@ -9,26 +9,26 @@ router
   .route('/')
   .post(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    EngTvCategoryController.createCategory
+    AgeGroupCategoryController.createCategory
   )
-  .get(EngTvCategoryController.getAllCategories);
+  .get(AgeGroupCategoryController.getAllCategories);
 
 router.get(
   '/admin',
   auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-  EngTvCategoryController.getAllCategoriesForAdmin
+  AgeGroupCategoryController.getAllCategoriesForAdmin
 );
 
 router
   .route('/:id')
-  .get(EngTvCategoryController.getSingleCategory)
+  .get(AgeGroupCategoryController.getSingleCategory)
   .patch(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    EngTvCategoryController.updateCategory
+    AgeGroupCategoryController.updateCategory
   )
   .delete(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    EngTvCategoryController.deleteCategory
+    AgeGroupCategoryController.deleteCategory
   );
 
 export default router;

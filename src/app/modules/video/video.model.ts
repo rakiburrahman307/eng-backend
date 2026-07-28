@@ -8,8 +8,14 @@ const videoSchema = new Schema<IVideo, VideoModel>(
       required: true,
     },
     category: {
-      type: String,
+      type: Schema.Types.ObjectId,
+      ref: 'EngTvCategory',
       required: true,
+    },
+    subCategory: {
+      type: Schema.Types.ObjectId,
+      ref: 'EngTvCategory',
+      default: null,
     },
     description: {
       type: String,
@@ -23,7 +29,7 @@ const videoSchema = new Schema<IVideo, VideoModel>(
     },
     thumbnail: {
       type: String,
-      requred: false
+      required: false,
     },
 
     createdBy: {

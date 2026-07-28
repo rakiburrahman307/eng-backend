@@ -7,10 +7,9 @@ import globalErrorHandler from './app/middlewares/globalErrorHandler';
 import session from "express-session";
 import handleStripeWebhook from "./helpers/handleStripeWebhook";
 import router from "./app/routes";
+import { globalLimiter, imageLimiter } from "./app/middlewares/rateLimiter";
+
 const app = express();
-
-
-
 
 app.post(
   '/api/v1/payment/webhook',
@@ -23,18 +22,19 @@ app.post(
   handleStripeWebhook
 );
 
-
 // morgan
 app.use(Morgan.successHandler);
 app.use(Morgan.errorHandler);
 
-
-//body parser
+// body parser
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-//file retrieve
+// Rate limiter for static images / requests
+app.use('/images', imageLimiter);
+
+// file retrieve
 app.use(express.static('uploads'));
 
 // Session middleware (must be before passport initialization)
@@ -45,18 +45,14 @@ app.use(session({
     cookie: { secure: false } // Secure should be true in production with HTTPS
 }));
 
-// Initialize Passport
-// app.use(passport.initialize());
-// app.use(passport.session());
-
-//router
-app.use('/api/v1', router);
+// Apply global rate limiter for API routes
+app.use('/api/v1', globalLimiter, router);
 
 app.get("/", (req: Request, res: Response)=>{
     res.send("Hey Backend, How can I assist you ");
 })
 
-//global error handle
+// global error handle
 app.use(globalErrorHandler);
 
 // handle not found route

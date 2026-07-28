@@ -1,12 +1,12 @@
 import { Schema, model } from 'mongoose';
 import {
-  IEngTvCategory,
-  EngTvCategoryModel,
-} from './engTvCategory.interface';
+  IGalleryCategory,
+  GalleryCategoryModel,
+} from './galleryCategory.interface';
 
-const engTvCategorySchema = new Schema<
-  IEngTvCategory,
-  EngTvCategoryModel
+const galleryCategorySchema = new Schema<
+  IGalleryCategory,
+  GalleryCategoryModel
 >(
   {
     name: {
@@ -21,7 +21,7 @@ const engTvCategorySchema = new Schema<
     },
     parentCategory: {
       type: Schema.Types.ObjectId,
-      ref: 'EngTvCategory',
+      ref: 'GalleryCategory',
       default: null,
     },
     status: {
@@ -42,14 +42,14 @@ const engTvCategorySchema = new Schema<
 );
 
 // Virtual for subcategories
-engTvCategorySchema.virtual('subCategories', {
-  ref: 'EngTvCategory',
+galleryCategorySchema.virtual('subCategories', {
+  ref: 'GalleryCategory',
   localField: '_id',
   foreignField: 'parentCategory',
 });
 
 // Generate slug before saving
-engTvCategorySchema.pre('save', function () {
+galleryCategorySchema.pre('save', function () {
   if (this.isModified('name') || !this.slug) {
     this.slug = this.name
       .trim()
@@ -59,7 +59,7 @@ engTvCategorySchema.pre('save', function () {
   }
 });
 
-export const EngTvCategory = model<IEngTvCategory, EngTvCategoryModel>(
-  'EngTvCategory',
-  engTvCategorySchema
+export const GalleryCategory = model<IGalleryCategory, GalleryCategoryModel>(
+  'GalleryCategory',
+  galleryCategorySchema
 );

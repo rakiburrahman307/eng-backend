@@ -6,7 +6,7 @@ import { PlayerStatsService } from './playerStats.service';
 
 // GET ALL (LEADERBOARD)
 const getAllPlayerStats = catchAsync(async (req: Request, res: Response) => {
-  const result = await PlayerStatsService.getAllPlayerStatsFromDB();
+  const result = await PlayerStatsService.getAllPlayerStatsFromDB(req.user);
 
   sendResponse(res, {
     success: true,
@@ -17,17 +17,15 @@ const getAllPlayerStats = catchAsync(async (req: Request, res: Response) => {
 });
 
 // GET SINGLE PLAYER STATS
-const getSinglePlayerStats = catchAsync(async (req, res) => {
+const getSinglePlayerStats = catchAsync(async (req: Request, res: Response) => {
   const playerId = req.params.playerId as string;
 
-  const result = await PlayerStatsService.getSinglePlayerStatsFromDB(playerId);
+  const result = await PlayerStatsService.getSinglePlayerStatsFromDB(playerId, req.user);
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: result
-      ? 'Player stats retrieved successfully'
-      : 'No stats found for this player',
+    message: typeof result === 'string' ? result : 'Player stats retrieved successfully',
     data: result,
   });
 });

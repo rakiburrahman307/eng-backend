@@ -5,6 +5,7 @@ import QueryBuilder from "../../../util/queryBuilder";
 import { User } from '../user/user.model';
 import { RewardProduct } from '../rewardProduct/rewardProduct.model';
 import { RewardOrder } from './rewardOrder.model';
+import { Subscription } from '../subscription/subscription.model';
 import { sendNotification, sendNotificationToAdmins } from '../../../helpers/notificationsHelper';
 import { NOTIFICATION_TYPE } from '../notification/notification.interface';
 
@@ -25,6 +26,22 @@ const createRewardOrderToDB = async (
         StatusCodes.NOT_FOUND,
         "User not found"
       );
+    }
+
+    // Check active subscription package permissions for point redemption
+    const subscription = await Subscription.findOne({
+      user: userId,
+      status: 'active',
+    }).populate('package');
+
+    if (subscription && subscription.package) {
+      const pkg = subscription.package as any;
+      if (pkg.canRedeemPoints === false || pkg.packageType === 'Semi Pro') {
+        throw new ApiError(
+          StatusCodes.FORBIDDEN,
+          'Your package does not allow point redemption.'
+        );
+      }
     }
 
     const rewardProduct = await RewardProduct.findById(

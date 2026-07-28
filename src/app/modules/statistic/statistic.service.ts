@@ -80,11 +80,11 @@ const getTopPlayerFromDB = async (leagueId: string) => {
       $project: {
         _id: 0,
         player: {
-        _id: "$player._id",
-        email: "$player.email",
-        role: "$player.role",
-        profile: "$player.profile",
-        username: "$player.userName",
+          _id: "$player._id",
+          email: "$player.email",
+          role: "$player.role",
+          profile: "$player.profile",
+          username: "$player.userName",
         },
         goals: 1,
         assists: 1,
@@ -176,22 +176,35 @@ const getPlayerSeasonStatsFromDB = async (
 };
 
 
-const getLeagueSummaryFromDB = async (leagueName?: string) => {
+const getLeagueSummaryFromDB = async (query?: Record<string, any>) => {
   const leagueFilter: any = {};
+  const { leagueName, leagueId, season, searchTerm, search } = query || {};
 
-  if (leagueName) {
-    const league = await League.findOne({
-      leagueName: {
-        $regex: leagueName,
-        $options: "i",
-      },
-    });
+  const searchKeyword = search || searchTerm || leagueName;
 
-    if (!league) {
-      return null;
+  if (leagueId) {
+    if (mongoose.Types.ObjectId.isValid(leagueId as string)) {
+      leagueFilter.league = new mongoose.Types.ObjectId(leagueId as string);
+    }
+  } else if (searchKeyword || season) {
+    const filterConditions: any = {};
+    if (searchKeyword) {
+      filterConditions.leagueName = { $regex: searchKeyword, $options: "i" };
+    }
+    if (season) {
+      filterConditions.season = { $regex: season, $options: "i" };
     }
 
-    leagueFilter.league = league._id;
+    const leagues = await League.find(filterConditions).select("_id");
+    if (!leagues.length) {
+      return {
+        topGoalScorer: null,
+        topAssistPlayer: null,
+        topGoalTeam: null,
+        topAssistTeam: null,
+      };
+    }
+    leagueFilter.league = { $in: leagues.map((l) => l._id) };
   }
 
   // ==========================
@@ -570,7 +583,7 @@ const getSeasonLeaderboardFromDB = async (season?: string) => {
     assist,
   };
 };
- 
+
 
 export const StatisticService = {
   getTopPlayerFromDB,

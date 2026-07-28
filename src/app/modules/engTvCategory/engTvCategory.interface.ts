@@ -1,12 +1,12 @@
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 
 export type IEngTvCategory = {
-  name: string; // e.g. "Highlights", "Full Matches", "Interviews", "Live Streams", "Tutorials", "News"
+  name: string;
   slug?: string;
-  description?: string;
-  image?: string;
+  parentCategory?: Types.ObjectId | IEngTvCategory | null;
   status: 'active' | 'inactive';
   order?: number;
+  subCategories?: IEngTvCategory[];
   createdAt?: Date;
   updatedAt?: Date;
 };

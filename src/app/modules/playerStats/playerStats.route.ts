@@ -1,13 +1,14 @@
 import express from 'express';
+import auth from '../../middlewares/auth';
 import { PlayerStatsController } from './playerStats.controller';
 
 const router = express.Router();
 
 // GET ALL (LEADERBOARD)
-router.route('/').get(PlayerStatsController.getAllPlayerStats);
+router.route('/').get(auth(false), PlayerStatsController.getAllPlayerStats);
 
 // GET SINGLE PLAYER STATS
-router.route('/:playerId').get(PlayerStatsController.getSinglePlayerStats);
+router.route('/:playerId').get(auth(false), PlayerStatsController.getSinglePlayerStats);
 
 // ADMIN UPDATE
 router.route('/:playerId').patch(PlayerStatsController.updatePlayerStats);

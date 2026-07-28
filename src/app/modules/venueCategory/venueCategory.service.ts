@@ -1,9 +1,9 @@
 import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiErrors';
-import { IEngTvCategory } from './engTvCategory.interface';
-import { EngTvCategory } from './engTvCategory.model';
+import { IVenueCategory } from './venueCategory.interface';
+import { VenueCategory } from './venueCategory.model';
 
-const createCategoryToDB = async (payload: Partial<IEngTvCategory>): Promise<IEngTvCategory> => {
+const createCategoryToDB = async (payload: Partial<IVenueCategory>): Promise<IVenueCategory> => {
   if (!payload.name) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Category name is required');
   }
@@ -11,13 +11,13 @@ const createCategoryToDB = async (payload: Partial<IEngTvCategory>): Promise<IEn
   const parentCategoryId = payload.parentCategory || null;
 
   if (parentCategoryId) {
-    const parentExists = await EngTvCategory.findById(parentCategoryId);
+    const parentExists = await VenueCategory.findById(parentCategoryId);
     if (!parentExists) {
       throw new ApiError(StatusCodes.NOT_FOUND, 'Parent category not found');
     }
   }
 
-  const existing = await EngTvCategory.findOne({
+  const existing = await VenueCategory.findOne({
     name: payload.name.trim(),
     parentCategory: parentCategoryId,
   });
@@ -31,15 +31,15 @@ const createCategoryToDB = async (payload: Partial<IEngTvCategory>): Promise<IEn
     );
   }
 
-  const result = await EngTvCategory.create({
+  const result = await VenueCategory.create({
     ...payload,
     parentCategory: parentCategoryId,
   });
   return result;
 };
 
-const getAllCategoriesFromDB = async (): Promise<IEngTvCategory[]> => {
-  const result = await EngTvCategory.find({
+const getAllCategoriesFromDB = async (): Promise<IVenueCategory[]> => {
+  const result = await VenueCategory.find({
     status: 'active',
     $or: [{ parentCategory: null }, { parentCategory: { $exists: false } }],
   })
@@ -53,8 +53,8 @@ const getAllCategoriesFromDB = async (): Promise<IEngTvCategory[]> => {
   return result;
 };
 
-const getAllCategoriesForAdminFromDB = async (): Promise<IEngTvCategory[]> => {
-  const result = await EngTvCategory.find({
+const getAllCategoriesForAdminFromDB = async (): Promise<IVenueCategory[]> => {
+  const result = await VenueCategory.find({
     $or: [{ parentCategory: null }, { parentCategory: { $exists: false } }],
   })
     .sort({ order: 1, name: 1 })
@@ -66,8 +66,8 @@ const getAllCategoriesForAdminFromDB = async (): Promise<IEngTvCategory[]> => {
   return result;
 };
 
-const getSingleCategoryFromDB = async (id: string): Promise<IEngTvCategory | null> => {
-  const result = await EngTvCategory.findById(id)
+const getSingleCategoryFromDB = async (id: string): Promise<IVenueCategory | null> => {
+  const result = await VenueCategory.findById(id)
     .populate('parentCategory')
     .populate('subCategories');
 
@@ -79,9 +79,9 @@ const getSingleCategoryFromDB = async (id: string): Promise<IEngTvCategory | nul
 
 const updateCategoryToDB = async (
   id: string,
-  payload: Partial<IEngTvCategory>
-): Promise<IEngTvCategory | null> => {
-  const isExist = await EngTvCategory.findById(id);
+  payload: Partial<IVenueCategory>
+): Promise<IVenueCategory | null> => {
+  const isExist = await VenueCategory.findById(id);
   if (!isExist) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Category not found');
   }
@@ -90,7 +90,7 @@ const updateCategoryToDB = async (
     if (payload.parentCategory.toString() === id) {
       throw new ApiError(StatusCodes.BAD_REQUEST, 'A category cannot be its own parent');
     }
-    const parentExists = await EngTvCategory.findById(payload.parentCategory);
+    const parentExists = await VenueCategory.findById(payload.parentCategory);
     if (!parentExists) {
       throw new ApiError(StatusCodes.NOT_FOUND, 'Parent category not found');
     }
@@ -100,7 +100,7 @@ const updateCategoryToDB = async (
     payload.slug = payload.name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
   }
 
-  const result = await EngTvCategory.findByIdAndUpdate(id, payload, {
+  const result = await VenueCategory.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
   })
@@ -110,20 +110,20 @@ const updateCategoryToDB = async (
   return result;
 };
 
-const deleteCategoryFromDB = async (id: string): Promise<IEngTvCategory | null> => {
-  const isExist = await EngTvCategory.findById(id);
+const deleteCategoryFromDB = async (id: string): Promise<IVenueCategory | null> => {
+  const isExist = await VenueCategory.findById(id);
   if (!isExist) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Category not found');
   }
 
   // Delete all subcategories under this parent category
-  await EngTvCategory.deleteMany({ parentCategory: id });
+  await VenueCategory.deleteMany({ parentCategory: id });
 
-  const result = await EngTvCategory.findByIdAndDelete(id);
+  const result = await VenueCategory.findByIdAndDelete(id);
   return result;
 };
 
-export const EngTvCategoryService = {
+export const VenueCategoryService = {
   createCategoryToDB,
   getAllCategoriesFromDB,
   getAllCategoriesForAdminFromDB,
