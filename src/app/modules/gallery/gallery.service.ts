@@ -13,7 +13,55 @@ const createGalleryToDB = async (payload: Partial<IGallery>): Promise<IGallery> 
   return (await result.populate('category')).populate('subCategory');
 };
 
+import { Types } from 'mongoose';
+import { GalleryCategory } from '../galleryCategory/galleryCategory.model';
+
+const resolveGalleryCategoryQuery = async (query: Record<string, any>) => {
+  const categoryValue = query.categoryName || query.category || query.categoryname;
+  if (categoryValue) {
+    if (Types.ObjectId.isValid(categoryValue)) {
+      query.category = new Types.ObjectId(categoryValue);
+    } else {
+      const categoryDoc = await GalleryCategory.findOne({
+        $or: [
+          { name: { $regex: new RegExp(`^${categoryValue.trim()}$`, 'i') } },
+          { slug: categoryValue.trim().toLowerCase() },
+          { name: { $regex: categoryValue.trim(), $options: 'i' } },
+        ],
+      });
+      query.category = categoryDoc ? categoryDoc._id : new Types.ObjectId();
+    }
+    delete query.categoryName;
+    delete query.categoryname;
+  }
+
+  const subCategoryValue =
+    query.subCategoryName ||
+    query.subCategory ||
+    query.subcategory ||
+    query.subcategoryName;
+  if (subCategoryValue) {
+    if (Types.ObjectId.isValid(subCategoryValue)) {
+      query.subCategory = new Types.ObjectId(subCategoryValue);
+    } else {
+      const subCategoryDoc = await GalleryCategory.findOne({
+        $or: [
+          { name: { $regex: new RegExp(`^${subCategoryValue.trim()}$`, 'i') } },
+          { slug: subCategoryValue.trim().toLowerCase() },
+          { name: { $regex: subCategoryValue.trim(), $options: 'i' } },
+        ],
+      });
+      query.subCategory = subCategoryDoc ? subCategoryDoc._id : new Types.ObjectId();
+    }
+    delete query.subCategoryName;
+    delete query.subcategory;
+    delete query.subcategoryName;
+  }
+};
+
 const getAllGalleriesFromDB = async (query: Record<string, any>) => {
+  await resolveGalleryCategoryQuery(query);
+
   const galleryQuery = new QueryBuilder(Gallery.find(), query)
     .search(['title', 'description'])
     .filter()

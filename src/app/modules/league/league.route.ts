@@ -12,7 +12,7 @@ router
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
     LeagueController.createLeague
   )
-  .get(auth(), LeagueController.getAllLeagues);
+  .get( LeagueController.getAllLeagues);
 
 // SINGLE + UPDATE + DELETE
 router

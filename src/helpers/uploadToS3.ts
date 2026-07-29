@@ -1,5 +1,5 @@
 import { Upload } from "@aws-sdk/lib-storage";
-import { s3 } from "../config/aws";
+import { s3, AWS_S3_BUCKET, getFileUrl } from "../config/aws";
 
 export const uploadToS3 = async (
   file: Express.Multer.File,
@@ -10,7 +10,7 @@ export const uploadToS3 = async (
   const upload = new Upload({
     client: s3,
     params: {
-      Bucket: process.env.AWS_BUCKET!,
+      Bucket: AWS_S3_BUCKET,
       Key: key,
       Body: file.buffer,
       ContentType: file.mimetype,
@@ -19,5 +19,5 @@ export const uploadToS3 = async (
 
   await upload.done();
 
-  return `https://${process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+  return getFileUrl(key);
 };

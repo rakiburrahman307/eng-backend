@@ -3,6 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import catchAsync from '../../../shared/catchAsync';
 import sendResponse from '../../../shared/sendResponse';
 import { VideoService } from './video.service';
+import { uploadToS3 } from '../../../helpers/uploadToS3';
 
 // CREATE
 const createVideo = catchAsync(async (req: Request, res: Response) => {
@@ -10,11 +11,13 @@ const createVideo = catchAsync(async (req: Request, res: Response) => {
 
   const files = req.files as {
     image?: Express.Multer.File[];
+    video?: Express.Multer.File[];
   };
 
   const thumbnail = files?.image?.[0];
+  const videoFile = files?.video?.[0];
 
-  const data = req.body?.data ? JSON.parse(req.body.data) : {};
+  const data = req.body?.data ? JSON.parse(req.body.data) : req.body || {};
 
   const payload: any = { ...data };
 
@@ -23,6 +26,13 @@ const createVideo = catchAsync(async (req: Request, res: Response) => {
     payload.thumbnail = thumbnail.path
       .replace(/\\/g, '/')
       .split('uploads')[1];
+  }
+
+  // 🎥 Direct Video Upload (if uploaded via form-data 'video' field)
+  if (videoFile) {
+    const videoS3Url = await uploadToS3(videoFile, 'videos');
+    payload.videoUrl = videoS3Url;
+    payload._localVideoPath = videoFile.path;
   }
 
   // 📅 Publish Logic
@@ -78,11 +88,13 @@ const updateVideo = catchAsync(async (req: Request, res: Response) => {
 
   const files = req.files as {
     image?: Express.Multer.File[];
+    video?: Express.Multer.File[];
   };
 
   const thumbnail = files?.image?.[0];
+  const videoFile = files?.video?.[0];
 
-  const data = req.body?.data ? JSON.parse(req.body.data) : {}
+  const data = req.body?.data ? JSON.parse(req.body.data) : req.body || {};
 
   const payload: any = { ...data };
 
@@ -91,6 +103,13 @@ const updateVideo = catchAsync(async (req: Request, res: Response) => {
     payload.thumbnail = thumbnail.path
       .replace(/\\/g, "/")
       .split("uploads")[1];
+  }
+
+  // 🎥 Direct Video Upload (if uploaded via form-data 'video' field)
+  if (videoFile) {
+    const videoS3Url = await uploadToS3(videoFile, 'videos');
+    payload.videoUrl = videoS3Url;
+    payload._localVideoPath = videoFile.path;
   }
 
   // 📅 Publish Logic
@@ -188,6 +207,17 @@ const getPresignedUrl = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const retryTranscode = catchAsync(async (req: Request, res: Response) => {
+  const result = await VideoService.retryTranscodeToDB(req.params.id as string);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Transcoding retry initiated in background',
+    data: result,
+  });
+});
+
 export const VideoController = {
   createVideo,
   getAllVideos,
@@ -197,4 +227,5 @@ export const VideoController = {
   toggleVideoStatus,
   getPublicVideos,
   getPresignedUrl,
+  retryTranscode,
 };

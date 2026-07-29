@@ -37,21 +37,9 @@ const demoStandings = [
   },
 ];
 
-// =========================
-// SINGLE LEAGUE CALC
-// =========================
-const calculateLeague = async (league: any) => {
-  const leagueId = league._id.toString();
-
-  const leagueTeams = await LeagueTeam.find({ league: leagueId })
-    .populate('team', 'teamName shortName teamLogo');
-
-  const matches = await Match.find({
-    league: leagueId,
-    status: 'finished',
-  });
-
-  const table: any = {};
+// Helper to calculate standings synchronously from prefetched teams & matches
+const computeStandings = (leagueTeams: any[], matches: any[]) => {
+  const table: Record<string, any> = {};
 
   for (const lt of leagueTeams) {
     if (!lt.team) continue;
@@ -105,26 +93,70 @@ const calculateLeague = async (league: any) => {
     }
   }
 
-  const result = Object.values(table);
+  for (const teamId in table) {
+    table[teamId].goalDifference =
+      table[teamId].goalsFor - table[teamId].goalsAgainst;
+  }
 
-  // // fallback demo
-  // if (!result.length) {
-  //   return demoStandings;
-  // }
-
-  return result;
+  return Object.values(table);
 };
 
 // =========================
-// GROUPED RESPONSE
+// SINGLE LEAGUE CALC
+// =========================
+const calculateLeague = async (league: any) => {
+  const leagueId = league._id.toString();
+
+  const [leagueTeams, matches] = await Promise.all([
+    LeagueTeam.find({ league: leagueId }).populate(
+      'team',
+      'teamName shortName teamLogo'
+    ),
+    Match.find({
+      league: leagueId,
+      status: 'finished',
+    }),
+  ]);
+
+  return computeStandings(leagueTeams, matches);
+};
+
+// =========================
+// GROUPED RESPONSE (OPTIMIZED 3 QUERIES)
 // =========================
 const getAllLeaguesGrouped = async () => {
-  const leagues = await League.find();
+  const [leagues, allLeagueTeams, allMatches] = await Promise.all([
+    League.find(),
+    LeagueTeam.find().populate('team', 'teamName shortName teamLogo'),
+    Match.find({ status: 'finished' }),
+  ]);
+
+  const leagueTeamsMap: Record<string, any[]> = {};
+  for (const lt of allLeagueTeams) {
+    const lId = lt.league?.toString();
+    if (lId) {
+      if (!leagueTeamsMap[lId]) leagueTeamsMap[lId] = [];
+      leagueTeamsMap[lId].push(lt);
+    }
+  }
+
+  const matchesMap: Record<string, any[]> = {};
+  for (const match of allMatches) {
+    const lId = match.league?.toString();
+    if (lId) {
+      if (!matchesMap[lId]) matchesMap[lId] = [];
+      matchesMap[lId].push(match);
+    }
+  }
 
   const response = [];
 
   for (const league of leagues) {
-    const standings = await calculateLeague(league);
+    const leagueId = league._id.toString();
+    const leagueTeams = leagueTeamsMap[leagueId] || [];
+    const matches = matchesMap[leagueId] || [];
+
+    const standings = computeStandings(leagueTeams, matches);
 
     response.push({
       league,

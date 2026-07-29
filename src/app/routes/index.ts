@@ -37,6 +37,7 @@ import VenueCategoryRoutes from "../modules/venueCategory/venueCategory.route";
 import PlayTimeCategoryRoutes from "../modules/playTimeCategory/playTimeCategory.route";
 import AgeGroupCategoryRoutes from "../modules/ageGroupCategory/ageGroupCategory.route";
 import GalleryCategoryRoutes from "../modules/galleryCategory/galleryCategory.route";
+import NewsCategoryRoutes from "../modules/newsCategory/newsCategory.route";
 
 const router = express.Router();
 
@@ -79,6 +80,7 @@ const apiRoutes = [
     { path: "/playtime-category", route: PlayTimeCategoryRoutes },
     { path: "/age-group-category", route: AgeGroupCategoryRoutes },
     { path: "/gallery-category", route: GalleryCategoryRoutes },
+    { path: "/news-category", route: NewsCategoryRoutes },
 ]
 
 apiRoutes.forEach(route => router.use(route.path, route.route));

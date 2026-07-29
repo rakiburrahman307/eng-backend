@@ -47,6 +47,7 @@ const getAllCategoriesFromDB = async (): Promise<IGalleryCategory[]> => {
     .populate({
       path: 'subCategories',
       match: { status: 'active' },
+      select: 'name',
       options: { sort: { order: 1, name: 1 } },
     });
 
@@ -60,6 +61,7 @@ const getAllCategoriesForAdminFromDB = async (): Promise<IGalleryCategory[]> => 
     .sort({ order: 1, name: 1 })
     .populate({
       path: 'subCategories',
+      select: 'name',
       options: { sort: { order: 1, name: 1 } },
     });
 
@@ -69,7 +71,10 @@ const getAllCategoriesForAdminFromDB = async (): Promise<IGalleryCategory[]> => 
 const getSingleCategoryFromDB = async (id: string): Promise<IGalleryCategory | null> => {
   const result = await GalleryCategory.findById(id)
     .populate('parentCategory')
-    .populate('subCategories');
+    .populate({
+      path: 'subCategories',
+      select: 'name',
+    });
 
   if (!result) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Category not found');
@@ -105,7 +110,10 @@ const updateCategoryToDB = async (
     runValidators: true,
   })
     .populate('parentCategory')
-    .populate('subCategories');
+    .populate({
+      path: 'subCategories',
+      select: 'name',
+    });
 
   return result;
 };

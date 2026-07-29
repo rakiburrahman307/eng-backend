@@ -24,8 +24,8 @@ const matchSchema = new Schema(
     },
 
     durationMinutes: {
-      type: Number,
-      default: 90,
+      type: String,
+      default: '90',
     },
 
     venueName: {
@@ -103,5 +103,11 @@ const matchSchema = new Schema(
     timestamps: true,
   }
 );
+
+matchSchema.index({ league: 1, status: 1 });
+matchSchema.index({ matchDate: 1 });
+matchSchema.index({ homeTeam: 1 });
+matchSchema.index({ awayTeam: 1 });
+matchSchema.index({ referee: 1 });
 
 export const Match = model('Match', matchSchema);

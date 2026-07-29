@@ -5,15 +5,74 @@ import { Video } from './video.model';
 import QueryBuilder from "../../../util/queryBuilder";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { s3, AWS_S3_BUCKET } from "../../../config/aws";
+import { s3, AWS_S3_BUCKET, getFileUrl } from "../../../config/aws";
+import { transcodeVideoToHLS } from "../../../helpers/transcodeVideo";
 
 // CREATE
-const createVideoToDB = async (payload: IVideo, userId: string) => {
+const createVideoToDB = async (payload: any, userId: string) => {
+  const localVideoPath = payload._localVideoPath;
+  delete payload._localVideoPath;
+
   const result = await Video.create({
     ...payload,
     createdBy: userId,
   });
+
+  // 🎬 Trigger background FFmpeg HLS transcoding
+  const sourceVideo = localVideoPath || result.videoUrl;
+  if (sourceVideo) {
+    transcodeVideoToHLS(result._id.toString(), sourceVideo).catch((err) => {
+      console.error('[FFmpeg Background Job Error]:', err);
+    });
+  }
+
   return (await result.populate('category')).populate('subCategory');
+};
+
+import { Types } from 'mongoose';
+import { EngTvCategory } from '../engTvCategory/engTvCategory.model';
+
+const resolveCategoryQuery = async (query: Record<string, any>) => {
+  const categoryValue = query.categoryName || query.category || query.categoryname;
+  if (categoryValue) {
+    if (Types.ObjectId.isValid(categoryValue)) {
+      query.category = new Types.ObjectId(categoryValue);
+    } else {
+      const categoryDoc = await EngTvCategory.findOne({
+        $or: [
+          { name: { $regex: new RegExp(`^${categoryValue.trim()}$`, 'i') } },
+          { slug: categoryValue.trim().toLowerCase() },
+          { name: { $regex: categoryValue.trim(), $options: 'i' } },
+        ],
+      });
+      query.category = categoryDoc ? categoryDoc._id : new Types.ObjectId();
+    }
+    delete query.categoryName;
+    delete query.categoryname;
+  }
+
+  const subCategoryValue =
+    query.subCategoryName ||
+    query.subCategory ||
+    query.subcategory ||
+    query.subcategoryName;
+  if (subCategoryValue) {
+    if (Types.ObjectId.isValid(subCategoryValue)) {
+      query.subCategory = new Types.ObjectId(subCategoryValue);
+    } else {
+      const subCategoryDoc = await EngTvCategory.findOne({
+        $or: [
+          { name: { $regex: new RegExp(`^${subCategoryValue.trim()}$`, 'i') } },
+          { slug: subCategoryValue.trim().toLowerCase() },
+          { name: { $regex: subCategoryValue.trim(), $options: 'i' } },
+        ],
+      });
+      query.subCategory = subCategoryDoc ? subCategoryDoc._id : new Types.ObjectId();
+    }
+    delete query.subCategoryName;
+    delete query.subcategory;
+    delete query.subcategoryName;
+  }
 };
 
 // GET ALL
@@ -21,6 +80,8 @@ const getAllVideosFromDB = async (
   role: string,
   query: Record<string, any>
 ) => {
+  await resolveCategoryQuery(query);
+
   const now = new Date();
 
   let baseQuery = {};
@@ -69,7 +130,7 @@ const getSingleVideoFromDB = async (id: string) => {
 const updateVideoToDB = async (
   id: string,
   userId: string,
-  payload: Partial<IVideo>
+  payload: any
 ) => {
   const video = await Video.findById(id);
 
@@ -81,12 +142,22 @@ const updateVideoToDB = async (
     throw new ApiError(StatusCodes.FORBIDDEN, "Not allowed");
   }
 
+  const localVideoPath = payload._localVideoPath;
+  delete payload._localVideoPath;
+
   const updatedVideo = await Video.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
   })
     .populate('category')
     .populate('subCategory');
+
+  const sourceVideo = localVideoPath || (payload.videoUrl && payload.videoUrl !== video.videoUrl ? payload.videoUrl : null);
+  if (sourceVideo) {
+    transcodeVideoToHLS(id, sourceVideo).catch((err) => {
+      console.error('[FFmpeg Background Job Error]:', err);
+    });
+  }
 
   return updatedVideo;
 };
@@ -128,6 +199,8 @@ const toggleVideoStatusToDB = async (id: string, user: any) => {
 };
 
 const getPublicVideosFromDB = async (query: Record<string, any>) => {
+  await resolveCategoryQuery(query);
+
   const now = new Date();
 
   const baseQuery = {
@@ -167,9 +240,22 @@ const generatePresignedUrl = async (fileName: string, contentType: string) => {
 
   const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 600 }); // 10 minutes
 
-  const videoUrl = `https://${AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+  const videoUrl = getFileUrl(key);
 
   return { uploadUrl, videoUrl, key };
+};
+
+const retryTranscodeToDB = async (id: string) => {
+  const video = await Video.findById(id);
+  if (!video) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'Video not found');
+  }
+
+  transcodeVideoToHLS(video._id.toString(), video.videoUrl).catch((err) => {
+    console.error('[FFmpeg Retry Error]:', err);
+  });
+
+  return video;
 };
 
 export const VideoService = {
@@ -181,4 +267,5 @@ export const VideoService = {
   toggleVideoStatusToDB,
   getPublicVideosFromDB,
   generatePresignedUrl,
+  retryTranscodeToDB,
 };

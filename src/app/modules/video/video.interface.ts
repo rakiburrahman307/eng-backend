@@ -9,6 +9,8 @@ export type IVideo = {
   thumbnail?: string;
   description: string;
   videoUrl: string;
+  hlsUrl?: string;
+  processingStatus?: 'pending' | 'processing' | 'completed' | 'failed';
   status: 'draft' | 'publish' | 'schedule';
   publishDateTime?: Date | null;
 };

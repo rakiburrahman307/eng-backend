@@ -29,4 +29,8 @@ const gallerySchema = new Schema<IGallery, GalleryModel>(
   { timestamps: true }
 );
 
+gallerySchema.index({ category: 1, status: 1 });
+gallerySchema.index({ subCategory: 1 });
+gallerySchema.index({ status: 1 });
+
 export const Gallery = model<IGallery, GalleryModel>('Gallery', gallerySchema);

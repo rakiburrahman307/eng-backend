@@ -27,6 +27,15 @@ const videoSchema = new Schema<IVideo, VideoModel>(
       type: String,
       required: true,
     },
+    hlsUrl: {
+      type: String,
+      default: '',
+    },
+    processingStatus: {
+      type: String,
+      enum: ['pending', 'processing', 'completed', 'failed'],
+      default: 'pending',
+    },
     thumbnail: {
       type: String,
       required: false,
@@ -51,5 +60,10 @@ const videoSchema = new Schema<IVideo, VideoModel>(
   },
   { timestamps: true }
 );
+
+videoSchema.index({ category: 1, status: 1 });
+videoSchema.index({ subCategory: 1 });
+videoSchema.index({ status: 1, publishDateTime: 1 });
+videoSchema.index({ createdBy: 1 });
 
 export const Video = model<IVideo, VideoModel>('Video', videoSchema);

@@ -71,14 +71,23 @@ const fileUploadHandler = () => {
 
     // IMAGE validation
     if (file.fieldname === 'image') {
-      if (
-        file.mimetype === 'image/jpeg' ||
-        file.mimetype === 'image/png' ||
-        file.mimetype === 'image/jpg'
-      ) {
+      const allowedImageTypes = [
+        'image/jpeg',
+        'image/png',
+        'image/jpg',
+        'image/webp',
+        'image/gif',
+        'image/svg+xml',
+      ];
+      if (allowedImageTypes.includes(file.mimetype)) {
         cb(null, true);
       } else {
-        cb(new ApiError(StatusCodes.BAD_REQUEST, 'Only image files allowed'));
+        cb(
+          new ApiError(
+            StatusCodes.BAD_REQUEST,
+            'Only image files allowed (JPEG, PNG, JPG, WEBP, GIF, SVG)'
+          )
+        );
       }
     }
 

@@ -9,7 +9,7 @@ export interface IMatch {
 
   matchDate: Date;
 
-  durationMinutes: number;
+  durationMinutes?: string;
 
   venueName?: string;
 

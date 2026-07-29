@@ -45,4 +45,12 @@ router
     VideoController.toggleVideoStatus
   );
 
+// RETRY TRANSCODE
+router
+  .route('/:id/retry-transcode')
+  .post(
+    auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+    VideoController.retryTranscode
+  );
+
 export default router;
