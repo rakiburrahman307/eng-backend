@@ -121,14 +121,54 @@ const calculateLeague = async (league: any) => {
   return computeStandings(leagueTeams, matches);
 };
 
+import mongoose from 'mongoose';
+
 // =========================
-// GROUPED RESPONSE (OPTIMIZED 3 QUERIES)
+// MAIN API (WITH STRICT FILTERING BY QUERY)
 // =========================
-const getAllLeaguesGrouped = async () => {
-  const [leagues, allLeagueTeams, allMatches] = await Promise.all([
-    League.find(),
-    LeagueTeam.find().populate('team', 'teamName shortName teamLogo'),
-    Match.find({ status: 'finished' }),
+const getPointTable = async (query: Record<string, any> = {}) => {
+  const { leagueId, id, _id, season, leagueName, year, page, limit } = query;
+
+  const filter: Record<string, any> = {};
+
+  const targetId = leagueId || id || _id;
+  if (targetId) {
+    if (mongoose.Types.ObjectId.isValid(targetId)) {
+      filter._id = targetId;
+    } else {
+      // Invalid ObjectId format means no match exists
+      return [];
+    }
+  }
+
+  if (season) {
+    filter.season = { $regex: new RegExp(`^${season.toString().trim()}$`, 'i') };
+  }
+
+  if (leagueName) {
+    filter.leagueName = { $regex: new RegExp(leagueName.toString().trim(), 'i') };
+  }
+
+  if (year) {
+    filter.season = { $regex: new RegExp(year.toString().trim(), 'i') };
+  }
+
+  // Fetch only leagues matching the filter criteria
+  const leagues = await League.find(filter).sort({ createdAt: -1 });
+
+  // If no league matches the filter (e.g. season=2022 doesn't match), return [] empty array!
+  if (!leagues.length) {
+    return [];
+  }
+
+  const leagueIds = leagues.map((l) => l._id);
+
+  const [allLeagueTeams, allMatches] = await Promise.all([
+    LeagueTeam.find({ league: { $in: leagueIds } }).populate(
+      'team',
+      'teamName shortName teamLogo'
+    ),
+    Match.find({ league: { $in: leagueIds }, status: 'finished' }),
   ]);
 
   const leagueTeamsMap: Record<string, any[]> = {};
@@ -152,9 +192,9 @@ const getAllLeaguesGrouped = async () => {
   const response = [];
 
   for (const league of leagues) {
-    const leagueId = league._id.toString();
-    const leagueTeams = leagueTeamsMap[leagueId] || [];
-    const matches = matchesMap[leagueId] || [];
+    const lId = league._id.toString();
+    const leagueTeams = leagueTeamsMap[lId] || [];
+    const matches = matchesMap[lId] || [];
 
     const standings = computeStandings(leagueTeams, matches);
 
@@ -164,28 +204,16 @@ const getAllLeaguesGrouped = async () => {
     });
   }
 
-  return response;
-};
+  // Handle pagination (page & limit) if passed
+  const parsedLimit = Number(limit);
+  const parsedPage = Number(page) || 1;
 
-// =========================
-// MAIN API
-// =========================
-const getPointTable = async (leagueId?: string) => {
-  if (leagueId) {
-    const league = await League.findById(leagueId);
-    if (!league) return [];
-
-    const standings = await calculateLeague(league);
-
-    return [
-      {
-        league,
-        standings,
-      },
-    ];
+  if (parsedLimit && parsedLimit > 0) {
+    const skip = (parsedPage - 1) * parsedLimit;
+    return response.slice(skip, skip + parsedLimit);
   }
 
-  return getAllLeaguesGrouped();
+  return response;
 };
 
 export const PointTableService = {

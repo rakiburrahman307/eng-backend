@@ -1,5 +1,6 @@
 import ApiError from "../../../errors/ApiErrors";
 import { MatchPlayerSelection } from "./matchPlayerSelection.model";
+import { Match } from "../match/match.model";
 import { Team } from "../team/team.model";
 import { sendNotification } from "../../../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
@@ -14,6 +15,18 @@ const createSelectionIntoDB = async (payload: any) => {
 
   if (!Array.isArray(players) || players.length === 0) {
     throw new ApiError(400, "Players array is required");
+  }
+
+  // 🛑 Validate maxPlayersPerTeam set by Admin
+  const matchData = await Match.findById(match);
+  if (matchData && (matchData as any).maxPlayersPerTeam) {
+    const maxAllowed = (matchData as any).maxPlayersPerTeam;
+    if (players.length > maxAllowed) {
+      throw new ApiError(
+        400,
+        `Maximum ${maxAllowed} players allowed per team for this match as set by Admin`
+      );
+    }
   }
 
   const unique = new Set(players.map((p: any) => p.player.toString()));
@@ -154,6 +167,23 @@ const getSingleSelectionFromDB = async (id: string) => {
 
 // UPDATE
 const updateSelectionIntoDB = async (id: string, payload: any) => {
+  const isExist = await MatchPlayerSelection.findById(id);
+  if (!isExist) throw new ApiError(404, "Selection not found");
+
+  const targetMatchId = payload.match || isExist.match;
+  if (payload.players && Array.isArray(payload.players)) {
+    const matchData = await Match.findById(targetMatchId);
+    if (matchData && (matchData as any).maxPlayersPerTeam) {
+      const maxAllowed = (matchData as any).maxPlayersPerTeam;
+      if (payload.players.length > maxAllowed) {
+        throw new ApiError(
+          400,
+          `Maximum ${maxAllowed} players allowed per team for this match as set by Admin`
+        );
+      }
+    }
+  }
+
   const updated = await MatchPlayerSelection.findByIdAndUpdate(
     id,
     {
