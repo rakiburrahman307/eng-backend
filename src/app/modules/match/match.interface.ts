@@ -11,6 +11,8 @@ export interface IMatch {
 
   durationMinutes?: string;
 
+  maxPlayersPerTeam?: number;
+
   venueName?: string;
 
   venueCategory?: Types.ObjectId | string;

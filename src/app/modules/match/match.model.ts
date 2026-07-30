@@ -28,6 +28,11 @@ const matchSchema = new Schema(
       default: '90',
     },
 
+    maxPlayersPerTeam: {
+      type: Number,
+      default: 11,
+    },
+
     venueName: {
       type: String,
       default: '',

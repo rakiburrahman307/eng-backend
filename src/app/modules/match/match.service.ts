@@ -9,6 +9,52 @@ import mongoose from "mongoose";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
 import { sendNotification } from "../../../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
+import { VenueCategory } from "../venueCategory/venueCategory.model";
+
+const formatMatchVenue = async (matchItem: any) => {
+  if (!matchItem) return matchItem;
+  const matchObj = matchItem.toObject ? matchItem.toObject() : { ...matchItem };
+
+  const parts: string[] = [];
+  let rawVenueName = matchObj.venueName || '';
+
+  // 1. If rawVenueName is a valid ObjectId, try finding its VenueCategory document
+  if (rawVenueName && mongoose.Types.ObjectId.isValid(rawVenueName)) {
+    const venueCatDoc = await VenueCategory.findById(rawVenueName).populate('parentCategory', 'name');
+    if (venueCatDoc) {
+      if (venueCatDoc.parentCategory && (venueCatDoc.parentCategory as any).name) {
+        parts.push((venueCatDoc.parentCategory as any).name);
+      }
+      parts.push(venueCatDoc.name);
+      rawVenueName = ''; // reset since resolved
+    }
+  }
+
+  // 2. Add raw text venueName if not ObjectId and not already included
+  if (rawVenueName && !parts.includes(rawVenueName)) {
+    parts.push(rawVenueName);
+  }
+
+  // 3. Add venueCategory name if present
+  const catName = matchObj.venueCategory?.name || '';
+  if (catName && !parts.includes(catName)) {
+    parts.push(catName);
+  }
+
+  // 4. Add venueSubCategory name if present
+  const subCatName = matchObj.venueSubCategory?.name || '';
+  if (subCatName && !parts.includes(subCatName)) {
+    parts.push(subCatName);
+  }
+
+  const finalVenueString = parts.length > 0 ? parts.join(', ') : (matchObj.venueName || '');
+
+  return {
+    ...matchObj,
+    venueName: finalVenueString,
+    venue: finalVenueString,
+  };
+};
 
 /* ---------------- RATING LOGIC ---------------- */
 
@@ -162,20 +208,21 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     .paginate()
     .fields();
 
-  const result = await matchQuery.modelQuery
+  const matches = await matchQuery.modelQuery
     .populate("league")
     .populate("homeTeam")
     .populate("awayTeam")
     .populate("referee")
     .populate("winnerTeam")
-    .populate("venueCategory")
-    .populate("venueSubCategory");
+    .populate("venueCategory", "name")
+    .populate("venueSubCategory", "name");
 
   const meta = await matchQuery.getPaginationInfo();
+  const formattedResult = await Promise.all(matches.map((m: any) => formatMatchVenue(m)));
 
   return {
     meta,
-    result,
+    result: formattedResult,
   };
 };
 
@@ -189,20 +236,21 @@ const getMatchesByRefereeFromDB = async (
     .paginate()
     .fields();
 
-  const result = await matchQuery.modelQuery
+  const matches = await matchQuery.modelQuery
     .populate("league")
     .populate("homeTeam")
     .populate("awayTeam")
     .populate("referee")
     .populate("winnerTeam")
-    .populate("venueCategory")
-    .populate("venueSubCategory");
+    .populate("venueCategory", "name")
+    .populate("venueSubCategory", "name");
 
   const meta = await matchQuery.getPaginationInfo();
+  const formattedResult = await Promise.all(matches.map((m: any) => formatMatchVenue(m)));
 
   return {
     meta,
-    result,
+    result: formattedResult,
   };
 };
 
@@ -214,14 +262,14 @@ const getSingleMatchFromDB = async (id: string) => {
     .populate("awayTeam")
     .populate("referee")
     .populate("winnerTeam")
-    .populate("venueCategory")
-    .populate("venueSubCategory");
+    .populate("venueCategory", "name")
+    .populate("venueSubCategory", "name");
 
   if (!match) {
     throw new Error("Match not found");
   }
 
-  return match;
+  return await formatMatchVenue(match);
 };
 
 // UPDATE
@@ -377,20 +425,21 @@ const getUpcomingMatchesForManagerFromDB = async (
     .paginate()
     .fields();
 
-  const result = await matchQuery.modelQuery
+  const matches = await matchQuery.modelQuery
     .populate("league")
     .populate("homeTeam")
     .populate("awayTeam")
     .populate("referee")
     .populate("winnerTeam")
-    .populate("venueCategory")
-    .populate("venueSubCategory");
+    .populate("venueCategory", "name")
+    .populate("venueSubCategory", "name");
 
   const meta = await matchQuery.getPaginationInfo();
+  const formattedResult = await Promise.all(matches.map((m: any) => formatMatchVenue(m)));
 
   return {
     meta,
-    result,
+    result: formattedResult,
   };
 };
 
