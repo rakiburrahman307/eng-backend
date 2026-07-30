@@ -15,6 +15,14 @@ const createPackageZodSchema = z.object({
         canRedeemPoints: z.boolean().optional(),
         canViewOtherPlayerStats: z.boolean().optional(),
         canEarnPoints: z.boolean().optional(),
+        features: z
+            .array(
+                z.object({
+                    title: z.string({ error: "Feature title is required" }),
+                    isIncluded: z.boolean().default(true),
+                })
+            )
+            .optional(),
         credit: z
             .union([z.string(), z.number()])
             .transform((val) => (typeof val === "string" ? parseFloat(val) : val))

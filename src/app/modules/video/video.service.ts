@@ -1,13 +1,14 @@
 import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiErrors';
 import { IVideo } from './video.interface';
+import { Types } from 'mongoose';
 import { Video } from './video.model';
 import QueryBuilder from "../../../util/queryBuilder";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { s3, AWS_S3_BUCKET, getFileUrl } from "../../../config/aws";
+import { s3, AWS_S3_BUCKET, getFileUrl, deleteFileFromS3, deleteFolderFromS3 } from "../../../config/aws";
 import { transcodeVideoToHLS } from "../../../helpers/transcodeVideo";
-
+import { EngTvCategory } from '../engTvCategory/engTvCategory.model';
 // CREATE
 const createVideoToDB = async (payload: any, userId: string) => {
   const localVideoPath = payload._localVideoPath;
@@ -29,8 +30,7 @@ const createVideoToDB = async (payload: any, userId: string) => {
   return (await result.populate('category')).populate('subCategory');
 };
 
-import { Types } from 'mongoose';
-import { EngTvCategory } from '../engTvCategory/engTvCategory.model';
+
 
 const resolveCategoryQuery = async (query: Record<string, any>) => {
   const categoryValue = query.categoryName || query.category || query.categoryname;
@@ -163,16 +163,33 @@ const updateVideoToDB = async (
 };
 
 // DELETE
-const deleteVideoFromDB = async (id: string, userId: string) => {
+const deleteVideoFromDB = async (id: string, userId: string, role?: string) => {
   const video = await Video.findById(id);
 
   if (!video) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Video not found');
   }
 
-  if (video.createdBy?.toString() !== userId.toString()) {
+  if (
+    role !== 'ADMIN' &&
+    role !== 'SUPER_ADMIN' &&
+    video.createdBy?.toString() !== userId.toString()
+  ) {
     throw new ApiError(StatusCodes.FORBIDDEN, 'Not allowed');
   }
+
+  // 🗑️ Delete raw S3 Video file
+  if (video.videoUrl) {
+    await deleteFileFromS3(video.videoUrl);
+  }
+
+  // 🗑️ Delete S3 Thumbnail (if stored on S3)
+  if (video.thumbnail && (video.thumbnail.startsWith('http://') || video.thumbnail.startsWith('https://'))) {
+    await deleteFileFromS3(video.thumbnail);
+  }
+
+  // 🗑️ Delete all S3 HLS segments and playlist files under videos/hls/${id}/
+  await deleteFolderFromS3(`videos/hls/${id}/`);
 
   return await Video.findByIdAndDelete(id);
 };

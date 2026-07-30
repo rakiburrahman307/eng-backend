@@ -38,6 +38,8 @@ import PlayTimeCategoryRoutes from "../modules/playTimeCategory/playTimeCategory
 import AgeGroupCategoryRoutes from "../modules/ageGroupCategory/ageGroupCategory.route";
 import GalleryCategoryRoutes from "../modules/galleryCategory/galleryCategory.route";
 import NewsCategoryRoutes from "../modules/newsCategory/newsCategory.route";
+import TournamentRoutes from "../modules/tournament/tournament.route";
+import TournamentClaimRoutes from "../modules/tournamentClaim/tournamentClaim.route";
 
 const router = express.Router();
 
@@ -81,6 +83,8 @@ const apiRoutes = [
     { path: "/age-group-category", route: AgeGroupCategoryRoutes },
     { path: "/gallery-category", route: GalleryCategoryRoutes },
     { path: "/news-category", route: NewsCategoryRoutes },
+    { path: "/tournament", route: TournamentRoutes },
+    { path: "/tournament-claim", route: TournamentClaimRoutes },
 ]
 
 apiRoutes.forEach(route => router.use(route.path, route.route));

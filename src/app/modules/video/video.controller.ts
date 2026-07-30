@@ -140,7 +140,8 @@ const deleteVideo = catchAsync(async (req: Request, res: Response) => {
 
   const result = await VideoService.deleteVideoFromDB(
     req.params.id as string,
-    user._id as string
+    user._id as string,
+    user.role as string
   );
 
   sendResponse(res, {

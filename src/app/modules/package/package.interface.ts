@@ -1,5 +1,10 @@
 import { Model } from "mongoose";
 
+export type IPackageFeature = {
+    title: string;
+    isIncluded: boolean;
+};
+
 export type IPackage = {
     title: string;
     description: string;
@@ -18,6 +23,7 @@ export type IPackage = {
     credit: number;
     loginLimit: number;
     paymentLink?: string;
+    features?: IPackageFeature[];
     status: 'Active' | 'Delete';
 };
 

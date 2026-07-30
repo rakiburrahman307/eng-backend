@@ -1,9 +1,22 @@
 import { model, Schema } from "mongoose";
 import { IPackage, PackageModel } from "./package.interface";
 
+const featureSchema = new Schema(
+  {
+    title: { type: String, required: true, trim: true },
+    isIncluded: { type: Boolean, default: true },
+  },
+  { _id: false }
+);
+
 const packageSchema = new Schema<IPackage, PackageModel>({
     title: { type: String, required: true },
     description: { type: String, required: true },
+
+    features: {
+        type: [featureSchema],
+        default: [],
+    },
 
     userType: {
         type: String,

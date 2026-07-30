@@ -1,0 +1,235 @@
+import { StatusCodes } from 'http-status-codes';
+import ApiError from '../../../errors/ApiErrors';
+import QueryBuilder from '../../../util/queryBuilder';
+import { ITournamentClaim } from './tournamentClaim.interface';
+import { TournamentClaim } from './tournamentClaim.model';
+import { Tournament } from '../tournament/tournament.model';
+import { User } from '../user/user.model';
+import { USER_ROLES } from '../../../enums/user';
+import { sendNotification } from '../../../helpers/notificationsHelper';
+import { NOTIFICATION_TYPE } from '../notification/notification.interface';
+
+const createClaimToDB = async (
+  userId: string,
+  payload: Partial<ITournamentClaim>
+): Promise<ITournamentClaim> => {
+  const { tournament: tournamentId, claimedPosition, proofNotes } = payload;
+
+  if (!tournamentId || !claimedPosition) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      'Tournament ID and claimedPosition are required'
+    );
+  }
+
+  // 1. Verify user exists & has allowed role (PLAYER or TOURNAMENT_PLAYER)
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+  }
+
+  if (
+    user.role !== USER_ROLES.PLAYER &&
+    user.role !== USER_ROLES.TOURNAMENT_PLAYER
+  ) {
+    throw new ApiError(
+      StatusCodes.FORBIDDEN,
+      'Only PLAYER or TOURNAMENT_PLAYER role can claim tournament positions'
+    );
+  }
+
+  // 2. Verify tournament exists
+  const tournament = await Tournament.findById(tournamentId);
+  if (!tournament) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'Tournament not found');
+  }
+
+  // 3. Check Deadline (endDate check)
+  const now = new Date();
+  if (now > new Date(tournament.endDate)) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      'Tournament submission deadline has passed. Submissions are closed.'
+    );
+  }
+
+  if (now < new Date(tournament.startDate)) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      'Tournament has not started yet'
+    );
+  }
+
+  // 4. Verify position exists in tournament rewards configuration
+  const rewardConfig = tournament.positionRewards?.find(
+    (r) => r.position === Number(claimedPosition)
+  );
+
+  if (!rewardConfig) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      `Position ${claimedPosition} is not configured for rewards in this tournament`
+    );
+  }
+
+  // 5. Check if position has ALREADY been approved for another user
+  const alreadyApproved = await TournamentClaim.findOne({
+    tournament: tournamentId,
+    claimedPosition: Number(claimedPosition),
+    status: 'approved',
+  });
+
+  if (alreadyApproved) {
+    throw new ApiError(
+      StatusCodes.CONFLICT,
+      `Position ${rewardConfig.positionName} has already been awarded and finalized for another participant.`
+    );
+  }
+
+  // 6. Check if user already submitted a claim for this tournament
+  const existingUserClaim = await TournamentClaim.findOne({
+    tournament: tournamentId,
+    user: userId,
+  });
+
+  if (existingUserClaim) {
+    throw new ApiError(
+      StatusCodes.CONFLICT,
+      'You have already submitted a claim for this tournament.'
+    );
+  }
+
+  // 7. Create Claim
+  const result = await TournamentClaim.create({
+    tournament: tournamentId,
+    user: userId,
+    claimedPosition: Number(claimedPosition),
+    claimedPositionName: rewardConfig.positionName,
+    proofNotes: proofNotes || '',
+    status: 'pending',
+  });
+
+  return result;
+};
+
+const getAllClaimsFromDB = async (query: Record<string, any>) => {
+  const claimQuery = new QueryBuilder(TournamentClaim.find(), query)
+    .filter()
+    .sort()
+    .paginate()
+    .fields();
+
+  const result = await claimQuery.modelQuery
+    .populate('tournament')
+    .populate('user', 'userName email firstName lastName profile role rewardPoint');
+
+  const meta = await claimQuery.getPaginationInfo();
+
+  return {
+    meta,
+    result,
+  };
+};
+
+const getMyClaimsFromDB = async (userId: string) => {
+  const result = await TournamentClaim.find({ user: userId })
+    .sort({ createdAt: -1 })
+    .populate('tournament');
+
+  return result;
+};
+
+const reviewClaimInDB = async (
+  claimId: string,
+  adminId: string,
+  status: 'approved' | 'rejected'
+): Promise<ITournamentClaim | null> => {
+  if (status !== 'approved' && status !== 'rejected') {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      'Status must be either approved or rejected'
+    );
+  }
+
+  const claim = await TournamentClaim.findById(claimId);
+  if (!claim) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'Tournament claim not found');
+  }
+
+  if (claim.status === 'approved') {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      'This claim has already been approved and points have been credited.'
+    );
+  }
+
+  const tournament = await Tournament.findById(claim.tournament);
+  if (!tournament) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'Associated tournament not found');
+  }
+
+  if (status === 'approved') {
+    // 🛑 1-Person per Position Rule: Ensure no other user is approved for this position
+    const duplicateApproval = await TournamentClaim.findOne({
+      tournament: claim.tournament,
+      claimedPosition: claim.claimedPosition,
+      status: 'approved',
+      _id: { $ne: claimId },
+    });
+
+    if (duplicateApproval) {
+      throw new ApiError(
+        StatusCodes.CONFLICT,
+        `Position ${claim.claimedPositionName} has already been approved for another participant in this tournament.`
+      );
+    }
+
+    // Find points configured for this position
+    const rewardConfig = tournament.positionRewards?.find(
+      (r) => r.position === claim.claimedPosition
+    );
+
+    const pointsToAward = rewardConfig ? rewardConfig.points : 0;
+
+    // 💰 Credit reward points to user account
+    await User.findByIdAndUpdate(claim.user, {
+      $inc: { rewardPoint: pointsToAward },
+    });
+
+    claim.status = 'approved';
+    claim.pointsAwarded = pointsToAward;
+    claim.approvedBy = adminId as any;
+    await claim.save();
+
+    // 🔔 Send Notification to User
+    await sendNotification({
+      receiver: claim.user.toString(),
+      title: 'Tournament Reward Credited! 🏆',
+      message: `Congratulations! Your position claim for "${tournament.title}" (${claim.claimedPositionName}) has been approved. ${pointsToAward} reward points have been added to your account!`,
+      type: NOTIFICATION_TYPE.GENERAL,
+      metadata: { tournamentId: tournament._id, claimId: claim._id },
+    });
+  } else {
+    claim.status = 'rejected';
+    claim.approvedBy = adminId as any;
+    await claim.save();
+
+    // 🔔 Send Notification to User
+    await sendNotification({
+      receiver: claim.user.toString(),
+      title: 'Tournament Claim Update ℹ️',
+      message: `Your position claim for "${tournament.title}" (${claim.claimedPositionName}) was not approved by Admin.`,
+      type: NOTIFICATION_TYPE.GENERAL,
+      metadata: { tournamentId: tournament._id, claimId: claim._id },
+    });
+  }
+
+  return claim;
+};
+
+export const TournamentClaimService = {
+  createClaimToDB,
+  getAllClaimsFromDB,
+  getMyClaimsFromDB,
+  reviewClaimInDB,
+};
