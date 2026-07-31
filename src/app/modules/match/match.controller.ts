@@ -151,6 +151,24 @@ const getUpcomingMatchesForManager = catchAsync(
 );
 
 
+const updateMatchTimer = catchAsync(async (req: Request, res: Response) => {
+  const matchId = req.params.id as string;
+  const { action } = req.body;
+
+  const result = await MatchService.updateMatchTimerInDB(
+    matchId,
+    action,
+    req.user
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: `Match timer action '${action}' processed successfully`,
+    data: result,
+  });
+});
+
 export const MatchController = {
   createMatch,
   getAllMatches,
@@ -160,5 +178,6 @@ export const MatchController = {
   toggleMatchStatus,
   getMatchesForReferee,
   addMatchReview,
-  getUpcomingMatchesForManager
+  getUpcomingMatchesForManager,
+  updateMatchTimer,
 };

@@ -2,12 +2,65 @@ import ApiError from "../../../errors/ApiErrors";
 import { MatchPlayerSelection } from "./matchPlayerSelection.model";
 import { Match } from "../match/match.model";
 import { Team } from "../team/team.model";
+import { ManagerTeam } from "../managerTeam/managerTeam.model";
+import { User } from "../user/user.model";
+import { USER_ROLES } from "../../../enums/user";
 import { sendNotification } from "../../../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 
+// ⚽ Helper to verify all selected players belong to the specified team
+const validatePlayersBelongToTeam = async (players: any[], teamId: string) => {
+  if (!Array.isArray(players) || players.length === 0) return;
+
+  const playerIds = players.map((p: any) => p.player?.toString()).filter(Boolean);
+  const playerUsers = await User.find({ _id: { $in: playerIds } }).select("firstName lastName selectTeam");
+
+  for (const playerUser of playerUsers) {
+    if (!playerUser.selectTeam || playerUser.selectTeam.toString() !== teamId.toString()) {
+      const playerName = `${playerUser.firstName || ''} ${playerUser.lastName || ''}`.trim() || 'Selected player';
+      throw new ApiError(
+        400,
+        `Player "${playerName}" does not belong to this team. You can only select players from your own team.`
+      );
+    }
+  }
+};
+
+// 🛡️ Helper to verify if the logged-in manager is assigned to the specified team
+const verifyManagerOfTeam = async (user: any, teamId: string) => {
+  if (!user) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  if (user.role === USER_ROLES.ADMIN || user.role === USER_ROLES.SUPER_ADMIN) {
+    return true;
+  }
+
+  if (user.role === USER_ROLES.MANAGER) {
+    const isManagerOfTeam = await ManagerTeam.findOne({
+      manager: user._id || user.id,
+      team: teamId,
+    });
+
+    if (!isManagerOfTeam) {
+      throw new ApiError(
+        403,
+        "Access Denied: You are not the assigned official manager of this team."
+      );
+    }
+
+    return true;
+  }
+
+  throw new ApiError(403, "Access Denied: Only managers can perform player selection.");
+};
+
 // CREATE
-const createSelectionIntoDB = async (payload: any) => {
+const createSelectionIntoDB = async (payload: any, user: any) => {
   const { match, team, players, teamFormation } = payload;
+
+  // 🛡️ Verify logged-in manager is assigned to this team
+  await verifyManagerOfTeam(user, team);
 
   if (!teamFormation) {
     throw new ApiError(400, "Team formation is required");
@@ -16,6 +69,9 @@ const createSelectionIntoDB = async (payload: any) => {
   if (!Array.isArray(players) || players.length === 0) {
     throw new ApiError(400, "Players array is required");
   }
+
+  // ⚽ Verify all selected players belong to this team
+  await validatePlayersBelongToTeam(players, team.toString());
 
   // 🛑 Validate maxPlayersPerTeam set by Admin
   const matchData = await Match.findById(match);
@@ -166,12 +222,19 @@ const getSingleSelectionFromDB = async (id: string) => {
 };
 
 // UPDATE
-const updateSelectionIntoDB = async (id: string, payload: any) => {
+const updateSelectionIntoDB = async (id: string, payload: any, user: any) => {
   const isExist = await MatchPlayerSelection.findById(id);
   if (!isExist) throw new ApiError(404, "Selection not found");
 
+  const targetTeamId = payload.team || isExist.team;
+  // 🛡️ Verify logged-in manager is assigned to this team
+  await verifyManagerOfTeam(user, targetTeamId.toString());
+
   const targetMatchId = payload.match || isExist.match;
   if (payload.players && Array.isArray(payload.players)) {
+    // ⚽ Verify all selected players belong to this team
+    await validatePlayersBelongToTeam(payload.players, targetTeamId.toString());
+
     const matchData = await Match.findById(targetMatchId);
     if (matchData && (matchData as any).maxPlayersPerTeam) {
       const maxAllowed = (matchData as any).maxPlayersPerTeam;
@@ -210,10 +273,14 @@ const updateSelectionIntoDB = async (id: string, payload: any) => {
 };
 
 // DELETE
-const deleteSelectionFromDB = async (id: string) => {
-  const deleted = await MatchPlayerSelection.findByIdAndDelete(id);
+const deleteSelectionFromDB = async (id: string, user: any) => {
+  const isExist = await MatchPlayerSelection.findById(id);
+  if (!isExist) throw new ApiError(404, "Selection not found");
 
-  if (!deleted) throw new ApiError(404, "Selection not found");
+  // 🛡️ Verify logged-in manager is assigned to this team
+  await verifyManagerOfTeam(user, isExist.team.toString());
+
+  const deleted = await MatchPlayerSelection.findByIdAndDelete(id);
 
   return deleted;
 };

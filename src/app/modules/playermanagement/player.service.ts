@@ -3,6 +3,7 @@ import { User } from "../user/user.model";
 import { USER_ROLES } from "../../../enums/user";
 import { Subscription } from "../subscription/subscription.model";
 import { JwtPayload } from "jsonwebtoken";
+import ApiError from "../../../errors/ApiErrors";
 
 const checkCanViewOtherPlayers = async (user?: JwtPayload | null): Promise<boolean> => {
   if (!user || user.role !== USER_ROLES.PLAYER) return true;
@@ -123,7 +124,27 @@ const getFilteredPlayersFromDB = async (query: Record<string, any>, user?: JwtPa
   };
 };
 
+// ✅ UPDATE PLAYER BY ADMIN
+const updatePlayerByAdminToDB = async (id: string, payload: Partial<any>) => {
+  const player = await User.findById(id);
+
+  if (!player) {
+    throw new ApiError(404, "Player not found");
+  }
+
+  const result = await User.findByIdAndUpdate(id, payload, {
+    new: true,
+    runValidators: true,
+  }).populate({
+    path: "selectTeam",
+    select: "teamName shortName teamLogo",
+  });
+
+  return result;
+};
+
 export const PlayerService = {
   getAllPlayersFromDB,
   getFilteredPlayersFromDB,
+  updatePlayerByAdminToDB,
 };

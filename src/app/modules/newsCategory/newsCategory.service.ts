@@ -13,6 +13,16 @@ const createCategoryToDB = async (payload: Partial<INewsCategory>): Promise<INew
     throw new ApiError(StatusCodes.CONFLICT, 'News category already exists with this name');
   }
 
+  if (payload.order !== undefined && payload.order !== null) {
+    const orderExist = await NewsCategory.findOne({ order: payload.order });
+    if (orderExist) {
+      throw new ApiError(
+        StatusCodes.CONFLICT,
+        `Category order must be unique. Order ${payload.order} is already in use.`
+      );
+    }
+  }
+
   const result = await NewsCategory.create(payload);
   return result;
 };
@@ -42,6 +52,19 @@ const updateCategoryToDB = async (
   const isExist = await NewsCategory.findById(id);
   if (!isExist) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Category not found');
+  }
+
+  if (payload.order !== undefined && payload.order !== null) {
+    const orderExist = await NewsCategory.findOne({
+      _id: { $ne: id },
+      order: payload.order,
+    });
+    if (orderExist) {
+      throw new ApiError(
+        StatusCodes.CONFLICT,
+        `Category order must be unique. Order ${payload.order} is already in use.`
+      );
+    }
   }
 
   if (payload.name) {

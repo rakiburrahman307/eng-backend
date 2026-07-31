@@ -23,6 +23,12 @@ export interface IMatch {
 
   status: 'upcoming' | 'live' | 'half_time' | 'finished' | 'cancelled';
 
+  timerStatus?: 'stopped' | 'running' | 'paused' | 'finished';
+
+  timerStartedAt?: Date | null;
+
+  elapsedSeconds?: number;
+
   homeScore: number;
 
   awayScore: number;

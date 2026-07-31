@@ -6,7 +6,8 @@ import { MatchPlayerSelectionService } from "./matchPlayerSelection.service";
 
 // CREATE
 const createSelection = catchAsync(async (req: Request, res: Response) => {
-  const result = await MatchPlayerSelectionService.createSelectionIntoDB(req.body);
+  const user = req.user as any;
+  const result = await MatchPlayerSelectionService.createSelectionIntoDB(req.body, user);
 
   sendResponse(res, {
     success: true,
@@ -44,9 +45,11 @@ const getSingleSelection = catchAsync(async (req: Request, res: Response) => {
 
 // UPDATE
 const updateSelection = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user as any;
   const result = await MatchPlayerSelectionService.updateSelectionIntoDB(
     req.params.id as string,
-    req.body
+    req.body,
+    user
   );
 
   sendResponse(res, {
@@ -59,8 +62,10 @@ const updateSelection = catchAsync(async (req: Request, res: Response) => {
 
 // DELETE
 const deleteSelection = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user as any;
   const result = await MatchPlayerSelectionService.deleteSelectionFromDB(
-    req.params.id as string
+    req.params.id as string,
+    user
   );
 
   sendResponse(res, {

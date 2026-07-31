@@ -13,9 +13,14 @@ const createEventToDB = async (payload: IEvent, userId: string) => {
 
 // GET ALL
 const getAllEventsFromDB = async (query: Record<string, any>) => {
+  const queryWithDefaultSort = {
+    sort: 'eventDate',
+    ...query,
+  };
+
   const eventQuery = new QueryBuilder(
     Event.find(),
-    query
+    queryWithDefaultSort
   )
     .search(['title', 'description', 'location'])
     .filter()
@@ -36,9 +41,14 @@ const getAllEventsFromDB = async (query: Record<string, any>) => {
 const getPublicEventsFromDB = async (
   query: Record<string, any>
 ) => {
+  const queryWithDefaultSort = {
+    sort: 'eventDate',
+    ...query,
+  };
+
   const eventQuery = new QueryBuilder(
-    Event.find(),
-    query
+    Event.find({ status: 'publish' }),
+    queryWithDefaultSort
   )
     .search(['title', 'description', 'location'])
     .filter()

@@ -2,7 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiErrors';
 import { Transfer } from './transfer.model';
 import { User } from '../user/user.model';
-
+import { Team } from '../team/team.model';
 import { ManagerTeam } from '../managerTeam/managerTeam.model';
 import { USER_ROLES } from '../../../enums/user';
 import mongoose from 'mongoose';
@@ -11,26 +11,38 @@ import { NOTIFICATION_TYPE } from '../notification/notification.interface';
 
 // CREATE
 const createTransferToDB = async (payload: any, userId: string) => {
-
-
   // 1. Check player
   const player = await User.findById(payload.player);
 
-
-
   if (!player) {
-
     throw new ApiError(StatusCodes.NOT_FOUND, 'Player not found');
   }
 
-  // 2. Get player details
-  const userDetails = await User.findById(payload.player);
+  const fromTeam = player.selectTeam || null;
 
+  // 🛑 CANNOT REQUEST OWN TEAM'S PLAYER
+  if (fromTeam && fromTeam.toString() === payload.toTeam.toString()) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      'You cannot send a transfer request for a player who is already in your team.'
+    );
+  }
 
+  // 💰 CHECK BUYING TEAM COIN BALANCE VS PLAYER MARKET VALUE
+  const playerMarketValue = player.marketValue || 0;
+  const toTeamData = await Team.findById(payload.toTeam);
 
-  const fromTeam = userDetails?.selectTeam || null;
+  if (!toTeamData) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'Target buying team not found');
+  }
 
-
+  const buyingTeamCoin = toTeamData.coin || 0;
+  if (buyingTeamCoin < playerMarketValue) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      `Insufficient team coins! Your team has ${buyingTeamCoin} coins, but the player's market value is ${playerMarketValue} coins.`
+    );
+  }
 
   // 3. Determine transfer type
   let transferType: any = 'CLUB_TO_CLUB';
@@ -39,20 +51,28 @@ const createTransferToDB = async (payload: any, userId: string) => {
     transferType = 'FREE_AGENT';
   }
 
-
   // 4. Check manager permission
-
-
   const isManager = await ManagerTeam.findOne({
     manager: userId,
     team: payload.toTeam,
   });
 
-
-
   if (!isManager) {
-
     throw new ApiError(StatusCodes.FORBIDDEN, 'Not your team');
+  }
+
+  // 🛑 Check duplicate pending transfer request
+  const existingPending = await Transfer.findOne({
+    player: payload.player,
+    toTeam: payload.toTeam,
+    status: 'PENDING',
+  });
+
+  if (existingPending) {
+    throw new ApiError(
+      StatusCodes.CONFLICT,
+      'A pending transfer request already exists for this player.'
+    );
   }
 
   // 5. Create transfer
@@ -90,9 +110,14 @@ const getAllTransfersFromDB = async (query: Record<string, any>) => {
   const limit = Number(query.limit) || 10;
   const skip = (page - 1) * limit;
 
-  const filter: any = {
-    status: query.status || 'PENDING',
-  };
+  const filter: any = {};
+
+  if (query.status) {
+    filter.status = query.status;
+  } else {
+    // Default: show both PENDING and MANAGER_APPROVED requests needing Admin action
+    filter.status = { $in: ['PENDING', 'MANAGER_APPROVED'] };
+  }
 
   const [transfers, total] = await Promise.all([
     Transfer.find(filter)
@@ -283,54 +308,113 @@ const getSingleTransferFromDB = async (id: string) => {
   return transfer;
 };
 
-// APPROVE
-const approveTransferToDB = async (id: string, adminId: string) => {
-
-
+// APPROVE (2-Phase Approval: Manager Approve -> Admin Final Approve & Team Swap)
+const approveTransferToDB = async (id: string, user: any) => {
   // 1. Find transfer
   const transfer = await Transfer.findById(id);
 
-
-
   if (!transfer) {
-
     throw new ApiError(StatusCodes.NOT_FOUND, 'Transfer not found');
   }
 
+  const userId = user?._id || user?.id;
+  const userRole = user?.role;
 
-  // 2. Find user details
-  const userDetails = await User.findById(transfer.player);
+  // 🛑 PHASE 1: MANAGER APPROVAL
+  if (userRole === USER_ROLES.MANAGER) {
+    if (transfer.fromTeam) {
+      const isFromTeamManager = await ManagerTeam.findOne({
+        manager: userId,
+        team: transfer.fromTeam,
+      });
 
-  if (!userDetails) {
+      if (!isFromTeamManager) {
+        throw new ApiError(
+          StatusCodes.FORBIDDEN,
+          "Access Denied: Only the manager of the player's current team can approve this transfer."
+        );
+      }
+    }
 
-    throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
+    transfer.status = 'MANAGER_APPROVED';
+    await transfer.save();
+
+    // 🔔 Notify Admins for final approval
+    await sendNotificationToAdmins({
+      title: 'Transfer Approved by Manager',
+      message: 'A team manager has approved a player transfer request. Final Admin approval is required.',
+      type: NOTIFICATION_TYPE.TRANSFER_REQUESTED,
+      metadata: { transferId: transfer._id },
+    });
+
+    // 🔔 Notify player
+    await sendNotification({
+      receiver: transfer.player.toString(),
+      title: 'Manager Approved Transfer 👍',
+      message: 'Your team manager has approved the transfer request. Awaiting final Admin approval.',
+      type: NOTIFICATION_TYPE.GENERAL,
+      metadata: { transferId: transfer._id },
+    });
+
+    return transfer;
   }
 
-  // 3. Update team
+  // 🛑 PHASE 2: ADMIN / SUPER_ADMIN FINAL APPROVAL (TEAM SWAP & COIN TRANSFER)
+  if (userRole === USER_ROLES.ADMIN || userRole === USER_ROLES.SUPER_ADMIN) {
+    const userDetails = await User.findById(transfer.player);
 
-  userDetails.selectTeam = transfer.toTeam as any;
+    if (!userDetails) {
+      throw new ApiError(StatusCodes.NOT_FOUND, 'Player user not found');
+    }
 
-  await userDetails.save();
+    const playerMarketValue = userDetails.marketValue || 0;
 
+    // 1. Deduct coins from buying team (toTeam)
+    const toTeamObj = await Team.findById(transfer.toTeam);
+    if (!toTeamObj) {
+      throw new ApiError(StatusCodes.NOT_FOUND, 'Target buying team not found');
+    }
 
+    if ((toTeamObj.coin || 0) < playerMarketValue) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        `Cannot complete transfer: Target buying team has insufficient coins (${toTeamObj.coin || 0} available, ${playerMarketValue} required).`
+      );
+    }
 
-  // 4. Update transfer
+    toTeamObj.coin = (toTeamObj.coin || 0) - playerMarketValue;
+    await toTeamObj.save();
 
-  transfer.status = 'APPROVED';
-  transfer.approvedBy = adminId as any;
+    // 2. Add coins to selling team (fromTeam), if exists
+    if (transfer.fromTeam) {
+      const fromTeamObj = await Team.findById(transfer.fromTeam);
+      if (fromTeamObj) {
+        fromTeamObj.coin = (fromTeamObj.coin || 0) + playerMarketValue;
+        await fromTeamObj.save();
+      }
+    }
 
-  await transfer.save();
+    // 3. Swap player's team to new team
+    userDetails.selectTeam = transfer.toTeam as any;
+    await userDetails.save();
 
-  // 🔔 Notify player: transfer approved
-  await sendNotification({
-    receiver: transfer.player.toString(),
-    title: '🎉 Transfer Approved!',
-    message: 'Congratulations! Your transfer request has been approved. You are now part of the new team.',
-    type: NOTIFICATION_TYPE.TRANSFER_APPROVED,
-    metadata: { transferId: transfer._id },
-  });
+    transfer.status = 'APPROVED';
+    transfer.approvedBy = userId as any;
+    await transfer.save();
 
-  return transfer;
+    // 🔔 Notify player: transfer approved
+    await sendNotification({
+      receiver: transfer.player.toString(),
+      title: '🎉 Transfer Approved!',
+      message: 'Congratulations! Your transfer request has been fully approved by Admin. You are now part of the new team.',
+      type: NOTIFICATION_TYPE.TRANSFER_APPROVED,
+      metadata: { transferId: transfer._id, newTeamId: transfer.toTeam },
+    });
+
+    return transfer;
+  }
+
+  throw new ApiError(StatusCodes.FORBIDDEN, 'Unauthorized role to approve transfer');
 };
 
 // REJECT
@@ -524,39 +608,41 @@ const getManagerTransferRequestsFromDB = async (
   managerId: string,
   query: Record<string, any>
 ) => {
-  const managerTeam = await ManagerTeam.findOne({
+  const managerTeams = await ManagerTeam.find({
     manager: managerId,
   });
 
-  if (!managerTeam) {
-    throw new ApiError(
-      StatusCodes.NOT_FOUND,
-      "Manager team not found"
-    );
+  if (!managerTeams || !managerTeams.length) {
+    return [];
   }
 
+  const myTeamIds = managerTeams.map((item) => item.team);
+
+  // 📥 INCOMING REQUESTS ONLY: Requests sent by other teams for players in THIS manager's team (fromTeam)
   const transfers = await Transfer.find({
-    toTeam: managerTeam.team,
+    fromTeam: { $in: myTeamIds },
   })
     .populate({
       path: "player",
-      select: "email profile userName",
+      select: "email profile userName firstName lastName",
     })
     .populate({
       path: "fromTeam",
-      select: "teamName",
+      select: "teamName shortName teamLogo",
     })
     .populate({
       path: "toTeam",
-      select: "teamName",
+      select: "teamName shortName teamLogo",
     })
     .sort({ createdAt: -1 })
     .lean();
 
   if (!transfers.length) return [];
 
-  // 🔥 ADD USERDETAILS MANUALLY
-  const userIds = transfers.map((t) => t.player?._id);
+  // 🔥 ADD USERDETAILS MANUALLY IF NEEDED
+  const userIds = transfers
+    .map((t) => t.player?._id)
+    .filter(Boolean);
 
   const details = await User.find({
     _id: { $in: userIds },
@@ -566,15 +652,16 @@ const getManagerTransferRequestsFromDB = async (
     details.map((d) => [d._id.toString(), d])
   );
 
-  const result = transfers.map((t) => {
-    const d = detailsMap.get(t.player?._id?.toString());
+  const result = transfers.map((t: any) => {
+    const playerObj = t.player || {};
+    const d: any = detailsMap.get(playerObj._id?.toString());
 
     return {
       ...t,
       player: {
-        ...t.player,
-        firstName: d?.firstName || null,
-        lastName: d?.lastName || null,
+        ...playerObj,
+        firstName: d?.firstName || playerObj.firstName || null,
+        lastName: d?.lastName || playerObj.lastName || null,
       },
     };
   });

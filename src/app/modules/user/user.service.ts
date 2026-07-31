@@ -15,6 +15,8 @@ import {
 } from "../../../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
+import { ManagerTeam } from "../managerTeam/managerTeam.model";
+import stripe from "../../../config/stripe";
 
 
 
@@ -40,6 +42,9 @@ const createAdminToDB = async (payload: any): Promise<IUser> => {
 }
 
 const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
+    if (payload.role === USER_ROLES.OTHER_CLUBS) {
+        payload.marketValue = 0;
+    }
 
     const createUser = await User.create(payload);
     if (!createUser) {
@@ -164,14 +169,17 @@ const updateProfileToDB = async (user: JwtPayload, payload: Partial<IUser>): Pro
 
 
 const createPlayerToDB = async (payload: any) => {
-  // Assign starting market value from PlayerEconomy config in DB
-  if (payload.marketValue === undefined) {
-    const pe = await PlayerEconomy.findOne();
-    payload.marketValue = pe ? pe.startingMarketValue : 100000;
-  }
   // Find the user to get their role
   const user = await User.findById(payload.userId);
   if (!user) throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
+
+  if (user.role === USER_ROLES.OTHER_CLUBS || payload.role === USER_ROLES.OTHER_CLUBS) {
+    payload.marketValue = 0;
+  } else if (payload.marketValue === undefined) {
+    // Assign starting market value from PlayerEconomy config in DB
+    const pe = await PlayerEconomy.findOne();
+    payload.marketValue = pe ? pe.startingMarketValue : 100000;
+  }
 
   const result = await User.findOneAndUpdate(
     { _id: payload.userId },
@@ -396,6 +404,52 @@ const approveOrRejectUser = async (
     { $set: { status } },
     { new: true }
   );
+
+  // ⚽ AUTO-ASSIGN MANAGER TO TEAM ON APPROVAL
+  if (
+    status === 'APPROVED' &&
+    user.role === USER_ROLES.MANAGER &&
+    user.selectTeam
+  ) {
+    await ManagerTeam.findOneAndUpdate(
+      { team: user.selectTeam },
+      {
+        manager: user._id,
+        team: user.selectTeam,
+      },
+      {
+        new: true,
+        upsert: true,
+        runValidators: true,
+      }
+    );
+  }
+
+  // 💸 AUTO STRIPE REFUND IF REJECTED
+  if (status === 'REJECTED') {
+    try {
+      const activeSub = await Subscription.findOne({
+        user: userId,
+        status: 'active',
+      });
+
+      if (activeSub && activeSub.trxId) {
+        // Issue refund via Stripe
+        await stripe.refunds.create({
+          payment_intent: activeSub.trxId,
+        });
+
+        // Cancel subscription status in DB
+        activeSub.status = 'cancel';
+        await activeSub.save();
+      }
+    } catch (refundErr: any) {
+      console.error(
+        `[Stripe Refund Error] Could not auto-refund user ${userId}:`,
+        refundErr?.message || refundErr
+      );
+    }
+  }
 
   return updated;
 };

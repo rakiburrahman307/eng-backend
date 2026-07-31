@@ -13,6 +13,16 @@ const createCategoryToDB = async (payload: Partial<IAgeGroupCategory>): Promise<
     throw new ApiError(StatusCodes.CONFLICT, 'Age Group category already exists with this name');
   }
 
+  if (payload.order !== undefined && payload.order !== null) {
+    const orderExist = await AgeGroupCategory.findOne({ order: payload.order });
+    if (orderExist) {
+      throw new ApiError(
+        StatusCodes.CONFLICT,
+        `Category order must be unique. Order ${payload.order} is already in use.`
+      );
+    }
+  }
+
   const result = await AgeGroupCategory.create(payload);
   return result;
 };
@@ -42,6 +52,19 @@ const updateCategoryToDB = async (
   const isExist = await AgeGroupCategory.findById(id);
   if (!isExist) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Category not found');
+  }
+
+  if (payload.order !== undefined && payload.order !== null) {
+    const orderExist = await AgeGroupCategory.findOne({
+      _id: { $ne: id },
+      order: payload.order,
+    });
+    if (orderExist) {
+      throw new ApiError(
+        StatusCodes.CONFLICT,
+        `Category order must be unique. Order ${payload.order} is already in use.`
+      );
+    }
   }
 
   if (payload.name) {

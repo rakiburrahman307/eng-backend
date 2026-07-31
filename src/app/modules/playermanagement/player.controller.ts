@@ -28,7 +28,36 @@ const getFilteredPlayers = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// ✅ UPDATE PLAYER BY ADMIN
+const updatePlayerByAdmin = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+
+  const files = req.files as {
+    image?: Express.Multer.File[];
+  };
+
+  const image = files?.image?.[0];
+  const data = req.body?.data ? JSON.parse(req.body.data) : req.body || {};
+  const payload: any = { ...data };
+
+  if (image) {
+    payload.profile = image.path
+      .replace(/\\/g, "/")
+      .split("uploads")[1];
+  }
+
+  const result = await PlayerService.updatePlayerByAdminToDB(id, payload);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Player updated successfully",
+    data: result,
+  });
+});
+
 export const PlayerController = {
   getAllPlayers,
   getFilteredPlayers,
+  updatePlayerByAdmin,
 };

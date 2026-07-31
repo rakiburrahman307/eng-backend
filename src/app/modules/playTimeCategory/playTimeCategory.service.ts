@@ -13,6 +13,16 @@ const createCategoryToDB = async (payload: Partial<IPlayTimeCategory>): Promise<
     throw new ApiError(StatusCodes.CONFLICT, 'Playtime category already exists with this name');
   }
 
+  if (payload.order !== undefined && payload.order !== null) {
+    const orderExist = await PlayTimeCategory.findOne({ order: payload.order });
+    if (orderExist) {
+      throw new ApiError(
+        StatusCodes.CONFLICT,
+        `Category order must be unique. Order ${payload.order} is already in use.`
+      );
+    }
+  }
+
   const result = await PlayTimeCategory.create(payload);
   return result;
 };
@@ -42,6 +52,19 @@ const updateCategoryToDB = async (
   const isExist = await PlayTimeCategory.findById(id);
   if (!isExist) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Category not found');
+  }
+
+  if (payload.order !== undefined && payload.order !== null) {
+    const orderExist = await PlayTimeCategory.findOne({
+      _id: { $ne: id },
+      order: payload.order,
+    });
+    if (orderExist) {
+      throw new ApiError(
+        StatusCodes.CONFLICT,
+        `Category order must be unique. Order ${payload.order} is already in use.`
+      );
+    }
   }
 
   if (payload.name) {

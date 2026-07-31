@@ -11,7 +11,7 @@ export interface ITransfer {
 
   transferType: 'FREE_AGENT' | 'CLUB_TO_CLUB';
 
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN';
+  status: 'PENDING' | 'MANAGER_APPROVED' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN';
 
   approvedBy?: Types.ObjectId | null;
 

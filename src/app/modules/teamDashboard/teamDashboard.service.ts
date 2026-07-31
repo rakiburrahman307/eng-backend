@@ -6,25 +6,30 @@ import { User } from "../user/user.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
 
 
+import { USER_ROLES } from "../../../enums/user";
+
 const getTeamDashboardFromDB = async (teamId: string) => {
   const teamObjectId = new mongoose.Types.ObjectId(teamId);
 
-  // 👥 PLAYERS
-const playersAgg = await User.aggregate([
-  {
-    $match: { selectTeam: teamObjectId },
-  },
-  {
-    $project: {
-      _id: 1,
-      firstName: 1,
-      lastName: 1,
-      userId: "$_id", // 👈 add this
-      profile: 1,
-      position: 1,
+  // 👥 PLAYERS (Only PLAYER / TOURNAMENT_PLAYER roles)
+  const playersAgg = await User.aggregate([
+    {
+      $match: {
+        selectTeam: teamObjectId,
+        role: { $in: [USER_ROLES.PLAYER, USER_ROLES.TOURNAMENT_PLAYER] },
+      },
     },
-  },
-]);
+    {
+      $project: {
+        _id: 1,
+        firstName: 1,
+        lastName: 1,
+        userId: "$_id",
+        profile: 1,
+        position: 1,
+      },
+    },
+  ]);
 
   const totalPlayers = playersAgg.length;
 

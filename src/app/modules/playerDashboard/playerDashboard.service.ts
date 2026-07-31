@@ -4,15 +4,22 @@ import { MatchResult } from "../matchResult/matchResult.model";
 import { Team } from "../team/team.model";
 import { User } from "../user/user.model";
 
+
+import { StatusCodes } from "http-status-codes";
+import { USER_ROLES } from "../../../enums/user";
+import ApiError from "../../../errors/ApiErrors";
+
 const getPlayerDashboardFromDB = async (playerId: string) => {
   const playerObjectId = new mongoose.Types.ObjectId(playerId);
 
-  // 👤 PLAYER INFO
-  const player = await User.findById(playerObjectId)
-    .populate("selectTeam");
+  // 👤 PLAYER INFO (Filter by PLAYER / TOURNAMENT_PLAYER roles only)
+  const player = await User.findOne({
+    _id: playerObjectId,
+    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.TOURNAMENT_PLAYER] },
+  }).populate("selectTeam");
 
   if (!player) {
-    throw new Error("Player not found");
+    throw new ApiError(StatusCodes.NOT_FOUND, "Player not found or specified user is not a player");
   }
 
   // Calculate age

@@ -34,7 +34,7 @@ const transferSchema = new Schema(
 
     status: {
       type: String,
-      enum: ['PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN'],
+      enum: ['PENDING', 'MANAGER_APPROVED', 'APPROVED', 'REJECTED', 'WITHDRAWN'],
       default: 'PENDING',
     },
 

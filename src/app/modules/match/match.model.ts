@@ -62,6 +62,22 @@ const matchSchema = new Schema(
       default: 'upcoming',
     },
 
+    timerStatus: {
+      type: String,
+      enum: ['stopped', 'running', 'paused', 'finished'],
+      default: 'stopped',
+    },
+
+    timerStartedAt: {
+      type: Date,
+      default: null,
+    },
+
+    elapsedSeconds: {
+      type: Number,
+      default: 0,
+    },
+
     homeScore: {
       type: Number,
       default: 0,

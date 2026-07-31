@@ -7,6 +7,7 @@ import colors from 'colors';
 import { socketHelper } from "./helpers/socketHelper";
 import { Server } from "socket.io";
 import seedSuperAdmin from "./DB";
+import { scheduleSubscriptionExpirationJob } from "./shared/expirePlayerSubscriptions";
 
 // Set DNS servers to resolve SRV records for MongoDB Atlas if local DNS fails
 dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
@@ -31,6 +32,7 @@ async function main() {
         await mongoose.connect(config.database_url as string);
         logger.info(colors.green('🚀 Database connected successfully'));
         await seedSuperAdmin();
+        scheduleSubscriptionExpirationJob();
 
         const port = typeof config.port === 'number' ? config.port : Number(config.port);
 

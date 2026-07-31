@@ -10,6 +10,8 @@ import { ManagerTeam } from "../managerTeam/managerTeam.model";
 import { sendNotification } from "../../../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 import { VenueCategory } from "../venueCategory/venueCategory.model";
+import ApiError from "../../../errors/ApiErrors";
+import { StatusCodes } from "http-status-codes";
 
 const formatMatchVenue = async (matchItem: any) => {
   if (!matchItem) return matchItem;
@@ -49,10 +51,21 @@ const formatMatchVenue = async (matchItem: any) => {
 
   const finalVenueString = parts.length > 0 ? parts.join(', ') : (matchObj.venueName || '');
 
+  let liveSeconds = matchObj.elapsedSeconds || 0;
+  if (matchObj.timerStatus === 'running' && matchObj.timerStartedAt) {
+    const diff = Math.floor((Date.now() - new Date(matchObj.timerStartedAt).getTime()) / 1000);
+    if (diff > 0) liveSeconds += diff;
+  }
+
+  const durationMinutes = Number(matchObj.durationMinutes) || 90;
+
   return {
     ...matchObj,
     venueName: finalVenueString,
     venue: finalVenueString,
+    currentElapsedSeconds: liveSeconds,
+    currentElapsedMinutes: Math.floor(liveSeconds / 60),
+    totalDurationMinutes: durationMinutes,
   };
 };
 
@@ -443,6 +456,98 @@ const getUpcomingMatchesForManagerFromDB = async (
   };
 };
 
+const updateMatchTimerInDB = async (
+  matchId: string,
+  action: 'START' | 'PAUSE' | 'RESUME' | 'FINISH',
+  user?: any
+) => {
+  const match = await Match.findById(matchId);
+
+  if (!match) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'Match not found');
+  }
+
+  const now = new Date();
+  let elapsed = match.elapsedSeconds || 0;
+
+  // Accumulate segment elapsed time if timer was running
+  if (match.timerStatus === 'running' && match.timerStartedAt) {
+    const diffSeconds = Math.floor(
+      (now.getTime() - new Date(match.timerStartedAt).getTime()) / 1000
+    );
+    if (diffSeconds > 0) {
+      elapsed += diffSeconds;
+    }
+  }
+
+  switch (action) {
+    case 'START':
+      match.timerStatus = 'running';
+      match.timerStartedAt = now;
+      match.elapsedSeconds = 0;
+      match.status = 'live';
+      break;
+
+    case 'PAUSE':
+      match.timerStatus = 'paused';
+      match.timerStartedAt = null;
+      match.elapsedSeconds = elapsed;
+      match.status = 'live';
+      break;
+
+    case 'RESUME':
+      match.timerStatus = 'running';
+      match.timerStartedAt = now;
+      match.elapsedSeconds = elapsed;
+      match.status = 'live';
+      break;
+
+    case 'FINISH':
+      match.timerStatus = 'finished';
+      match.timerStartedAt = null;
+      match.elapsedSeconds = elapsed;
+      match.status = 'finished';
+      break;
+
+    default:
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        'Invalid timer action. Valid actions: START, PAUSE, RESUME, FINISH'
+      );
+  }
+
+  await match.save();
+
+  // Calculate live current elapsed for instant response & socket emit
+  let liveSeconds = match.elapsedSeconds || 0;
+  if (match.timerStatus === 'running' && match.timerStartedAt) {
+    const diff = Math.floor((Date.now() - new Date(match.timerStartedAt).getTime()) / 1000);
+    if (diff > 0) liveSeconds += diff;
+  }
+
+  // 📡 Socket broadcast
+  if ((global as any).io) {
+    (global as any).io.emit(`match_${matchId}_timer`, {
+      matchId,
+      action,
+      timerStatus: match.timerStatus,
+      elapsedSeconds: match.elapsedSeconds,
+      currentElapsedSeconds: liveSeconds,
+      currentElapsedMinutes: Math.floor(liveSeconds / 60),
+      timerStartedAt: match.timerStartedAt,
+      status: match.status,
+      durationMinutes: match.durationMinutes,
+    });
+  }
+
+  const formatted = await formatMatchVenue(match);
+  return {
+    ...formatted,
+    currentElapsedSeconds: liveSeconds,
+    currentElapsedMinutes: Math.floor(liveSeconds / 60),
+  };
+};
+
 export const MatchService = {
   createMatchToDB,
   getAllMatchesFromDB,
@@ -453,4 +558,5 @@ export const MatchService = {
   getMatchesByRefereeFromDB,
   addMatchReviewToDB,
   getUpcomingMatchesForManagerFromDB,
+  updateMatchTimerInDB,
 };

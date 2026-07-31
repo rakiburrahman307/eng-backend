@@ -56,26 +56,19 @@ const getSingleTransfer = catchAsync(async (req: Request, res: Response) => {
 });
 
 const approveTransfer = catchAsync(async (req: Request, res: Response) => {
-
-
   const user = req.user as any;
-
-
 
   const result = await TransferService.approveTransferToDB(
     req.params.id as string,
-    user._id
+    user
   );
-
-
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: 'Transfer approved',
+    message: 'Transfer approved successfully',
     data: result,
   });
-
 });
 
 const rejectTransfer = catchAsync(async (req: Request, res: Response) => {

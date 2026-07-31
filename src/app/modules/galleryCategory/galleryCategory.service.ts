@@ -31,6 +31,16 @@ const createCategoryToDB = async (payload: Partial<IGalleryCategory>): Promise<I
     );
   }
 
+  if (payload.order !== undefined && payload.order !== null) {
+    const orderExist = await GalleryCategory.findOne({ order: payload.order });
+    if (orderExist) {
+      throw new ApiError(
+        StatusCodes.CONFLICT,
+        `Category order must be unique. Order ${payload.order} is already in use.`
+      );
+    }
+  }
+
   const result = await GalleryCategory.create({
     ...payload,
     parentCategory: parentCategoryId,
@@ -98,6 +108,19 @@ const updateCategoryToDB = async (
     const parentExists = await GalleryCategory.findById(payload.parentCategory);
     if (!parentExists) {
       throw new ApiError(StatusCodes.NOT_FOUND, 'Parent category not found');
+    }
+  }
+
+  if (payload.order !== undefined && payload.order !== null) {
+    const orderExist = await GalleryCategory.findOne({
+      _id: { $ne: id },
+      order: payload.order,
+    });
+    if (orderExist) {
+      throw new ApiError(
+        StatusCodes.CONFLICT,
+        `Category order must be unique. Order ${payload.order} is already in use.`
+      );
     }
   }
 

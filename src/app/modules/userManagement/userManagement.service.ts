@@ -9,7 +9,9 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
   const userQuery = new QueryBuilder(
     User.find({
       role: { $ne: USER_ROLES.SUPER_ADMIN },
-    }).select('userName role profile verified status'),
+    })
+      .select('userName role profile verified status document selectTeam firstName lastName email location')
+      .populate('selectTeam', 'teamName shortName teamLogo'),
     query
   )
     .search(['userName', 'email', 'location'])
@@ -83,26 +85,11 @@ const getAllRefereesFromDB = async () => {
 
   return result;
 };
+
 const getAllManagersFromDB = async () => {
-  const result = await User.aggregate([
-    {
-      $match: {
-        role: USER_ROLES.MANAGER,
-      },
-    },
-    {
-      $project: {
-        _id: 1,
-        userName: 1,
-        firstName: {
-          $ifNull: ["$firstName", null],
-        },
-        lastName: {
-          $ifNull: ["$lastName", null],
-        },
-      },
-    },
-  ]);
+  const result = await User.find({ role: USER_ROLES.MANAGER })
+    .select('_id userName firstName lastName selectTeam')
+    .populate('selectTeam', 'teamName shortName teamLogo');
 
   return result;
 };

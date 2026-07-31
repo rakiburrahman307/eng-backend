@@ -31,6 +31,16 @@ const createCategoryToDB = async (payload: Partial<IVenueCategory>): Promise<IVe
     );
   }
 
+  if (payload.order !== undefined && payload.order !== null) {
+    const orderExist = await VenueCategory.findOne({ order: payload.order });
+    if (orderExist) {
+      throw new ApiError(
+        StatusCodes.CONFLICT,
+        `Category order must be unique. Order ${payload.order} is already in use.`
+      );
+    }
+  }
+
   const result = await VenueCategory.create({
     ...payload,
     parentCategory: parentCategoryId,
@@ -98,6 +108,19 @@ const updateCategoryToDB = async (
     const parentExists = await VenueCategory.findById(payload.parentCategory);
     if (!parentExists) {
       throw new ApiError(StatusCodes.NOT_FOUND, 'Parent category not found');
+    }
+  }
+
+  if (payload.order !== undefined && payload.order !== null) {
+    const orderExist = await VenueCategory.findOne({
+      _id: { $ne: id },
+      order: payload.order,
+    });
+    if (orderExist) {
+      throw new ApiError(
+        StatusCodes.CONFLICT,
+        `Category order must be unique. Order ${payload.order} is already in use.`
+      );
     }
   }
 

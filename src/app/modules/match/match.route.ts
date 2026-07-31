@@ -53,7 +53,11 @@ router.patch(
   MatchController.toggleMatchStatus
 );
 
-
-
+// ⏱️ MATCH TIMER CONTROL (START, PAUSE, RESUME, FINISH)
+router.patch(
+  '/:id/timer',
+  auth(USER_ROLES.REFEREE, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  MatchController.updateMatchTimer
+);
 
 export default router;
