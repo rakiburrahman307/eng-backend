@@ -1,55 +1,34 @@
-import nodemailer from 'nodemailer';
 import config from '../config';
 import { errorLogger, logger } from '../shared/logger';
 import { ISendEmail } from '../types/email';
-import ApiError from '../errors/ApiErrors';
-import { StatusCodes } from 'http-status-codes';
+import { BrevoClient } from '@getbrevo/brevo';
 
-const transporter = nodemailer.createTransport({
-    host: config.email.host,
-    port: Number(config.email.port),
-    secure: false,
-    auth: {
-        user: config.email.user,
-        pass: config.email.pass
-    },
-    tls: {
-    rejectUnauthorized: false, // <-- ignore SSL mismatch
-  },
+const brevo = new BrevoClient({
+     apiKey: config.email.apiKey!,
 });
 
-const sendEmail = async (values: ISendEmail) => {
-  try {
-    logger.info("📧 Attempting to send email", {
-      to: values.to,
-      subject: values.subject,
-    });
+const sendEmail = async (values: ISendEmail): Promise<void> => {
+     try {
+          const result = await brevo.transactionalEmails.sendTransacEmail({
+               sender: {
+                    name: config.email.emailHeader,
+                    email: config.email.from,
+               },
+               to: [
+                    {
+                         email: values.to,
+                    },
+               ],
+               subject: values.subject,
+               htmlContent: values.html,
+          });
 
-    const info = await transporter.sendMail({
-      from: `"Mlitech" <${config.email.from}>`,
-      to: values.to,
-      subject: values.subject,
-      html: values.html,
-    });
-
-    logger.info("✅ Mail sent successfully", {
-      accepted: info.accepted,
-      messageId: info.messageId,
-    });
-
-    return { success: true, info };
-
-  } catch (error) {
-    errorLogger.error("❌ Email send failed", error);
-
-    // ❌ DON'T throw error (prevents server crash)
-    return {
-      success: false,
-      error: "Email sending failed"
-    };
-  }
+          logger.info('Email sent successfully', result.messageId);
+     } catch (error) {
+          errorLogger.error('Brevo Email Error', error);
+          throw error;
+     }
 };
-
 
 export const emailHelper = {
     sendEmail

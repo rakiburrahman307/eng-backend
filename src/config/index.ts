@@ -22,11 +22,9 @@ export default {
     paymentSuccess: process.env.STRIPE_PAYMENT_SUCCESS,
   },
   email: {
+    apiKey: process.env.API_KEY,
+    emailHeader: process.env.EMAIL_HEADER_NAME,
     from: process.env.EMAIL_FROM,
-    user: process.env.EMAIL_USER,
-    port: process.env.EMAIL_PORT,
-    host: process.env.EMAIL_HOST,
-    pass: process.env.EMAIL_PASS,
   },
   social: {
     google_client_id: process.env.GOOGLE_CLIENT_ID,
