@@ -9,7 +9,8 @@ import router from '../app/routes';
 import { globalLimiter, imageLimiter } from '../app/middlewares/rateLimiter';
 import globalErrorHandler from '../app/middlewares/globalErrorHandler';
 import { welcome } from '../util/welcome';
-
+export const allowedOrigins =
+     config.allowed_origins?.split(',').map((origin: string) => origin.trim()) || [];
 export function configureMiddlewares(app: Express): void {
      app.post(
           '/api/v1/payment/webhook',
@@ -23,7 +24,27 @@ export function configureMiddlewares(app: Express): void {
      app.use(Morgan.successHandler);
      app.use(Morgan.errorHandler);
 
-     app.use(cors());
+     app.use(
+          cors({
+               origin: (origin, callback) => {
+                    // Allow requests with no origin (like mobile apps, curl, postman)
+                    if (!origin) return callback(null, true);
+
+                    // In development, reflect request origin to bypass wildcard restriction with credentials
+                    if (config.node_env !== 'production') {
+                         return callback(null, true);
+                    }
+
+                    // In production, check if the origin is in the allowed list
+                    if (allowedOrigins.includes(origin)) {
+                         return callback(null, true);
+                    } else {
+                         return callback(new Error('Not allowed by CORS'));
+                    }
+               },
+               credentials: true,
+          })
+     );
      app.use(express.json({ limit: '50mb' }));
      app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 

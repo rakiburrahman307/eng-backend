@@ -10,6 +10,7 @@ import { scheduleSubscriptionExpirationJob } from '../shared/expirePlayerSubscri
 import { connectToRedis, disconnectRedis, createSocketRedisClients } from '../DB/redis';
 import { setupQueueEvents, setupWorkerEvents, closeBullMQ } from '../DB/bullMQ';
 import { socketHelper } from './socketHelper';
+import { allowedOrigins } from './appLoaders';
 
 export async function connectServices(): Promise<void> {
      // 1. Connect to MongoDB
@@ -62,7 +63,18 @@ export async function initSocketServer(server: http.Server): Promise<void> {
           io = new Server(server, {
                pingTimeout: 60000,
                cors: {
-                    origin: '*',
+                    origin: (origin, callback) => {
+                         if (!origin) return callback(null, true);
+                         if (config.node_env !== 'production') {
+                              return callback(null, true);
+                         }
+                         if (allowedOrigins.includes(origin)) {
+                              return callback(null, true);
+                         } else {
+                              return callback(new Error('Not allowed by CORS'));
+                         }
+                    },
+                    credentials: true,
                },
                adapter: createAdapter(pubClient, subClient),
           });
@@ -75,7 +87,18 @@ export async function initSocketServer(server: http.Server): Promise<void> {
           io = new Server(server, {
                pingTimeout: 60000,
                cors: {
-                    origin: '*',
+                    origin: (origin, callback) => {
+                         if (!origin) return callback(null, true);
+                         if (config.node_env !== 'production') {
+                              return callback(null, true);
+                         }
+                         if (allowedOrigins.includes(origin)) {
+                              return callback(null, true);
+                         } else {
+                              return callback(new Error('Not allowed by CORS'));
+                         }
+                    },
+                    credentials: true,
                },
           });
      }

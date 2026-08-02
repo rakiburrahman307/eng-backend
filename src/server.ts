@@ -17,8 +17,9 @@ async function bootstrap() {
 
         // 2. Start HTTP server
         const port = typeof config.port === 'number' ? config.port : Number(config.port);
-        server = app.listen(port, "0.0.0.0", () => {
-            logger.info(colors.yellow(`♻️  Application listening on port:${config.port}`));
+        const ipAddress = (config.ip_address as string) || "0.0.0.0";
+        server = app.listen(port, ipAddress, () => {
+            logger.info(colors.yellow(`♻️  Application listening on http://${ipAddress}:${port}`));
         });
 
         // 3. Initialize Socket Server
