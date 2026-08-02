@@ -1,72 +1,15 @@
-import express, { Request, Response } from "express";
-import cors from "cors";
-import { StatusCodes } from "http-status-codes";
-import { Morgan } from "./shared/morgan";
-
-import globalErrorHandler from './app/middlewares/globalErrorHandler';
-import session from "express-session";
-import handleStripeWebhook from "./helpers/handleStripeWebhook";
-import router from "./app/routes";
-import { globalLimiter, imageLimiter } from "./app/middlewares/rateLimiter";
+import express from "express";
+import { configureMiddlewares, configureRoutes, configureErrorHandlers } from "./helpers/appLoaders";
 
 const app = express();
 
-app.post(
-  '/api/v1/payment/webhook',
-  express.raw({ type: 'application/json' }), // raw body required for Stripe
-  (req, res, next) => {
-    if (Buffer.isBuffer(req.body)) {
-    }
-    next(); // pass to actual handler
-  },
-  handleStripeWebhook
-);
+// 1. Configure pre-routing and global middleware (Webhook, CORS, Parsers, Sessions)
+configureMiddlewares(app);
 
-// morgan
-app.use(Morgan.successHandler);
-app.use(Morgan.errorHandler);
+// 2. Register application routes
+configureRoutes(app);
 
-// body parser
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// Rate limiter for static images / requests
-app.use('/images', imageLimiter);
-
-// file retrieve
-app.use(express.static('uploads'));
-
-// Session middleware (must be before passport initialization)
-app.use(session({
-    secret: "your_secret_key",
-    resave: false,
-    saveUninitialized: true,
-    cookie: { secure: false } // Secure should be true in production with HTTPS
-}));
-
-// Apply global rate limiter for API routes
-app.use('/api/v1', globalLimiter, router);
-
-app.get("/", (req: Request, res: Response)=>{
-    res.send("Hey Backend, How can I assist you ");
-})
-
-// global error handle
-app.use(globalErrorHandler);
-
-// handle not found route
-app.use((req: Request, res: Response)=>{
-    res.status(StatusCodes.NOT_FOUND).json({
-        success: false,
-        message: "Not Found",
-        errorMessages: [
-            {
-                path: req.originalUrl,
-                message: "API DOESN'T EXIST"
-            }
-        ]
-    })
-});
+// 3. Register error and not-found middleware handlers
+configureErrorHandlers(app);
 
 export default app;

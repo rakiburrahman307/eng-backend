@@ -15,7 +15,9 @@ export default {
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || "refresh_secret",
     jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
   },
-
+  server: {
+    name: process.env.SERVER_NAME || "ENG Backend",
+  },
   stripe: {
     stripeSecretKey: process.env.STRIPE_API_SECRET,
     webhookSecret: process.env.WEBHOOK_SECRET,
@@ -52,4 +54,13 @@ export default {
     url: process.env.M3_SMS_URL,
   },
   frontendUrl: process.env.FRONTEND_URL,
+  redis: {
+    url: process.env.REDIS_URL || 'redis://localhost:6379',
+    db: process.env.REDIS_DB || 0,
+  },
+  firebase: {
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY,
+  },
 };

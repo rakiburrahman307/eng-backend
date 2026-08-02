@@ -1,8 +1,12 @@
 import colors from "colors";
 import { Server, Socket } from "socket.io";
 import { logger } from "../shared/logger";
+import { socketService } from "./socket/service";
 
 const socket = (io: Server) => {
+  // Initialize SocketService
+  socketService.init(io);
+
   io.on("connection", (socket: Socket) => {
     logger.info(colors.blue("A User connected: " + socket.id));
 
@@ -13,9 +17,10 @@ const socket = (io: Server) => {
     // ─────────────────────────────────────────────────────────────────────
     socket.on("join", (userId: string) => {
       if (userId) {
+        socket.join(userId);
         socket.join(`user-${userId}`);
         logger.info(
-          colors.green(`✅ User ${userId} joined room: user-${userId}`)
+          colors.green(`✅ User ${userId} joined room: ${userId} & user-${userId}`)
         );
       }
     });
@@ -25,9 +30,10 @@ const socket = (io: Server) => {
     // ─────────────────────────────────────────────────────────────────────
     socket.on("leave", (userId: string) => {
       if (userId) {
+        socket.leave(userId);
         socket.leave(`user-${userId}`);
         logger.info(
-          colors.yellow(`❌ User ${userId} left room: user-${userId}`)
+          colors.yellow(`❌ User ${userId} left room: ${userId} & user-${userId}`)
         );
       }
     });
