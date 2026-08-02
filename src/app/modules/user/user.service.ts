@@ -5,8 +5,7 @@ import { User } from "./user.model";
 import { StatusCodes } from "http-status-codes";
 import ApiError from "../../../errors/ApiErrors";
 import generateOTP from "../../../util/generateOTP";
-import { emailTemplate } from "../../../shared/emailTemplate";
-import { emailHelper } from "../../../helpers/emailHelper";
+import { EmailQueueHelper } from "../../../helpers/bullMQ/bullHelper";
 import unlinkFile from "../../../shared/unlinkFile";
 import { Subscription } from "../subscription/subscription.model";
 import {
@@ -51,16 +50,8 @@ const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
         throw new ApiError(StatusCodes.BAD_REQUEST, 'Failed to create user');
     }
 
-    //send email
     const otp = generateOTP();
-    const values = {
-        name: createUser.userName,
-        otp: otp,
-        email: createUser.email!
-    };
-
-    const createAccountTemplate = emailTemplate.createAccount(values);
-    emailHelper.sendEmail(createAccountTemplate);
+    await EmailQueueHelper.sendWelcomeEmail(createUser.email!, createUser.userName || '', otp.toString());
 
     //save to DB
     const authentication = {

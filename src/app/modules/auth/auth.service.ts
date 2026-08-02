@@ -3,9 +3,8 @@ import { StatusCodes } from 'http-status-codes';
 import { JwtPayload, Secret } from 'jsonwebtoken';
 import config from '../../../config';
 import ApiError from '../../../errors/ApiErrors';
-import { emailHelper } from '../../../helpers/emailHelper';
 import { jwtHelper } from '../../../helpers/jwtHelper';
-import { emailTemplate } from '../../../shared/emailTemplate';
+import { EmailQueueHelper } from '../../../helpers/bullMQ/bullHelper';
 import {
     IAuthResetPassword,
     IChangePassword,
@@ -114,13 +113,7 @@ const forgetPasswordToDB = async (email: string) => {
   
     //send mail
     const otp = generateOTP();
-    const value = {
-        otp,
-        email: isExistUser.email
-    };
-
-    const forgetPassword = emailTemplate.resetPassword(value);
-    emailHelper.sendEmail(forgetPassword);
+    await EmailQueueHelper.sendPasswordResetEmail(isExistUser.email, otp.toString());
   
     //save to DB
     const authentication = {
@@ -157,8 +150,6 @@ const verifyEmailToDB = async (payload: IVerifyEmail) => {
     let message;
     let data;
 
-    const jwt = require("jsonwebtoken");
-
     // =========================
     // ✅ FIRST TIME EMAIL VERIFY → LOGIN TOKEN
     // =========================
@@ -176,14 +167,14 @@ const verifyEmailToDB = async (payload: IVerifyEmail) => {
         );
 
         // 🔥 SAME LOGIN TOKEN LIKE LOGIN API
-        data = jwt.sign(
+        data = jwtHelper.createToken(
             {
-                _id: isExistUser._id,
+                id: isExistUser._id,
                 email: isExistUser.email,
                 role: isExistUser.role,
             },
-            process.env.JWT_SECRET as string,
-            { expiresIn: "7d" }
+            config.jwt.jwt_secret as Secret,
+            "7d"
         );
 
         // 🔔 Notify user: email verified
@@ -270,6 +261,9 @@ const resetPasswordToDB = async ( token: string, payload: IAuthResetPassword ) =
         updateData,
         {new: true}
     );
+
+    // Invalidate/delete reset token after successful password reset
+    await ResetToken.deleteMany({ user: isExistToken.user });
 };
   
 const changePasswordToDB = async ( user: JwtPayload, payload: IChangePassword) => {
@@ -346,16 +340,12 @@ const resendVerificationEmailToDB = async (email:string) => {
         throw new ApiError(StatusCodes.BAD_REQUEST, 'User is already verified!');
     }
   
-    // Generate OTP and prepare email
     const otp = generateOTP();
-    const emailValues = {
-        name: existingUser.firstName,
-        otp,
-        email: existingUser.email,
-    };
-
-    const accountEmailTemplate = emailTemplate.createAccount(emailValues);
-    emailHelper.sendEmail(accountEmailTemplate);
+    await EmailQueueHelper.sendWelcomeEmail(
+        existingUser.email,
+        existingUser.firstName || existingUser.userName || '',
+        otp.toString()
+    );
   
     // Update user with authentication details
     const authentication = {
