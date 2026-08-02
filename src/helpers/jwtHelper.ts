@@ -29,13 +29,8 @@ const verifyToken = (token: string, secret: Secret) => {
     throw new Error('❌ JWT secret is missing for verification');
   }
 
-  try {
-    const decoded = jwt.verify(token, secret) as JwtPayload;
-    return decoded;
-  } catch (error) {
-    console.error('❌ JWT Verification Failed:', error);
-    throw error;
-  }
+  const decoded = jwt.verify(token, secret) as JwtPayload;
+  return decoded;
 };
 
 export const jwtHelper = { createToken, verifyToken };

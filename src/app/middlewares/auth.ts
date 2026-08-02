@@ -32,7 +32,9 @@ const auth = (...args: any[]) => async (
     // 2️⃣ No token case (Guest handling)
     // ----------------------------------------
 
-    if (!authHeader) {
+    const isInvalidHeader = !authHeader || authHeader === "null" || authHeader === "undefined" || authHeader.trim() === "";
+
+    if (isInvalidHeader) {
       if (required) {
         throw new ApiError(StatusCodes.UNAUTHORIZED, "You are not authorized");
       }
@@ -49,7 +51,9 @@ const auth = (...args: any[]) => async (
       ? authHeader.split(" ")[1]
       : authHeader;
 
-    if (!token) {
+    const isInvalidToken = !token || token === "null" || token === "undefined" || token.trim() === "";
+
+    if (isInvalidToken) {
       if (required) {
         throw new ApiError(StatusCodes.UNAUTHORIZED, "Token not found");
       }

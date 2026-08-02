@@ -17,7 +17,8 @@ const sendNotification = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getNotifications = catchAsync(async (req: Request, res: Response) => {
-  const result = await NotificationService.getNotificationsFromDB(req.query);
+  const { id } = req.user as { id: string }
+  const result = await NotificationService.getNotificationsFromDB(id, req.query);
 
   sendResponse(res, {
     success: true,
@@ -27,7 +28,61 @@ const getNotifications = catchAsync(async (req: Request, res: Response) => {
     pagination: result.pagination,
   });
 });
+const deleteNotification = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { id: userId } = req.user as { id: string };
+  const result = await NotificationService.deleteNotificationFromDB(id as string, userId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Notification deleted successfully",
+    data: result,
+  });
+});
+
+const clearAllNotifications = catchAsync(async (req: Request, res: Response) => {
+  const { id: userId } = req.user as { id: string };
+  const result = await NotificationService.clearAllNotificationsFromDB(userId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "All notifications cleared successfully",
+    data: result,
+  });
+});
+
+const markAsRead = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { id: userId } = req.user as { id: string };
+  const result = await NotificationService.markAsReadFromDB(id as string, userId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Notification marked as read successfully",
+    data: result,
+  });
+});
+
+const markAllAsRead = catchAsync(async (req: Request, res: Response) => {
+  const { id: userId } = req.user as { id: string };
+  const result = await NotificationService.markAllAsReadFromDB(userId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "All notifications marked as read successfully",
+    data: result,
+  });
+});
+
 export const NotificationController = {
   sendNotification,
   getNotifications,
+  deleteNotification,
+  clearAllNotifications,
+  markAsRead,
+  markAllAsRead,
 };
