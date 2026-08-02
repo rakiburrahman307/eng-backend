@@ -11,6 +11,6 @@ router.get("/", auth(...ROLE_GROUPS.All), NotificationController.getNotification
 router.patch("/read-all", auth(...ROLE_GROUPS.All), NotificationController.markAllAsRead);
 router.patch("/:id/read", auth(...ROLE_GROUPS.All), NotificationController.markAsRead);
 router.delete("/clear-all", auth(...ROLE_GROUPS.All), NotificationController.clearAllNotifications);
-router.delete("/:id", auth(...ROLE_GROUPS.All), NotificationController.deleteNotification);
+router.delete("/delete/:id", auth(...ROLE_GROUPS.All), NotificationController.deleteNotification);
 
 export default router;
