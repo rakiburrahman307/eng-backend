@@ -40,6 +40,7 @@ router.patch(
   auth(...ROLE_GROUPS.All),
   NotificationController.markAsRead
 );
+router.delete("/clear-all", auth(...ROLE_GROUPS.ADMINS), NotificationController.deleteAllNotifications)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADMIN ROUTES
@@ -64,7 +65,7 @@ router.get(
 // DELETE notification by ID
 // DELETE /api/v1/notification/:id
 router.delete(
-  "/:id",
+  "/",
   auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
   NotificationController.deleteNotification
 );

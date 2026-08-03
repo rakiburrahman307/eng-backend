@@ -131,12 +131,22 @@ const markAllAsRead = async (userId: string) => {
     message: `${result.modifiedCount} notifications marked as read`,
   };
 };
+// ─────────────────────────────────────────────────────────────────────────────
+// PLAYER: DELETE ALL NOTIFICATIONS 
+// ─────────────────────────────────────────────────────────────────────────────
+const deleteAllNotifications = async (userId: string) => {
+  const result = await Notification.deleteMany(
+    { receiver: userId },
+  );
+
+  return result;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADMIN: DELETE NOTIFICATION
 // ─────────────────────────────────────────────────────────────────────────────
-const deleteNotificationFromDB = async (id: string) => {
-  const result = await PushNotification.findByIdAndDelete(id);
+const clearNotificationFromDB = async () => {
+  const result = await PushNotification.deleteMany();
 
   if (!result) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Notification not found");
@@ -152,5 +162,6 @@ export const NotificationService = {
   getUnreadCount,
   markAsRead,
   markAllAsRead,
-  deleteNotificationFromDB,
+  clearNotificationFromDB,
+  deleteAllNotifications
 };

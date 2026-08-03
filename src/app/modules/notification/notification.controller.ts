@@ -108,18 +108,27 @@ const markAllAsRead = catchAsync(async (req: Request, res: Response) => {
     data: { modifiedCount: result.modifiedCount },
   });
 });
+// ─────────────────────────────────────────────────────────────────────────────
+// PLAYER: DELETE ALL NOTIFICATIONS 
+// ─────────────────────────────────────────────────────────────────────────────
+const deleteAllNotifications = catchAsync(async (req: Request, res: Response) => {
+  const { id: userId } = req.user as { id: string };
+
+  const result = await NotificationService.deleteAllNotifications(userId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "All notifications deleted successfully",
+    data: {},
+  });
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADMIN: DELETE NOTIFICATION
 // ─────────────────────────────────────────────────────────────────────────────
 const deleteNotification = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  if (typeof id !== "string") {
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Notification ID must be a string");
-  }
-
-  const result = await NotificationService.deleteNotificationFromDB(id);
+  const result = await NotificationService.clearNotificationFromDB();
 
   sendResponse(res, {
     success: true,
@@ -137,4 +146,5 @@ export const NotificationController = {
   markAsRead,
   markAllAsRead,
   deleteNotification,
+  deleteAllNotifications
 };
