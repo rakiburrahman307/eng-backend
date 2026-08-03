@@ -95,6 +95,10 @@ const getAllVideosFromDB = async (
     };
   }
 
+  // 🔔 Custom sort to ensure highlights are at the top, sorted by custom order
+  const originalSort = query.sort;
+  query.sort = originalSort ? `-isHighlight order ${originalSort}` : '-isHighlight order -createdAt';
+
   const videoQuery = new QueryBuilder(Video.find(baseQuery), query)
     .search(['title', 'description'])
     .filter()
@@ -227,6 +231,10 @@ const getPublicVideosFromDB = async (query: Record<string, any>) => {
     ],
   };
 
+  // 🔔 Custom sort to ensure highlights are at the top, sorted by custom order
+  const originalSort = query.sort;
+  query.sort = originalSort ? `-isHighlight order ${originalSort}` : '-isHighlight order -createdAt';
+
   const videoQuery = new QueryBuilder(Video.find(baseQuery), query)
     .search(['title', 'description'])
     .filter()
@@ -275,6 +283,31 @@ const retryTranscodeToDB = async (id: string) => {
   return video;
 };
 
+const rearrangeVideosInDB = async (payload: {
+  videos: { id: string; order: number; isHighlight?: boolean }[];
+}) => {
+  if (!Array.isArray(payload?.videos)) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid payload: videos array is required');
+  }
+
+  const bulkOps = payload.videos.map((vid) => {
+    const updateData: any = { order: vid.order };
+    if (vid.isHighlight !== undefined) {
+      updateData.isHighlight = vid.isHighlight;
+    }
+
+    return {
+      updateOne: {
+        filter: { _id: new Types.ObjectId(vid.id) },
+        update: { $set: updateData },
+      },
+    };
+  });
+
+  const result = await Video.bulkWrite(bulkOps);
+  return result;
+};
+
 export const VideoService = {
   createVideoToDB,
   getAllVideosFromDB,
@@ -285,4 +318,5 @@ export const VideoService = {
   getPublicVideosFromDB,
   generatePresignedUrl,
   retryTranscodeToDB,
+  rearrangeVideosInDB,
 };

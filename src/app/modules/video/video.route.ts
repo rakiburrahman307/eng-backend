@@ -23,6 +23,12 @@ router.route('/presigned-url').get(
   VideoController.getPresignedUrl
 );
 
+// REARRANGE VIDEOS
+router.route('/rearrange').patch(
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  VideoController.rearrangeVideos
+);
+
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')

@@ -13,6 +13,8 @@ export type IVideo = {
   processingStatus?: 'pending' | 'processing' | 'completed' | 'failed';
   status: 'draft' | 'publish' | 'schedule';
   publishDateTime?: Date | null;
+  isHighlight?: boolean;
+  order?: number;
 };
 
 export type VideoModel = Model<IVideo, Record<string, unknown>>;

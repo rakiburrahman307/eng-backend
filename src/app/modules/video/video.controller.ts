@@ -219,6 +219,17 @@ const retryTranscode = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const rearrangeVideos = catchAsync(async (req: Request, res: Response) => {
+  const result = await VideoService.rearrangeVideosInDB(req.body);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Videos order rearranged successfully',
+    data: result,
+  });
+});
+
 export const VideoController = {
   createVideo,
   getAllVideos,
@@ -229,4 +240,5 @@ export const VideoController = {
   getPublicVideos,
   getPresignedUrl,
   retryTranscode,
+  rearrangeVideos,
 };

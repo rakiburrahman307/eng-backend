@@ -57,6 +57,14 @@ const videoSchema = new Schema<IVideo, VideoModel>(
       type: Date,
       default: null,
     },
+    isHighlight: {
+      type: Boolean,
+      default: false,
+    },
+    order: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );
@@ -65,5 +73,6 @@ videoSchema.index({ category: 1, status: 1 });
 videoSchema.index({ subCategory: 1 });
 videoSchema.index({ status: 1, publishDateTime: 1 });
 videoSchema.index({ createdBy: 1 });
+videoSchema.index({ isHighlight: -1, order: 1, createdAt: -1 });
 
 export const Video = model<IVideo, VideoModel>('Video', videoSchema);
