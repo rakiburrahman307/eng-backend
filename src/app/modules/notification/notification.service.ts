@@ -4,6 +4,7 @@ import QueryBuilder from "../../../util/queryBuilder";
 import { User } from "../user/user.model";
 import { NOTIFICATION_TYPE } from "./notification.interface";
 import { Notification } from "./notification.model";
+import { NotificationHelper } from "../../builder/PushNotifications";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADMIN: SEND NOTIFICATION TO ALL USERS
@@ -13,44 +14,30 @@ const sendToAllUsers = async (payload: {
   message: string;
   type?: NOTIFICATION_TYPE;
 }) => {
-  const users = await User.find({}, "_id");
+  const users = await User.find({ verified: true }, "_id");
 
   if (!users.length) {
     throw new ApiError(StatusCodes.NOT_FOUND, "No users found");
   }
 
-  const notifications = users.map((user) => ({
-    receiver: user._id,
+  const userIds = users.map((user) => user._id);
+
+  // Dispatch FCM Push notification, save to DB, and emit to socket via central helper
+  await NotificationHelper.sendToBatch(userIds, {
     title: payload.title,
-    message: payload.message,
-    type: payload.type || NOTIFICATION_TYPE.GENERAL,
-    isRead: false,
-  }));
+    body: payload.message,
+    type: payload.type,
+  });
 
-  const result = await Notification.insertMany(notifications);
-
-  // Emit socket to each user
-  //@ts-ignore
-  const io = global.io;
-  if (io) {
-    users.forEach((user) => {
-      io.to(`user-${user._id}`).emit("notification", {
-        title: payload.title,
-        message: payload.message,
-        type: payload.type || NOTIFICATION_TYPE.GENERAL,
-      });
-    });
-  }
-
-  return result;
+  return { message: "Notifications successfully dispatched" };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADMIN: GET ALL NOTIFICATIONS (all users, paginated)
 // ─────────────────────────────────────────────────────────────────────────────
-const getAllNotificationsForAdmin = async (query: Record<string, any>) => {
+const getAllNotificationsForAdmin = async (id: string, query: Record<string, any>) => {
   const notificationQuery = new QueryBuilder(
-    Notification.find().populate("receiver", "userName email profile role"),
+    Notification.find({ receiver: id }).populate("receiver", "userName email profile role"),
     query
   )
     .filter()

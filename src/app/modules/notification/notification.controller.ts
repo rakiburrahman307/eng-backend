@@ -23,7 +23,10 @@ const sendToAllUsers = catchAsync(async (req: Request, res: Response) => {
 // ADMIN: GET ALL NOTIFICATIONS
 // ─────────────────────────────────────────────────────────────────────────────
 const getAllNotifications = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.user as { id: string };
+
   const result = await NotificationService.getAllNotificationsForAdmin(
+    id,
     req.query
   );
 
