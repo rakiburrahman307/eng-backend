@@ -4,6 +4,7 @@ import QueryBuilder from "../../../util/queryBuilder";
 import { User } from "../user/user.model";
 import { NOTIFICATION_TYPE } from "./notification.interface";
 import { Notification } from "./notification.model";
+import { Notification as PushNotification } from "../pushNotification/pushNotification.model";
 import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,17 +31,26 @@ const sendToAllUsers = async (payload: {
     payload.type || NOTIFICATION_TYPE.GENERAL
   );
 
+  // Save a single log in PushNotification collection for Admin's sent history
+  await PushNotification.create({
+    title: payload.title,
+    message: payload.message,
+    user: null, // null means all users
+    isRead: false
+  });
+
   return { message: "Notifications successfully dispatched" };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADMIN: GET ALL NOTIFICATIONS (all users, paginated)
 // ─────────────────────────────────────────────────────────────────────────────
-const getAllNotificationsForAdmin = async (id: string, query: Record<string, any>) => {
+const getAllNotificationsForAdmin = async (query: Record<string, any>) => {
   const notificationQuery = new QueryBuilder(
-    Notification.find({ receiver: id }).populate("receiver", "userName email profile role"),
+    PushNotification.find().populate("user", "userName email profile role"),
     query
   )
+    .search(["title", "message"])
     .filter()
     .sort()
     .paginate()
@@ -126,13 +136,13 @@ const markAllAsRead = async (userId: string) => {
 // ADMIN: DELETE NOTIFICATION
 // ─────────────────────────────────────────────────────────────────────────────
 const deleteNotificationFromDB = async (id: string) => {
-  const notification = await Notification.findById(id);
+  const result = await PushNotification.findByIdAndDelete(id);
 
-  if (!notification) {
+  if (!result) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Notification not found");
   }
 
-  return await Notification.findByIdAndDelete(id);
+  return result;
 };
 
 export const NotificationService = {

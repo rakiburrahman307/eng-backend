@@ -39,8 +39,15 @@ const sendNotificationToUsers = async (payload: {
   return notification;
 };
 
-const getNotificationsFromDB = async (id: string, query: Record<string, any>) => {
-  const baseQuery = Notification.find({ user: id }).populate("user", "userName email image");
+const getNotificationsFromDB = async (id: string, role: string, query: Record<string, any>) => {
+  let filter: any = {};
+
+  // If the user is NOT an admin/super_admin, filter notifications sent to them or everyone (null)
+  if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+    filter = { $or: [{ user: id }, { user: null }] };
+  }
+
+  const baseQuery = Notification.find(filter).populate("user", "userName email image");
 
   const queryBuilder = new QueryBuilder(baseQuery, query)
     .search(["title", "message"])

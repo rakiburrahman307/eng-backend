@@ -17,8 +17,8 @@ const sendNotification = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getNotifications = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.user as { id: string }
-  const result = await NotificationService.getNotificationsFromDB(id, req.query);
+  const { id, role } = req.user as { id: string; role: string };
+  const result = await NotificationService.getNotificationsFromDB(id, role, req.query);
 
   sendResponse(res, {
     success: true,
