@@ -5,7 +5,7 @@ import { Team } from "../team/team.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
 import { User } from "../user/user.model";
 import { USER_ROLES } from "../../../enums/user";
-import { sendNotification } from "../../../helpers/notificationsHelper";
+import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 
 // ⚽ Helper to verify all selected players belong to the specified team
@@ -106,18 +106,24 @@ const createSelectionIntoDB = async (payload: any, user: any) => {
   const teamData = await Team.findById(team);
   const teamName = teamData?.teamName || "your team";
 
-  // 🔔 Send notification to selected players
-  for (const p of players) {
-    if (p.player) {
-      await sendNotification({
-        receiver: p.player.toString(),
-        title: "You are Selected! 🏃‍♂️",
-        message: `You have been selected to play as a ${p.position} ${p.substitute ? "(Substitute)" : "(Starting Lineup)"} for ${teamName} in the upcoming match.`,
-        type: NOTIFICATION_TYPE.GENERAL,
-        metadata: { matchId: match, selectionId: result._id },
-      });
-    }
-  }
+  // 🔔 Send notification to selected players via background queue
+  const notifyPromises = players
+    .filter((p) => p.player)
+    .map((p) => {
+      const positionText = p.position ? `as a ${p.position} ` : '';
+      const statusText = p.substitute ? "(Substitute)" : "(Starting Lineup)";
+      return NotificationQueueHelper.sendNotification(
+        p.player.toString(),
+        `You have been selected to play ${positionText}${statusText} for ${teamName} in the upcoming match.`,
+        "You are Selected! 🏃‍♂️",
+        NOTIFICATION_TYPE.GENERAL,
+        undefined,
+        match.toString(),
+        'Match'
+      );
+    });
+
+  await Promise.all(notifyPromises);
 
   return result;
 };

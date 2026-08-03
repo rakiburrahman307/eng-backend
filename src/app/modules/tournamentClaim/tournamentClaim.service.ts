@@ -6,7 +6,7 @@ import { TournamentClaim } from './tournamentClaim.model';
 import { Tournament } from '../tournament/tournament.model';
 import { User } from '../user/user.model';
 import { USER_ROLES } from '../../../enums/user';
-import { sendNotification } from '../../../helpers/notificationsHelper';
+import { NotificationQueueHelper } from '../../../helpers/bullMQ/bullHelper';
 import { NOTIFICATION_TYPE } from '../notification/notification.interface';
 
 const createClaimToDB = async (
@@ -201,27 +201,31 @@ const reviewClaimInDB = async (
     claim.approvedBy = adminId as any;
     await claim.save();
 
-    // 🔔 Send Notification to User
-    await sendNotification({
-      receiver: claim.user.toString(),
-      title: 'Tournament Reward Credited! 🏆',
-      message: `Congratulations! Your position claim for "${tournament.title}" (${claim.claimedPositionName}) has been approved. ${pointsToAward} reward points have been added to your account!`,
-      type: NOTIFICATION_TYPE.GENERAL,
-      metadata: { tournamentId: tournament._id, claimId: claim._id },
-    });
+    // 🔔 Send Notification to User via background queue
+    await NotificationQueueHelper.sendNotification(
+      claim.user.toString(),
+      `Congratulations! Your position claim for "${tournament.title}" (${claim.claimedPositionName}) has been approved. ${pointsToAward} reward points have been added to your account!`,
+      'Tournament Reward Credited! 🏆',
+      NOTIFICATION_TYPE.GENERAL,
+      undefined,
+      claim._id.toString(),
+      'TournamentClaim'
+    );
   } else {
     claim.status = 'rejected';
     claim.approvedBy = adminId as any;
     await claim.save();
 
-    // 🔔 Send Notification to User
-    await sendNotification({
-      receiver: claim.user.toString(),
-      title: 'Tournament Claim Update ℹ️',
-      message: `Your position claim for "${tournament.title}" (${claim.claimedPositionName}) was not approved by Admin.`,
-      type: NOTIFICATION_TYPE.GENERAL,
-      metadata: { tournamentId: tournament._id, claimId: claim._id },
-    });
+    // 🔔 Send Notification to User via background queue
+    await NotificationQueueHelper.sendNotification(
+      claim.user.toString(),
+      `Your position claim for "${tournament.title}" (${claim.claimedPositionName}) was not approved by Admin.`,
+      'Tournament Claim Update ℹ️',
+      NOTIFICATION_TYPE.GENERAL,
+      undefined,
+      claim._id.toString(),
+      'TournamentClaim'
+    );
   }
 
   return claim;

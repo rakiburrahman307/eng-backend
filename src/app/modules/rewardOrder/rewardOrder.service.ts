@@ -6,7 +6,8 @@ import { User } from '../user/user.model';
 import { RewardProduct } from '../rewardProduct/rewardProduct.model';
 import { RewardOrder } from './rewardOrder.model';
 import { Subscription } from '../subscription/subscription.model';
-import { sendNotification, sendNotificationToAdmins } from '../../../helpers/notificationsHelper';
+import { NotificationQueueHelper } from '../../../helpers/bullMQ/bullHelper';
+import { sendNotificationToAdmins } from '../../../helpers/notificationsHelper';
 import { NOTIFICATION_TYPE } from '../notification/notification.interface';
 
 // CREATE ORDER
@@ -99,18 +100,16 @@ const createRewardOrderToDB = async (
 
 
 
-    // Notify Player
-
-    await sendNotification({
-      receiver: userId,
-      title: "Reward Order Placed 🎁",
-      message: `Your reward order has been placed successfully. ${rewardProduct.point} points have been deducted from your ENG Coins.`,
-      type: NOTIFICATION_TYPE.REWARD_ORDER_PLACED,
-      metadata: {
-        orderId: order[0]._id,
-        productId: rewardProduct._id,
-      },
-    });
+    // Notify Player via background queue
+    await NotificationQueueHelper.sendNotification(
+      userId,
+      `Your reward order has been placed successfully. ${rewardProduct.point} points have been deducted from your ENG Coins.`,
+      "Reward Order Placed 🎁",
+      NOTIFICATION_TYPE.REWARD_ORDER_PLACED,
+      undefined,
+      order[0]._id.toString(),
+      'RewardOrder'
+    );
 
 
     // Notify Admins
@@ -249,14 +248,16 @@ const approveRewardOrderToDB = async (
 
   await order.save();
 
-  // 🔔 Notify player: order approved
-  await sendNotification({
-    receiver: order.user.toString(),
-    title: '✅ Reward Order Approved!',
-    message: 'Your reward order has been approved! It will be delivered to you soon.',
-    type: NOTIFICATION_TYPE.REWARD_ORDER_APPROVED,
-    metadata: { orderId: order._id },
-  });
+  // 🔔 Notify player: order approved via background queue
+  await NotificationQueueHelper.sendNotification(
+    order.user.toString(),
+    'Your reward order has been approved! It will be delivered to you soon.',
+    '✅ Reward Order Approved!',
+    NOTIFICATION_TYPE.REWARD_ORDER_APPROVED,
+    undefined,
+    order._id.toString(),
+    'RewardOrder'
+  );
 
   return order;
 };
@@ -321,14 +322,16 @@ const rejectRewardOrderToDB = async (
     session.endSession();
 
     const reasonText = rejectReason ? ` Reason: ${rejectReason}` : '';
-    // 🔔 Notify player: order rejected + points refunded
-    await sendNotification({
-      receiver: order.user.toString(),
-      title: 'Reward Order Rejected',
-      message: `Your reward order has been rejected. ${order.pointUsed} points have been refunded to your account.${reasonText}`,
-      type: NOTIFICATION_TYPE.REWARD_ORDER_REJECTED,
-      metadata: { orderId: order._id, pointsRefunded: order.pointUsed },
-    });
+    // 🔔 Notify player: order rejected + points refunded via background queue
+    await NotificationQueueHelper.sendNotification(
+      order.user.toString(),
+      `Your reward order has been rejected. ${order.pointUsed} points have been refunded to your account.${reasonText}`,
+      'Reward Order Rejected',
+      NOTIFICATION_TYPE.REWARD_ORDER_REJECTED,
+      undefined,
+      order._id.toString(),
+      'RewardOrder'
+    );
 
     return order;
   } catch (error) {
@@ -363,14 +366,16 @@ const deliveredRewardOrderToDB = async (
 
   await order.save();
 
-  // 🔔 Notify player: order delivered
-  await sendNotification({
-    receiver: order.user.toString(),
-    title: '🚚 Reward Order Delivered!',
-    message: 'Your reward order has been delivered! Enjoy your reward.',
-    type: NOTIFICATION_TYPE.REWARD_ORDER_DELIVERED,
-    metadata: { orderId: order._id },
-  });
+  // 🔔 Notify player: order delivered via background queue
+  await NotificationQueueHelper.sendNotification(
+    order.user.toString(),
+    'Your reward order has been delivered! Enjoy your reward.',
+    '🚚 Reward Order Delivered!',
+    NOTIFICATION_TYPE.REWARD_ORDER_DELIVERED,
+    undefined,
+    order._id.toString(),
+    'RewardOrder'
+  );
 
   return order;
 };

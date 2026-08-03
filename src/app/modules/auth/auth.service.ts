@@ -17,7 +17,7 @@ import { ResetToken } from '../resetToken/resetToken.model';
 import { User } from '../user/user.model';
 import { IUser } from '../user/user.interface';
 import { Subscription } from '../subscription/subscription.model';
-import { sendNotification } from '../../../helpers/notificationsHelper';
+import { NotificationQueueHelper } from '../../../helpers/bullMQ/bullHelper';
 import { NOTIFICATION_TYPE } from '../notification/notification.interface';
 
 //login
@@ -177,13 +177,13 @@ const verifyEmailToDB = async (payload: IVerifyEmail) => {
             "7d"
         );
 
-        // 🔔 Notify user: email verified
-        await sendNotification({
-            receiver: isExistUser._id.toString(),
-            title: "Email Verified Successfully!",
-            message: "Welcome! Your email has been verified. You can now access your account.",
-            type: NOTIFICATION_TYPE.EMAIL_VERIFIED,
-        });
+        // 🔔 Notify user: email verified via background queue
+        await NotificationQueueHelper.sendNotification(
+            isExistUser._id.toString(),
+            "Welcome! Your email has been verified. You can now access your account.",
+            "Email Verified Successfully!",
+            NOTIFICATION_TYPE.EMAIL_VERIFIED
+        );
 
         message = "Email verified successfully";
     }

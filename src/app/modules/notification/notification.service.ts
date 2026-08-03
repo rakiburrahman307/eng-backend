@@ -4,7 +4,7 @@ import QueryBuilder from "../../../util/queryBuilder";
 import { User } from "../user/user.model";
 import { NOTIFICATION_TYPE } from "./notification.interface";
 import { Notification } from "./notification.model";
-import { NotificationHelper } from "../../builder/PushNotifications";
+import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ADMIN: SEND NOTIFICATION TO ALL USERS
@@ -20,14 +20,15 @@ const sendToAllUsers = async (payload: {
     throw new ApiError(StatusCodes.NOT_FOUND, "No users found");
   }
 
-  const userIds = users.map((user) => user._id);
+  const userIds = users.map((user) => user._id.toString());
 
-  // Dispatch FCM Push notification, save to DB, and emit to socket via central helper
-  await NotificationHelper.sendToBatch(userIds, {
-    title: payload.title,
-    body: payload.message,
-    type: payload.type,
-  });
+  // Dispatch FCM Push notification, save to DB, and emit to socket via background queue
+  await NotificationQueueHelper.sendBulkNotifications(
+    userIds,
+    payload.title,
+    payload.message,
+    payload.type || NOTIFICATION_TYPE.GENERAL
+  );
 
   return { message: "Notifications successfully dispatched" };
 };

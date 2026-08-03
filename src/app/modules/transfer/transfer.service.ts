@@ -6,7 +6,8 @@ import { Team } from '../team/team.model';
 import { ManagerTeam } from '../managerTeam/managerTeam.model';
 import { USER_ROLES } from '../../../enums/user';
 import mongoose from 'mongoose';
-import { sendNotification, sendNotificationToAdmins } from '../../../helpers/notificationsHelper';
+import { NotificationQueueHelper } from '../../../helpers/bullMQ/bullHelper';
+import { sendNotificationToAdmins } from '../../../helpers/notificationsHelper';
 import { NOTIFICATION_TYPE } from '../notification/notification.interface';
 
 // CREATE
@@ -84,14 +85,16 @@ const createTransferToDB = async (payload: any, userId: string) => {
     transferType,
   });
 
-  // 🔔 Notify player: transfer request submitted
-  await sendNotification({
-    receiver: payload.player,
-    title: 'Transfer Request Submitted',
-    message: 'A transfer request has been submitted for you. Awaiting admin approval.',
-    type: NOTIFICATION_TYPE.TRANSFER_REQUESTED,
-    metadata: { transferId: transfer._id, transferType },
-  });
+  // 🔔 Notify player: transfer request submitted via background queue helper
+  await NotificationQueueHelper.sendNotification(
+    payload.player,
+    'A transfer request has been submitted for you. Awaiting admin approval.',
+    'Transfer Request Submitted',
+    NOTIFICATION_TYPE.TRANSFER_REQUESTED,
+    undefined,
+    transfer._id.toString(),
+    'Transfer'
+  );
 
   // 🔔 Notify admins: new transfer request
   await sendNotificationToAdmins({
@@ -347,14 +350,16 @@ const approveTransferToDB = async (id: string, user: any) => {
       metadata: { transferId: transfer._id },
     });
 
-    // 🔔 Notify player
-    await sendNotification({
-      receiver: transfer.player.toString(),
-      title: 'Manager Approved Transfer 👍',
-      message: 'Your team manager has approved the transfer request. Awaiting final Admin approval.',
-      type: NOTIFICATION_TYPE.GENERAL,
-      metadata: { transferId: transfer._id },
-    });
+    // 🔔 Notify player via background queue
+    await NotificationQueueHelper.sendNotification(
+      transfer.player.toString(),
+      'Your team manager has approved the transfer request. Awaiting final Admin approval.',
+      'Manager Approved Transfer 👍',
+      NOTIFICATION_TYPE.GENERAL,
+      undefined,
+      transfer._id.toString(),
+      'Transfer'
+    );
 
     return transfer;
   }
@@ -402,14 +407,16 @@ const approveTransferToDB = async (id: string, user: any) => {
     transfer.approvedBy = userId as any;
     await transfer.save();
 
-    // 🔔 Notify player: transfer approved
-    await sendNotification({
-      receiver: transfer.player.toString(),
-      title: '🎉 Transfer Approved!',
-      message: 'Congratulations! Your transfer request has been fully approved by Admin. You are now part of the new team.',
-      type: NOTIFICATION_TYPE.TRANSFER_APPROVED,
-      metadata: { transferId: transfer._id, newTeamId: transfer.toTeam },
-    });
+    // 🔔 Notify player: transfer approved via background queue
+    await NotificationQueueHelper.sendNotification(
+      transfer.player.toString(),
+      'Congratulations! Your transfer request has been fully approved by Admin. You are now part of the new team.',
+      '🎉 Transfer Approved!',
+      NOTIFICATION_TYPE.TRANSFER_APPROVED,
+      undefined,
+      transfer._id.toString(),
+      'Transfer'
+    );
 
     return transfer;
   }
@@ -435,14 +442,16 @@ const rejectTransferToDB = async (
 
   await transfer.save();
 
-  // 🔔 Notify player: transfer rejected
-  await sendNotification({
-    receiver: transfer.player.toString(),
-    title: 'Transfer Request Rejected',
-    message: `Your transfer request has been rejected. Reason: ${reason || 'No reason provided.'}`,
-    type: NOTIFICATION_TYPE.TRANSFER_REJECTED,
-    metadata: { transferId: transfer._id, reason },
-  });
+  // 🔔 Notify player: transfer rejected via background queue
+  await NotificationQueueHelper.sendNotification(
+    transfer.player.toString(),
+    `Your transfer request has been rejected. Reason: ${reason || 'No reason provided.'}`,
+    'Transfer Request Rejected',
+    NOTIFICATION_TYPE.TRANSFER_REJECTED,
+    undefined,
+    transfer._id.toString(),
+    'Transfer'
+  );
 
   return transfer;
 };

@@ -7,7 +7,7 @@ import { League } from "../league/league.model";
 import { getRatingCoin } from "../../../util/getRatingCoin";
 import mongoose from "mongoose";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
-import { sendNotification } from "../../../helpers/notificationsHelper";
+import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 import { VenueCategory } from "../venueCategory/venueCategory.model";
 import ApiError from "../../../errors/ApiErrors";
@@ -363,17 +363,17 @@ const toggleMatchStatusToDB = async (id: string) => {
         ? `The match ${matchName} has officially started and is now live!` 
         : `The match ${matchName} has finished. Check the final match results and ratings.`;
 
-      for (const details of userDetails) {
-        if (details._id) {
-          await sendNotification({
-            receiver: details._id.toString(),
-            title,
-            message,
-            type: NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,
-            metadata: { matchId: match._id, status: match.status }
-          });
-        }
-      }
+      const userIds = userDetails.map((u) => u._id.toString());
+
+      await NotificationQueueHelper.sendBulkNotifications(
+        userIds,
+        title,
+        message,
+        NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,
+        undefined,
+        match._id.toString(),
+        "Match"
+      );
     }
   }
 
