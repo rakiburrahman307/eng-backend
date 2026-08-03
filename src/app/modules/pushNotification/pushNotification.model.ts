@@ -25,4 +25,4 @@ const pushNotificationSchema = new Schema(
   }
 );
 
-export const Notification = model("PushNotification", pushNotificationSchema);
+export const PushNotification = model("PushNotification", pushNotificationSchema);

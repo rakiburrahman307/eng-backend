@@ -30,8 +30,7 @@ const getNotifications = catchAsync(async (req: Request, res: Response) => {
 });
 const deleteNotification = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { id: userId } = req.user as { id: string };
-  const result = await NotificationService.deleteNotificationFromDB(id as string, userId);
+  const result = await NotificationService.deleteNotificationFromDB(id as string);
 
   sendResponse(res, {
     success: true,
@@ -42,8 +41,7 @@ const deleteNotification = catchAsync(async (req: Request, res: Response) => {
 });
 
 const clearAllNotifications = catchAsync(async (req: Request, res: Response) => {
-  const { id: userId } = req.user as { id: string };
-  const result = await NotificationService.clearAllNotificationsFromDB(userId);
+  const result = await NotificationService.clearAllNotificationsFromDB();
 
   sendResponse(res, {
     success: true,
@@ -53,36 +51,9 @@ const clearAllNotifications = catchAsync(async (req: Request, res: Response) => 
   });
 });
 
-const markAsRead = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { id: userId } = req.user as { id: string };
-  const result = await NotificationService.markAsReadFromDB(id as string, userId);
-
-  sendResponse(res, {
-    success: true,
-    statusCode: StatusCodes.OK,
-    message: "Notification marked as read successfully",
-    data: result,
-  });
-});
-
-const markAllAsRead = catchAsync(async (req: Request, res: Response) => {
-  const { id: userId } = req.user as { id: string };
-  const result = await NotificationService.markAllAsReadFromDB(userId);
-
-  sendResponse(res, {
-    success: true,
-    statusCode: StatusCodes.OK,
-    message: "All notifications marked as read successfully",
-    data: result,
-  });
-});
-
 export const NotificationController = {
   sendNotification,
   getNotifications,
   deleteNotification,
   clearAllNotifications,
-  markAsRead,
-  markAllAsRead,
 };

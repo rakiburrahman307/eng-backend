@@ -5,36 +5,7 @@ import sendResponse from "../../../shared/sendResponse";
 import { NotificationService } from "./notification.service";
 import ApiError from "../../../errors/ApiErrors";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ADMIN: SEND TO ALL USERS
-// ─────────────────────────────────────────────────────────────────────────────
-const sendToAllUsers = catchAsync(async (req: Request, res: Response) => {
-  const result = await NotificationService.sendToAllUsers(req.body);
 
-  sendResponse(res, {
-    success: true,
-    statusCode: StatusCodes.OK,
-    message: "Notification sent to all users successfully",
-    data: result,
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ADMIN: GET ALL NOTIFICATIONS
-// ─────────────────────────────────────────────────────────────────────────────
-const getAllNotifications = catchAsync(async (req: Request, res: Response) => {
-  const result = await NotificationService.getAllNotificationsForAdmin(
-    req.query
-  );
-
-  sendResponse(res, {
-    success: true,
-    statusCode: StatusCodes.OK,
-    message: "All notifications retrieved successfully",
-    pagination: result.meta,
-    data: result.result,
-  });
-});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PLAYER: GET MY NOTIFICATIONS
@@ -124,12 +95,9 @@ const deleteAllNotifications = catchAsync(async (req: Request, res: Response) =>
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ADMIN: DELETE NOTIFICATION
-// ─────────────────────────────────────────────────────────────────────────────
 const deleteNotification = catchAsync(async (req: Request, res: Response) => {
-  const result = await NotificationService.clearNotificationFromDB();
-
+  const { id } = req.params;
+  const result = await NotificationService.deleteNotification(id as string);
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
@@ -139,12 +107,11 @@ const deleteNotification = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const NotificationController = {
-  sendToAllUsers,
-  getAllNotifications,
+
   getMyNotifications,
   getUnreadCount,
   markAsRead,
   markAllAsRead,
-  deleteNotification,
-  deleteAllNotifications
+  deleteAllNotifications,
+  deleteNotification
 };

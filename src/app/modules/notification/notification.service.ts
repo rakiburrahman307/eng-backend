@@ -1,66 +1,7 @@
 import { StatusCodes } from "http-status-codes";
 import ApiError from "../../../errors/ApiErrors";
 import QueryBuilder from "../../../util/queryBuilder";
-import { User } from "../user/user.model";
-import { NOTIFICATION_TYPE } from "./notification.interface";
 import { Notification } from "./notification.model";
-import { Notification as PushNotification } from "../pushNotification/pushNotification.model";
-import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ADMIN: SEND NOTIFICATION TO ALL USERS
-// ─────────────────────────────────────────────────────────────────────────────
-const sendToAllUsers = async (payload: {
-  title: string;
-  message: string;
-  type?: NOTIFICATION_TYPE;
-}) => {
-  const users = await User.find({ verified: true }, "_id");
-
-  if (!users.length) {
-    throw new ApiError(StatusCodes.NOT_FOUND, "No users found");
-  }
-
-  const userIds = users.map((user) => user._id.toString());
-
-  // Dispatch FCM Push notification, save to DB, and emit to socket via background queue
-  await NotificationQueueHelper.sendBulkNotifications(
-    userIds,
-    payload.title,
-    payload.message,
-    payload.type || NOTIFICATION_TYPE.GENERAL
-  );
-
-  // Save a single log in PushNotification collection for Admin's sent history
-  await PushNotification.create({
-    title: payload.title,
-    message: payload.message,
-    user: null, // null means all users
-    isRead: false
-  });
-
-  return { message: "Notifications successfully dispatched" };
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ADMIN: GET ALL NOTIFICATIONS (all users, paginated)
-// ─────────────────────────────────────────────────────────────────────────────
-const getAllNotificationsForAdmin = async (query: Record<string, any>) => {
-  const notificationQuery = new QueryBuilder(
-    PushNotification.find().populate("user", "userName email profile role"),
-    query
-  )
-    .search(["title", "message"])
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
-
-  const result = await notificationQuery.modelQuery;
-  const meta = await notificationQuery.getPaginationInfo();
-
-  return { meta, result };
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PLAYER: GET OWN NOTIFICATIONS (paginated)
@@ -131,6 +72,12 @@ const markAllAsRead = async (userId: string) => {
     message: `${result.modifiedCount} notifications marked as read`,
   };
 };
+
+const deleteNotification = async (id: string) => {
+  const result = await Notification.findByIdAndDelete(id);
+  return result;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PLAYER: DELETE ALL NOTIFICATIONS 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -142,26 +89,11 @@ const deleteAllNotifications = async (userId: string) => {
   return result;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ADMIN: DELETE NOTIFICATION
-// ─────────────────────────────────────────────────────────────────────────────
-const clearNotificationFromDB = async () => {
-  const result = await PushNotification.deleteMany();
-
-  if (!result) {
-    throw new ApiError(StatusCodes.NOT_FOUND, "Notification not found");
-  }
-
-  return result;
-};
-
 export const NotificationService = {
-  sendToAllUsers,
-  getAllNotificationsForAdmin,
   getMyNotifications,
   getUnreadCount,
   markAsRead,
   markAllAsRead,
-  clearNotificationFromDB,
-  deleteAllNotifications
+  deleteAllNotifications,
+  deleteNotification,
 };
