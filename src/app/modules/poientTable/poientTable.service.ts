@@ -142,10 +142,10 @@ const getPointTable = async (query: Record<string, any> = {}) => {
   }
 
   if (season) {
-    console.log(season)
+    console.log(season);
     const escapedSeason = season.toString().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
     const pattern = escapedSeason.trim().replace(/\s+/g, '\\s+');
-    filter.season = { $regex: new RegExp(`^${pattern}$`, 'i') };
+    filter.season = { $regex: new RegExp(`^\\s*${pattern}\\s*$`, 'i') };
   }
 
   if (leagueName) {
