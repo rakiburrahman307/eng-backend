@@ -12,6 +12,7 @@ import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 import { VenueCategory } from "../venueCategory/venueCategory.model";
 import ApiError from "../../../errors/ApiErrors";
 import { StatusCodes } from "http-status-codes";
+import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 
 const formatMatchVenue = async (matchItem: any) => {
   if (!matchItem) return matchItem;
@@ -290,7 +291,7 @@ const updateMatchToDB = async (id: string, payload: any) => {
   const match = await Match.findById(id);
 
   if (!match) {
-    throw new Error("Match not found");
+    throw new ApiError(StatusCodes.NOT_FOUND, "Match not found");
   }
 
   if (
@@ -298,7 +299,7 @@ const updateMatchToDB = async (id: string, payload: any) => {
     payload.awayTeam &&
     payload.homeTeam === payload.awayTeam
   ) {
-    throw new Error("Same team cannot play match");
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Same team cannot play match");
   }
 
   return await Match.findByIdAndUpdate(id, payload, {
@@ -548,6 +549,67 @@ const updateMatchTimerInDB = async (
   };
 };
 
+const modifyMatchScoreInDB = async (
+  id: string,
+  payload: { homeScore: number; awayScore: number }
+) => {
+  const match = await Match.findById(id);
+
+  if (!match) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Match not found");
+  }
+
+  if (payload.homeScore === undefined || payload.awayScore === undefined) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Both homeScore and awayScore must be provided");
+  }
+
+  const oldHomeScore = match.homeScore ?? 0;
+  const oldAwayScore = match.awayScore ?? 0;
+  const newHomeScore = Number(payload.homeScore);
+  const newAwayScore = Number(payload.awayScore);
+
+  let newWinnerTeam = null;
+  if (newHomeScore > newAwayScore) {
+    newWinnerTeam = match.homeTeam;
+  } else if (newAwayScore > newHomeScore) {
+    newWinnerTeam = match.awayTeam;
+  }
+
+  // If the match is already finished, adjust team coins & market value rewards
+  if (match.status === 'finished') {
+    const ce = await ClubEconomy.findOne();
+    const drawCoin = ce?.drawMatch?.coin ?? 2000;
+    const drawMV = ce?.drawMatch?.budgetValue ?? 20000;
+    const winCoin = ce?.winMatch?.coin ?? 5000;
+    const winMV = ce?.winMatch?.budgetValue ?? 50000;
+
+    // Rollback old coin/MV allocations
+    if (oldHomeScore === oldAwayScore) {
+      await Team.findByIdAndUpdate(match.homeTeam, { $inc: { coin: -drawCoin, marketValue: -drawMV } });
+      await Team.findByIdAndUpdate(match.awayTeam, { $inc: { coin: -drawCoin, marketValue: -drawMV } });
+    } else {
+      const oldWinner = oldHomeScore > oldAwayScore ? match.homeTeam : match.awayTeam;
+      await Team.findByIdAndUpdate(oldWinner, { $inc: { coin: -winCoin, marketValue: -winMV } });
+    }
+
+    // Apply new coin/MV allocations
+    if (newHomeScore === newAwayScore) {
+      await Team.findByIdAndUpdate(match.homeTeam, { $inc: { coin: drawCoin, marketValue: drawMV } });
+      await Team.findByIdAndUpdate(match.awayTeam, { $inc: { coin: drawCoin, marketValue: drawMV } });
+    } else {
+      await Team.findByIdAndUpdate(newWinnerTeam, { $inc: { coin: winCoin, marketValue: winMV } });
+    }
+  }
+
+  match.homeScore = newHomeScore;
+  match.awayScore = newAwayScore;
+  match.winnerTeam = newWinnerTeam as any;
+
+  await match.save();
+
+  return await formatMatchVenue(match);
+};
+
 export const MatchService = {
   createMatchToDB,
   getAllMatchesFromDB,
@@ -559,4 +621,5 @@ export const MatchService = {
   addMatchReviewToDB,
   getUpcomingMatchesForManagerFromDB,
   updateMatchTimerInDB,
+  modifyMatchScoreInDB,
 };

@@ -60,4 +60,11 @@ router.patch(
   MatchController.updateMatchTimer
 );
 
+// ⚽ MODIFY SCORE (ADMIN/SUPER ADMIN ONLY)
+router.patch(
+  '/:id/modify-score',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  MatchController.modifyMatchScore
+);
+
 export default router;

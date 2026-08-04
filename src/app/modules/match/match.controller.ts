@@ -169,6 +169,18 @@ const updateMatchTimer = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const modifyMatchScore = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const result = await MatchService.modifyMatchScoreInDB(id as string, req.body);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Match score modified successfully",
+    data: result,
+  });
+});
+
 export const MatchController = {
   createMatch,
   getAllMatches,
@@ -180,4 +192,5 @@ export const MatchController = {
   addMatchReview,
   getUpcomingMatchesForManager,
   updateMatchTimer,
+  modifyMatchScore,
 };

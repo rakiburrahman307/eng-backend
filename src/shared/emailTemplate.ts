@@ -21,7 +21,7 @@ const createAccount = (values: ICreateAccount) => {
                                 <!-- Logo -->
                                 <tr>
                                     <td align="center" style="padding-bottom: 32px;">
-                                        <img src="https://i.postimg.cc/6pgNvKhD/logo.png" alt="ENG Sports Logo" style="display: block; width: 110px; height: auto;" />
+                                        <img src="https://res.cloudinary.com/dn83fu2pc/image/upload/v1785814172/image_35_mguqdb.png" alt="ENG Sports Logo" style="display: block; width: 110px; height: auto;" />
                                     </td>
                                 </tr>
                                 
@@ -95,7 +95,7 @@ const resetPassword = (values: IResetPassword) => {
                                 <!-- Logo -->
                                 <tr>
                                     <td align="center" style="padding-bottom: 32px;">
-                                        <img src="https://i.postimg.cc/6pgNvKhD/logo.png" alt="ENG Sports Logo" style="display: block; width: 110px; height: auto;" />
+                                        <img src="https://res.cloudinary.com/dn83fu2pc/image/upload/v1785814172/image_35_mguqdb.png" alt="ENG Sports Logo" style="display: block; width: 110px; height: auto;" />
                                     </td>
                                 </tr>
                                 
