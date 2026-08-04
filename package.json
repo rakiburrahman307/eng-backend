@@ -6,7 +6,9 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "start": "node dist/server.js",
     "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "queue:stats": "ts-node src/scripts/queueStats.ts",
+    "queue:clean": "ts-node src/scripts/cleanQueues.ts"
   },
   "author": "Md Rakibur Rahman",
   "license": "ISC",

@@ -106,10 +106,15 @@ const deleteLeagueFromDB = async (id: string) => {
   return await League.findByIdAndDelete(id);
 };
 
+const getUniqueSeasonsFromDB = async () => {
+  return await League.distinct('season');
+};
+
 export const LeagueService = {
   createLeagueToDB,
   getAllLeaguesFromDB,
   getSingleLeagueFromDB,
   updateLeagueToDB,
   deleteLeagueFromDB,
+  getUniqueSeasonsFromDB,
 };

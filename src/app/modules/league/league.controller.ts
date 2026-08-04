@@ -79,10 +79,22 @@ const deleteLeague = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getUniqueSeasons = catchAsync(async (req: Request, res: Response) => {
+  const result = await LeagueService.getUniqueSeasonsFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Unique seasons retrieved successfully',
+    data: result,
+  });
+});
+
 export const LeagueController = {
   createLeague,
   getAllLeagues,
   getSingleLeague,
   updateLeague,
   deleteLeague,
+  getUniqueSeasons,
 };

@@ -142,15 +142,22 @@ const getPointTable = async (query: Record<string, any> = {}) => {
   }
 
   if (season) {
-    filter.season = { $regex: new RegExp(`^${season.toString().trim()}$`, 'i') };
+    console.log(season)
+    const escapedSeason = season.toString().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const pattern = escapedSeason.trim().replace(/\s+/g, '\\s+');
+    filter.season = { $regex: new RegExp(`^${pattern}$`, 'i') };
   }
 
   if (leagueName) {
-    filter.leagueName = { $regex: new RegExp(leagueName.toString().trim(), 'i') };
+    const escapedLeagueName = leagueName.toString().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const pattern = escapedLeagueName.trim().replace(/\s+/g, '\\s+');
+    filter.leagueName = { $regex: new RegExp(pattern, 'i') };
   }
 
   if (year) {
-    filter.season = { $regex: new RegExp(year.toString().trim(), 'i') };
+    const escapedYear = year.toString().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const pattern = escapedYear.trim().replace(/\s+/g, '\\s+');
+    filter.season = { $regex: new RegExp(pattern, 'i') };
   }
 
   // Fetch only leagues matching the filter criteria
