@@ -9,6 +9,8 @@ import { Team } from "../team/team.model";
 import { User } from "../user/user.model";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
+import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
+import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 
 // ========================== CREATE ==========================
 const createMatchResultToDB = async (payload: any) => {
@@ -75,6 +77,65 @@ const createMatchResultToDB = async (payload: any) => {
 
   // 🔟 UPDATE WINNER
   await updateMatchWinner(match);
+
+  // 11️⃣ SEND QUEUED NOTIFICATIONS TO PLAYERS
+  try {
+    const eventMeta = payload.eventMeta;
+
+    if (player) {
+      let title = "Match Event Update";
+      let message = `A new event occurred at minute ${minute}.`;
+
+      if (eventType === "goal") {
+        if (eventMeta?.goalType === "own_goal") {
+          title = "Own Goal ⚽";
+          message = `An own goal was recorded at minute ${minute}.`;
+        } else {
+          title = "Goal Scored! ⚽";
+          message = `Congratulations! You scored a goal at minute ${minute}.`;
+        }
+      } else if (eventType === "assist") {
+        title = "Assist Recorded! 👟⚽";
+        message = `Well done! You assisted a goal at minute ${minute}.`;
+      } else if (eventType === "yellow_card") {
+        title = "Yellow Card Issued 🟨";
+        message = `You received a yellow card at minute ${minute}.`;
+      } else if (eventType === "red_card") {
+        title = "Red Card Issued 🟥";
+        message = `You received a red card at minute ${minute}.`;
+      } else if (eventType === "substitution") {
+        if (eventMeta?.substitutionType === "in") {
+          title = "Subbed In 🔄";
+          message = `You were substituted in at minute ${minute}.`;
+        } else if (eventMeta?.substitutionType === "out") {
+          title = "Subbed Out 🔄";
+          message = `You were substituted out at minute ${minute}.`;
+        }
+      } else if (eventType === "foul") {
+        title = "Foul Committed ⚠️";
+        message = `A foul was recorded for you at minute ${minute}.`;
+      }
+
+      await NotificationQueueHelper.sendNotification(
+        String(player),
+        message,
+        title,
+        NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED
+      );
+    }
+
+    // Assist player notification
+    if (eventType === "goal" && eventMeta?.assist) {
+      await NotificationQueueHelper.sendNotification(
+        String(eventMeta.assist),
+        `Well done! You assisted a goal at minute ${minute}.`,
+        "Assist Recorded! 👟⚽",
+        NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED
+      );
+    }
+  } catch (error) {
+    console.error("❌ Failed to send match result notifications:", error);
+  }
 
   return result;
 };
