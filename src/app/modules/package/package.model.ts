@@ -77,8 +77,6 @@ const packageSchema = new Schema<IPackage, PackageModel>({
     credit: { type: Number, required: true },
     loginLimit: { type: Number, required: true },
 
-    paymentLink: { type: String, required: true },
-
     status: {
         type: String,
         enum: ['Active', 'Delete'],

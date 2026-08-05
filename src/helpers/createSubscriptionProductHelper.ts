@@ -9,7 +9,6 @@ export const createSubscriptionProduct = async (
 ): Promise<{
     productId: string;
     priceId: string;
-    paymentLink: string;
 } | null> => {
 
     // Create Product in Stripe
@@ -58,33 +57,8 @@ export const createSubscriptionProduct = async (
         throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create price in Stripe");
     }
 
-    // Create Payment Link
-    const paymentLink = await stripe.paymentLinks.create({
-        line_items: [
-            {
-                price: price.id,
-                quantity: 1,
-            },
-        ],
-        after_completion: {
-            type: 'redirect',
-            redirect: {
-                url: `${config.stripe.paymentSuccess}`,
-            },
-        },
-        metadata: {
-            productId: product.id,
-            priceId: price.id,   // 🔥 IMPORTANT ADD
-        },
-    });
-
-    if (!paymentLink.url) {
-        throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create payment link");
-    }
-
     return {
         productId: product.id,
-        priceId: price.id,   // 🔥 THIS FIXES YOUR MAIN BUG
-        paymentLink: paymentLink.url
+        priceId: price.id,
     };
 };

@@ -22,7 +22,6 @@ export type IPackage = {
     productId?: string;
     credit: number;
     loginLimit: number;
-    paymentLink?: string;
     features?: IPackageFeature[];
     status: 'Active' | 'Delete';
 };

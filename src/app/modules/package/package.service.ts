@@ -5,6 +5,7 @@ import { Package } from "./package.model";
 import mongoose from "mongoose";
 import { createSubscriptionProduct } from "../../../helpers/createSubscriptionProductHelper";
 import stripe from "../../../config/stripe";
+import config from "../../../config";
 
 const createPackageToDB = async (payload: IPackage): Promise<IPackage | null> => {
     // Set default permissions based on packageType if not explicitly passed
@@ -34,7 +35,6 @@ const createPackageToDB = async (payload: IPackage): Promise<IPackage | null> =>
     }
 
     // ✅ FIX: map correctly
-    payload.paymentLink = product.paymentLink;
     payload.stripeProductId = product.productId;
     payload.stripePriceId = product.priceId;   // 🔥 MUST ADD THIS
 
@@ -52,6 +52,67 @@ const updatePackageToDB = async(id: string, payload: IPackage): Promise<IPackage
 
     if(!mongoose.Types.ObjectId.isValid(id)){
         throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid ID")
+    }
+
+    const existingPackage = await Package.findById(id);
+    if (!existingPackage) {
+        throw new ApiError(StatusCodes.NOT_FOUND, "Package not found");
+    }
+
+    // Check if price or duration is changed
+    const isPriceChanged = payload.price !== undefined && Number(payload.price) !== Number(existingPackage.price);
+    const isDurationChanged = payload.duration !== undefined && payload.duration !== existingPackage.duration;
+
+    if (isPriceChanged || isDurationChanged) {
+        const stripeProductId = existingPackage.stripeProductId;
+        if (!stripeProductId) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, "Stripe Product ID not found for this package");
+        }
+
+        const newPriceVal = payload.price !== undefined ? Number(payload.price) : Number(existingPackage.price);
+        const newDuration = payload.duration !== undefined ? payload.duration : existingPackage.duration;
+
+        let interval: 'month' | 'year' = 'month';
+        let intervalCount = 1;
+
+        switch (newDuration) {
+            case '1 month':
+                interval = 'month';
+                intervalCount = 1;
+                break;
+            case '3 months':
+                interval = 'month';
+                intervalCount = 3;
+                break;
+            case '6 months':
+                interval = 'month';
+                intervalCount = 6;
+                break;
+            case '1 year':
+                interval = 'year';
+                intervalCount = 1;
+                break;
+            default:
+                interval = 'month';
+                intervalCount = 1;
+        }
+
+        // Create new Price in Stripe under the existing Product
+        const stripePrice = await stripe.prices.create({
+            product: stripeProductId,
+            unit_amount: newPriceVal * 100,
+            currency: 'gbp',
+            recurring: {
+                interval,
+                interval_count: intervalCount,
+            },
+        });
+
+        if (!stripePrice) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create new price in Stripe");
+        }
+
+        payload.stripePriceId = stripePrice.id;
     }
 
     const result = await Package.findByIdAndUpdate(
@@ -158,7 +219,6 @@ const getActivePackagesFromDB = async (
 
   return result;
 };
-// GET CHECKOUT URL — automatically appends client_reference_id + prefilled_email from logged-in user
 const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail: string): Promise<{ checkoutUrl: string }> => {
     if (!mongoose.Types.ObjectId.isValid(packageId)) {
         throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid package ID');
@@ -174,14 +234,31 @@ const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail
         throw new ApiError(StatusCodes.NOT_FOUND, 'Package not found');
     }
 
-    if (!pkg.paymentLink) {
-        throw new ApiError(StatusCodes.BAD_REQUEST, 'Package does not have a payment link');
+    if (!pkg.stripePriceId) {
+        throw new ApiError(StatusCodes.BAD_REQUEST, 'Package does not have a Stripe Price ID');
     }
 
-    // Append client_reference_id + prefilled_email — user never has to touch it
-    const checkoutUrl = `${pkg.paymentLink}?client_reference_id=${userId}&prefilled_email=${encodeURIComponent(userEmail)}`;
+    // Generate dynamic checkout session using stripe.checkout.sessions.create
+    const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+            {
+                price: pkg.stripePriceId,
+                quantity: 1,
+            },
+        ],
+        mode: 'subscription',
+        success_url: `${config.stripe.paymentSuccess || 'http://localhost:3000/success'}?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${config.stripe.paymentSuccess || 'http://localhost:3000/success'}`,
+        customer_email: userEmail,
+        client_reference_id: userId,
+    });
 
-    return { checkoutUrl };
+    if (!session.url) {
+        throw new ApiError(StatusCodes.BAD_REQUEST, 'Failed to generate checkout session');
+    }
+
+    return { checkoutUrl: session.url };
 };
 
 export const PackageService = {
