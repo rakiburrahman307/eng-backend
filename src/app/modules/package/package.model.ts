@@ -75,7 +75,6 @@ const packageSchema = new Schema<IPackage, PackageModel>({
     },
 
     credit: { type: Number, required: true },
-    loginLimit: { type: Number, required: true },
 
     status: {
         type: String,

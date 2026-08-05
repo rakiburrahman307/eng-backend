@@ -21,7 +21,6 @@ export type IPackage = {
     canEarnPoints?: boolean;
     productId?: string;
     credit: number;
-    loginLimit: number;
     features?: IPackageFeature[];
     status: 'Active' | 'Delete';
 };
