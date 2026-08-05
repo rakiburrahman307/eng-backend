@@ -78,13 +78,18 @@ export const handleSubscriptionUpdated = async (data: any) => {
 
                         // Add package credit to user's coin (engCoine)
                         const creditToAdd = Number(pkg.credit) || 0;
+                        const marketValueToAdd = creditToAdd * 100;
                         const updateData: any = {};
                         if (existingUser.role === USER_ROLES.PLAYER) {
                             updateData.blueTick = true;
                         }
+                        const incData: any = { engCoine: creditToAdd };
+                        if (existingUser.role === USER_ROLES.PLAYER) {
+                            incData.marketValue = marketValueToAdd;
+                        }
                         await User.findByIdAndUpdate(existingUser._id, {
                             $set: updateData,
-                            $inc: { engCoine: creditToAdd },
+                            $inc: incData,
                         });
 
                         // 🔔 Queue push + in-app notification to User about subscription update
@@ -111,13 +116,18 @@ export const handleSubscriptionUpdated = async (data: any) => {
                         );
 
                         const creditToAdd = Number(pkg.credit) || 0;
+                        const marketValueToAdd = creditToAdd * 100;
                         const updateData: any = {};
-                        if (existingUser.role === 'PLAYER') {
+                        if (existingUser.role === USER_ROLES.PLAYER) {
                             updateData.blueTick = true;
+                        }
+                        const incData: any = { engCoine: creditToAdd };
+                        if (existingUser.role === USER_ROLES.PLAYER) {
+                            incData.marketValue = marketValueToAdd;
                         }
                         await User.findByIdAndUpdate(existingUser._id, {
                             $set: updateData,
-                            $inc: { engCoine: creditToAdd },
+                            $inc: incData,
                         });
 
                         // 🔔 Queue push + in-app notification to User about reactivation

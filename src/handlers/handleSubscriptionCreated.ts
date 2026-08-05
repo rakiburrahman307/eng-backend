@@ -110,6 +110,7 @@ export const handleSubscriptionCreated = async (data: any) => {
 
 
   const creditToAdd = Number(pkg.credit) || 0;
+  const marketValueToAdd = creditToAdd * 100;
 
   // Activate user access and add coins
   // ⚠️ status (APPROVED/REJECTED) is NOT changed here — admin must approve separately
@@ -118,15 +119,21 @@ export const handleSubscriptionCreated = async (data: any) => {
     hasAccess: true,
   };
 
-if (user.role === USER_ROLES.PLAYER) {
+  if (user.role === USER_ROLES.PLAYER) {
     updateData.blueTick = true;
+  }
+
+  const incData: any = {
+    engCoine: creditToAdd,
+  };
+
+  if (user.role === USER_ROLES.PLAYER) {
+    incData.marketValue = marketValueToAdd;
   }
 
   await User.findByIdAndUpdate(user._id, {
     $set: updateData,
-    $inc: {
-      engCoine: creditToAdd,
-    },
+    $inc: incData,
   });
 
 

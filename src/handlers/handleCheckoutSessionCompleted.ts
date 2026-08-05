@@ -6,6 +6,7 @@ import { Package } from '../app/modules/package/package.model';
 import { Subscription } from '../app/modules/subscription/subscription.model';
 import { NOTIFICATION_TYPE } from '../app/modules/notification/notification.interface';
 import { NotificationQueueHelper } from '../helpers/bullMQ/bullHelper';
+import { USER_ROLES } from '../enums/user';
 
 export const handleCheckoutSessionCompleted = async (session: any) => {
   const userId = session.client_reference_id as string | null;
@@ -93,21 +94,28 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
   // Activate user access and add package credit to coin (engCoine)
   // ⚠️ status (APPROVED/REJECTED) is NOT changed here — admin must approve separately
   const creditToAdd = Number(pkg.credit) || 0;
+  const marketValueToAdd = creditToAdd * 100;
 
   const updateData: any = {
     isSubscribed: true,
     hasAccess: true,
   };
 
-  if (user.role === "PLAYER") {
+  if (user.role === USER_ROLES.PLAYER) {
     updateData.blueTick = true;
+  }
+
+  const incData: any = {
+    engCoine: creditToAdd,
+  };
+
+  if (user.role === USER_ROLES.PLAYER) {
+    incData.marketValue = marketValueToAdd;
   }
 
   await User.findByIdAndUpdate(user._id, {
     $set: updateData,
-    $inc: {
-      engCoine: creditToAdd,
-    },
+    $inc: incData,
   });
 
   // Queue push + in-app notification
