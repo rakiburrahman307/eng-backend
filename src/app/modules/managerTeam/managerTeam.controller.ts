@@ -60,10 +60,63 @@ const getMyTeams = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const bulkAssignTeams = catchAsync(async (req: Request, res: Response) => {
+  const result = await ManagerTeamService.bulkAssignTeamsToManagerInDB(req.body);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: result.message,
+    data: result,
+  });
+});
+
+const bulkRemoveTeams = catchAsync(async (req: Request, res: Response) => {
+  const result = await ManagerTeamService.bulkRemoveTeamsFromManagerInDB(req.body);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: result.message,
+    data: result,
+  });
+});
+
+const removeManagerFromTeamByTeamId = catchAsync(async (req: Request, res: Response) => {
+  const result = await ManagerTeamService.removeManagerFromTeamByTeamIdFromDB(
+    req.params.teamId as string
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Manager removed from team successfully',
+    data: result,
+  });
+});
+
+const getManagerTeamsForAdmin = catchAsync(async (req: Request, res: Response) => {
+  const result = await ManagerTeamService.getMyTeamsFromDB(
+    req.params.managerId as string
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Manager teams retrieved successfully',
+    data: result,
+  });
+});
 
 export const ManagerTeamController = {
   assignManagerToTeam,
   getAllManagerTeams,
   removeManagerFromTeam,
-  getMyTeams
+  removeManagerFromTeamByTeamId,
+  getManagerTeamsForAdmin,
+  getMyTeams,
+  bulkAssignTeams,
+  bulkRemoveTeams,
 };
+
+

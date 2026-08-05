@@ -17,6 +17,18 @@ router
     ManagerTeamController.getAllManagerTeams
   );
 
+router.post(
+  '/assign',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  ManagerTeamController.bulkAssignTeams
+);
+
+router.post(
+  '/remove',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  ManagerTeamController.bulkRemoveTeams
+);
+
 // REMOVE MANAGER FROM TEAM
 router
   .route('/:id')
@@ -25,7 +37,19 @@ router
     ManagerTeamController.removeManagerFromTeam
   );
 
-  router.get(
+router.delete(
+  '/team/:teamId',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  ManagerTeamController.removeManagerFromTeamByTeamId
+);
+
+router.get(
+  '/manager/:managerId',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  ManagerTeamController.getManagerTeamsForAdmin
+);
+
+router.get(
   '/my-teams',
   auth(USER_ROLES.MANAGER),
   ManagerTeamController.getMyTeams
