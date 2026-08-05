@@ -140,6 +140,22 @@ const userSchema = new Schema<IUser, UserModal>(
       type: Boolean,
       default: false,
     },
+    playForAcademy: {
+      type: Boolean,
+      default: false,
+    },
+    academyClubName: {
+      type: String,
+      default: "",
+    },
+    isDevelopmentPlayer: {
+      type: Boolean,
+      default: false,
+    },
+    mediaConsent: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

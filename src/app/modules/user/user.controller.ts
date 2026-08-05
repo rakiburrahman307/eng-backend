@@ -164,18 +164,27 @@ const createPlayer = catchAsync(async (req: Request, res: Response) => {
 
     // 🚨 PLAYER ROLE SPECIFIC VALIDATION
     if (role === "PLAYER") {
-    const playerRequiredFields = ["ageGroup", "selectTeam"];
+      const playerRequiredFields = ["ageGroup", "selectTeam"];
 
-    const missingPlayerFields = playerRequiredFields.filter(
+      const missingPlayerFields = playerRequiredFields.filter(
         (field) => !parsedData?.[field]
-    );
+      );
 
-    if (missingPlayerFields.length > 0) {
+      if (missingPlayerFields.length > 0) {
         throw new ApiError(
-        400,
-        `Player must provide: ${missingPlayerFields.join(", ")}`
+          400,
+          `Player must provide: ${missingPlayerFields.join(", ")}`
         );
-    }
+      }
+
+      if (parsedData?.playForAcademy === true) {
+        if (!parsedData?.academyClubName || parsedData.academyClubName.trim() === "") {
+          throw new ApiError(
+            400,
+            "Academy Club Name is required when playing for a CAT 1 to 3 academy"
+          );
+        }
+      }
     }
 
     // 🚀 FINAL PAYLOAD

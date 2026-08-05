@@ -56,6 +56,10 @@ export type IUser = {
     marketValue?: number;
     debutDate?: Date;
     blueTick?: boolean;
+    playForAcademy?: boolean;
+    academyClubName?: string;
+    isDevelopmentPlayer?: boolean;
+    mediaConsent?: boolean;
 }
 
 export type UserModal = {
