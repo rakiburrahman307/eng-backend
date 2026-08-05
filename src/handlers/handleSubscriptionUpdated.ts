@@ -4,8 +4,9 @@ import stripe from '../config/stripe';
 import { User } from '../app/modules/user/user.model';
 import { Subscription } from '../app/modules/subscription/subscription.model';
 import { Package } from '../app/modules/package/package.model';
-import { sendNotification } from '../helpers/notificationsHelper';
 import { NOTIFICATION_TYPE } from '../app/modules/notification/notification.interface';
+import { USER_ROLES } from '../enums/user';
+import { NotificationQueueHelper } from '../helpers/bullMQ/bullHelper';
 
 export const handleSubscriptionUpdated = async (data: any) => {
 
@@ -77,17 +78,22 @@ export const handleSubscriptionUpdated = async (data: any) => {
 
                         // Add package credit to user's coin (engCoine)
                         const creditToAdd = Number(pkg.credit) || 0;
+                        const updateData: any = {};
+                        if (existingUser.role === USER_ROLES.PLAYER) {
+                            updateData.blueTick = true;
+                        }
                         await User.findByIdAndUpdate(existingUser._id, {
+                            $set: updateData,
                             $inc: { engCoine: creditToAdd },
                         });
 
-                        // 🔔 Send notification to User about subscription update
-                        await sendNotification({
-                            receiver: existingUser._id.toString(),
-                            title: "Subscription Updated",
-                            message: `Your subscription has been successfully updated to package "${pkg.title}".`,
-                            type: NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED,
-                        });
+                        // 🔔 Queue push + in-app notification to User about subscription update
+                        await NotificationQueueHelper.sendNotification(
+                            existingUser._id.toString(),
+                            `Your subscription has been successfully updated to package "${pkg.title}".`,
+                            "Subscription Updated",
+                            NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED
+                        );
                     }
                 } else {
 
@@ -105,17 +111,22 @@ export const handleSubscriptionUpdated = async (data: any) => {
                         );
 
                         const creditToAdd = Number(pkg.credit) || 0;
+                        const updateData: any = {};
+                        if (existingUser.role === 'PLAYER') {
+                            updateData.blueTick = true;
+                        }
                         await User.findByIdAndUpdate(existingUser._id, {
+                            $set: updateData,
                             $inc: { engCoine: creditToAdd },
                         });
 
-                        // 🔔 Send notification to User about reactivation
-                        await sendNotification({
-                            receiver: existingUser._id.toString(),
-                            title: "Subscription Reactivated",
-                            message: `Your subscription for package "${pkg.title}" has been reactivated.`,
-                            type: NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED,
-                        });
+                        // 🔔 Queue push + in-app notification to User about reactivation
+                        await NotificationQueueHelper.sendNotification(
+                            existingUser._id.toString(),
+                            `Your subscription for package "${pkg.title}" has been reactivated.`,
+                            "Subscription Reactivated",
+                            NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED
+                        );
                     }
                 }
             } else {

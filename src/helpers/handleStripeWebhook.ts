@@ -11,7 +11,6 @@ import {
 
 import stripe from "../config/stripe";
 import config from "../config";
-import ApiError from "../errors/ApiErrors";
 import { logger } from "../shared/logger";
 
 const handleStripeWebhook = async (req: Request, res: Response) => {

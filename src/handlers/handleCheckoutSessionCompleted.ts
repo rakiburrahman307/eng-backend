@@ -4,8 +4,8 @@ import stripe from '../config/stripe';
 import { User } from '../app/modules/user/user.model';
 import { Package } from '../app/modules/package/package.model';
 import { Subscription } from '../app/modules/subscription/subscription.model';
-import { sendNotification } from '../helpers/notificationsHelper';
 import { NOTIFICATION_TYPE } from '../app/modules/notification/notification.interface';
+import { NotificationQueueHelper } from '../helpers/bullMQ/bullHelper';
 
 export const handleCheckoutSessionCompleted = async (session: any) => {
   const userId = session.client_reference_id as string | null;
@@ -94,23 +94,29 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
   // ⚠️ status (APPROVED/REJECTED) is NOT changed here — admin must approve separately
   const creditToAdd = Number(pkg.credit) || 0;
 
+  const updateData: any = {
+    isSubscribed: true,
+    hasAccess: true,
+  };
+
+  if (user.role === "PLAYER") {
+    updateData.blueTick = true;
+  }
+
   await User.findByIdAndUpdate(user._id, {
-    $set: {
-      isSubscribed: true,
-      hasAccess: true,
-    },
+    $set: updateData,
     $inc: {
       engCoine: creditToAdd,
     },
   });
 
-  // Send notification
-  await sendNotification({
-    receiver: user._id.toString(),
-    title: 'Subscription Activated! 🚀',
-    message: `Your subscription for package "${pkg.title}" is now active. Enjoy all premium features!`,
-    type: NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED,
-  });
+  // Queue push + in-app notification
+  await NotificationQueueHelper.sendNotification(
+    user._id.toString(),
+    `Your subscription for package "${pkg.title}" is now active. Enjoy all premium features!`,
+    'Subscription Activated! 🚀',
+    NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED
+  );
 
   return newSub;
 };

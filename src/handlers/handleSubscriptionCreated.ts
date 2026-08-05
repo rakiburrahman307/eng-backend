@@ -1,13 +1,12 @@
-import Stripe from "stripe";
 import ApiError from "../errors/ApiErrors";
 import { StatusCodes } from "http-status-codes";
 import stripe from "../config/stripe";
-
 import { User } from "../app/modules/user/user.model";
 import { Package } from "../app/modules/package/package.model";
 import { Subscription } from "../app/modules/subscription/subscription.model";
-import { sendNotification } from "../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../app/modules/notification/notification.interface";
+import { USER_ROLES } from "../enums/user";
+import { NotificationQueueHelper } from "../helpers/bullMQ/bullHelper";
 
 export const handleSubscriptionCreated = async (data: any) => {
 
@@ -114,11 +113,17 @@ export const handleSubscriptionCreated = async (data: any) => {
 
   // Activate user access and add coins
   // ⚠️ status (APPROVED/REJECTED) is NOT changed here — admin must approve separately
+  const updateData: any = {
+    isSubscribed: true,
+    hasAccess: true,
+  };
+
+if (user.role === USER_ROLES.PLAYER) {
+    updateData.blueTick = true;
+  }
+
   await User.findByIdAndUpdate(user._id, {
-    $set: {
-      isSubscribed: true,
-      hasAccess: true,
-    },
+    $set: updateData,
     $inc: {
       engCoine: creditToAdd,
     },
@@ -128,13 +133,13 @@ export const handleSubscriptionCreated = async (data: any) => {
 
 
 
-  // 🔔 Send notification to User about subscription activation
-  await sendNotification({
-    receiver: user._id.toString(),
-    title: "Subscription Activated! ",
-    message: `Your subscription for package "${pkg.title}" is now active. Enjoy all premium features!`,
-    type: NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED,
-  });
+  // 🔔 Queue push + in-app notification to User about subscription activation
+  await NotificationQueueHelper.sendNotification(
+    user._id.toString(),
+    `Your subscription for package "${pkg.title}" is now active. Enjoy all premium features!`,
+    "Subscription Activated! 🚀",
+    NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED
+  );
 
   return newSub;
 };
