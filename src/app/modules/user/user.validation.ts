@@ -31,7 +31,7 @@ const createPlayerZodSchema = z.object({
 
     dateOfBirth: z.string().min(1, "Date of birth is required"),
 
-    ageGroup: z.enum(["U16", "U18", "U21", "SENIOR"]),
+    ageGroup: z.string().min(1, "Age group is required"),
 
     position: z.string().optional(),
 

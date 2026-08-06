@@ -19,6 +19,13 @@ router.get(
   EngTvCategoryController.getAllCategoriesForAdmin
 );
 
+// REARRANGE — must be registered before /:id to avoid route conflict
+router.patch(
+  '/rearrange',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  EngTvCategoryController.rearrangeCategories
+);
+
 router
   .route('/:id')
   .get(EngTvCategoryController.getSingleCategory)

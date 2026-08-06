@@ -2,7 +2,9 @@ import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiErrors';
 import { IEngTvCategory } from './engTvCategory.interface';
 import { EngTvCategory } from './engTvCategory.model';
+import { Types } from 'mongoose';
 
+// ========================== CREATE ==========================
 const createCategoryToDB = async (payload: Partial<IEngTvCategory>): Promise<IEngTvCategory> => {
   if (!payload.name) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Category name is required');
@@ -31,14 +33,12 @@ const createCategoryToDB = async (payload: Partial<IEngTvCategory>): Promise<IEn
     );
   }
 
-  if (payload.order !== undefined && payload.order !== null) {
-    const orderExist = await EngTvCategory.findOne({ order: payload.order });
-    if (orderExist) {
-      throw new ApiError(
-        StatusCodes.CONFLICT,
-        `Category order must be unique. Order ${payload.order} is already in use.`
-      );
-    }
+  // Auto-assign order if not provided: place at end
+  if (payload.order === undefined || payload.order === null) {
+    const lastCat = await EngTvCategory.findOne({ parentCategory: parentCategoryId })
+      .sort({ order: -1 })
+      .select('order');
+    payload.order = lastCat ? (lastCat.order ?? 0) + 1 : 1;
   }
 
   const result = await EngTvCategory.create({
@@ -48,6 +48,7 @@ const createCategoryToDB = async (payload: Partial<IEngTvCategory>): Promise<IEn
   return result;
 };
 
+// ========================== GET ALL (Public) ==========================
 const getAllCategoriesFromDB = async (): Promise<IEngTvCategory[]> => {
   const result = await EngTvCategory.find({
     status: 'active',
@@ -57,13 +58,14 @@ const getAllCategoriesFromDB = async (): Promise<IEngTvCategory[]> => {
     .populate({
       path: 'subCategories',
       match: { status: 'active' },
-      select: 'name',
+      select: 'name isLandscape',
       options: { sort: { order: 1, name: 1 } },
     });
 
   return result;
 };
 
+// ========================== GET ALL (Admin) ==========================
 const getAllCategoriesForAdminFromDB = async (): Promise<IEngTvCategory[]> => {
   const result = await EngTvCategory.find({
     $or: [{ parentCategory: null }, { parentCategory: { $exists: false } }],
@@ -71,19 +73,20 @@ const getAllCategoriesForAdminFromDB = async (): Promise<IEngTvCategory[]> => {
     .sort({ order: 1, name: 1 })
     .populate({
       path: 'subCategories',
-      select: 'name',
+      select: 'name isLandscape',
       options: { sort: { order: 1, name: 1 } },
     });
 
   return result;
 };
 
+// ========================== GET SINGLE ==========================
 const getSingleCategoryFromDB = async (id: string): Promise<IEngTvCategory | null> => {
   const result = await EngTvCategory.findById(id)
     .populate('parentCategory')
     .populate({
       path: 'subCategories',
-      select: 'name',
+      select: 'name isLandscape',
     });
 
   if (!result) {
@@ -92,6 +95,7 @@ const getSingleCategoryFromDB = async (id: string): Promise<IEngTvCategory | nul
   return result;
 };
 
+// ========================== UPDATE ==========================
 const updateCategoryToDB = async (
   id: string,
   payload: Partial<IEngTvCategory>
@@ -111,19 +115,6 @@ const updateCategoryToDB = async (
     }
   }
 
-  if (payload.order !== undefined && payload.order !== null) {
-    const orderExist = await EngTvCategory.findOne({
-      _id: { $ne: id },
-      order: payload.order,
-    });
-    if (orderExist) {
-      throw new ApiError(
-        StatusCodes.CONFLICT,
-        `Category order must be unique. Order ${payload.order} is already in use.`
-      );
-    }
-  }
-
   if (payload.name) {
     payload.slug = payload.name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
   }
@@ -135,12 +126,13 @@ const updateCategoryToDB = async (
     .populate('parentCategory')
     .populate({
       path: 'subCategories',
-      select: 'name',
+      select: 'name isLandscape',
     });
 
   return result;
 };
 
+// ========================== DELETE ==========================
 const deleteCategoryFromDB = async (id: string): Promise<IEngTvCategory | null> => {
   const isExist = await EngTvCategory.findById(id);
   if (!isExist) {
@@ -154,6 +146,31 @@ const deleteCategoryFromDB = async (id: string): Promise<IEngTvCategory | null> 
   return result;
 };
 
+// ========================== REARRANGE ==========================
+const rearrangeCategoriesInDB = async (
+  payload: { id: string; order: number }[]
+): Promise<{ modifiedCount: number }> => {
+  if (!Array.isArray(payload) || payload.length === 0) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid payload: categories array is required');
+  }
+
+  // Validate all IDs
+  const invalidIds = payload.filter((item) => !Types.ObjectId.isValid(item.id));
+  if (invalidIds.length > 0) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, `Invalid category IDs: ${invalidIds.map((i) => i.id).join(', ')}`);
+  }
+
+  const bulkOps = payload.map((item) => ({
+    updateOne: {
+      filter: { _id: new Types.ObjectId(item.id) },
+      update: { $set: { order: item.order } },
+    },
+  }));
+
+  const result = await EngTvCategory.bulkWrite(bulkOps);
+  return { modifiedCount: result.modifiedCount };
+};
+
 export const EngTvCategoryService = {
   createCategoryToDB,
   getAllCategoriesFromDB,
@@ -161,4 +178,5 @@ export const EngTvCategoryService = {
   getSingleCategoryFromDB,
   updateCategoryToDB,
   deleteCategoryFromDB,
+  rearrangeCategoriesInDB,
 };

@@ -73,6 +73,18 @@ const deleteCategory = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const rearrangeCategories = catchAsync(async (req: Request, res: Response) => {
+  const { categories } = req.body as { categories: { id: string; order: number }[] };
+  const result = await EngTvCategoryService.rearrangeCategoriesInDB(categories);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'ENG TV categories reordered successfully',
+    data: result,
+  });
+});
+
 export const EngTvCategoryController = {
   createCategory,
   getAllCategories,
@@ -80,4 +92,5 @@ export const EngTvCategoryController = {
   getSingleCategory,
   updateCategory,
   deleteCategory,
+  rearrangeCategories,
 };

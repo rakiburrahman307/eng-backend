@@ -6,6 +6,7 @@ export type IEngTvCategory = {
   parentCategory?: Types.ObjectId | IEngTvCategory | null;
   status: 'active' | 'inactive';
   order?: number;
+  isLandscape?: boolean;
   subCategories?: IEngTvCategory[];
   createdAt?: Date;
   updatedAt?: Date;

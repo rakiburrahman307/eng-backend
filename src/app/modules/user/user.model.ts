@@ -96,7 +96,6 @@ const userSchema = new Schema<IUser, UserModal>(
     },
     ageGroup: {
       type: String,
-      enum: Object.values(AGE_GROUP),
       required: false,
     },
     selectTeam: {

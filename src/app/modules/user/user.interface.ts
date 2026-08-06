@@ -46,7 +46,7 @@ export type IUser = {
     lastName?: string;
     dateOfBirth?: Date;
     strongFoot?: string;
-    ageGroup?: AGE_GROUP;
+    ageGroup?: string;
     selectTeam?: Types.ObjectId;
     position?: string;
     document?: string[];
