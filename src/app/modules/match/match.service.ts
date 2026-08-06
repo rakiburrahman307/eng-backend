@@ -62,6 +62,7 @@ const formatMatchVenue = async (matchItem: any) => {
 
   return {
     ...matchObj,
+    formation: matchObj.formation || null,
     venueName: finalVenueString,
     venue: finalVenueString,
     currentElapsedSeconds: liveSeconds,
@@ -72,14 +73,28 @@ const formatMatchVenue = async (matchItem: any) => {
 
 /* ---------------- RATING LOGIC ---------------- */
 
+const VALID_FORMATIONS = ['5 v 5', '7 v 7', '8 v 8', '9 v 9'];
+
 const createMatchToDB = async (payload: any) => {
   // single object হলে array বানাবে
   const matches = Array.isArray(payload) ? payload : [payload];
 
   const createdMatches: any[] = [];
   for (const matchData of matches) {
-    const { league, homeTeam, awayTeam, matchDate, referee, venueName } =
+    const { league, homeTeam, awayTeam, matchDate, referee, venueName, formation } =
       matchData;
+
+    // formation validation
+    if (!formation) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Formation is required");
+    }
+    if (!VALID_FORMATIONS.includes(formation)) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        `Invalid formation. Must be one of: ${VALID_FORMATIONS.join(', ')}`
+      );
+    }
+
     // same team check
     if (homeTeam === awayTeam) {
       throw new Error("Same team cannot play match");

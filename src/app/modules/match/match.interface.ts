@@ -11,6 +11,8 @@ export interface IMatch {
 
   durationMinutes?: string;
 
+  formation?: '5 v 5' | '7 v 7' | '8 v 8' | '9 v 9' | string | null;
+
   maxPlayersPerTeam?: number;
 
   venueName?: string;

@@ -28,6 +28,12 @@ const matchSchema = new Schema(
       default: '90',
     },
 
+    formation: {
+      type: String,
+      enum: ['5 v 5', '7 v 7', '8 v 8', '9 v 9'],
+      default: null,
+    },
+
     maxPlayersPerTeam: {
       type: Number,
       default: 11,
