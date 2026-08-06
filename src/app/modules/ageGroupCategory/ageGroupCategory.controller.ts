@@ -73,6 +73,18 @@ const deleteCategory = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getSubCategories = catchAsync(async (req: Request, res: Response) => {
+  const parentId = Array.isArray(req.params.parentId) ? req.params.parentId[0] : req.params.parentId;
+  const result = await AgeGroupCategoryService.getSubCategoriesFromDB(parentId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Age Group sub-categories retrieved successfully',
+    data: result,
+  });
+});
+
 export const AgeGroupCategoryController = {
   createCategory,
   getAllCategories,
@@ -80,4 +92,5 @@ export const AgeGroupCategoryController = {
   getSingleCategory,
   updateCategory,
   deleteCategory,
+  getSubCategories,
 };

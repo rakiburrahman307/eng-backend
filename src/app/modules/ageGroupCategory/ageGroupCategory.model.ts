@@ -12,13 +12,17 @@ const ageGroupCategorySchema = new Schema<
     name: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
     slug: {
       type: String,
       trim: true,
       lowercase: true,
+    },
+    parentCategory: {
+      type: Schema.Types.ObjectId,
+      ref: 'AgeGroupCategory',
+      default: null,
     },
     status: {
       type: String,
@@ -32,8 +36,17 @@ const ageGroupCategorySchema = new Schema<
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
+
+// Virtual for subcategories
+ageGroupCategorySchema.virtual('subCategories', {
+  ref: 'AgeGroupCategory',
+  localField: '_id',
+  foreignField: 'parentCategory',
+});
 
 // Generate slug before saving
 ageGroupCategorySchema.pre('save', function () {

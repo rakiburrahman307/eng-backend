@@ -5,6 +5,7 @@ import { AgeGroupCategoryController } from './ageGroupCategory.controller';
 
 const router = express.Router();
 
+// GET all categories with subcategories (public)
 router
   .route('/')
   .post(
@@ -13,10 +14,17 @@ router
   )
   .get(AgeGroupCategoryController.getAllCategories);
 
+// GET all categories for admin (with inactive ones)
 router.get(
   '/admin',
   auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
   AgeGroupCategoryController.getAllCategoriesForAdmin
+);
+
+// GET subcategories by parent ID
+router.get(
+  '/:parentId/sub-categories',
+  AgeGroupCategoryController.getSubCategories
 );
 
 router
