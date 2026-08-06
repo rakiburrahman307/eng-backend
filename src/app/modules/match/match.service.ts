@@ -13,6 +13,9 @@ import { VenueCategory } from "../venueCategory/venueCategory.model";
 import ApiError from "../../../errors/ApiErrors";
 import { StatusCodes } from "http-status-codes";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
+import { MatchResult } from "../matchResult/matchResult.model";
+import { PlayerStats } from "../playerStats/playerStats.model";
+import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 
 const formatMatchVenue = async (matchItem: any) => {
   if (!matchItem) return matchItem;
@@ -566,7 +569,16 @@ const updateMatchTimerInDB = async (
 
 const modifyMatchScoreInDB = async (
   id: string,
-  payload: { homeScore: number; awayScore: number }
+  payload: {
+    homeScore: number;
+    awayScore: number;
+    goalScorers?: Array<{
+      team: string;
+      player: string;
+      assistPlayer?: string;
+      minute?: number;
+    }>;
+  }
 ) => {
   const match = await Match.findById(id);
 
@@ -613,6 +625,83 @@ const modifyMatchScoreInDB = async (
       await Team.findByIdAndUpdate(match.awayTeam, { $inc: { coin: drawCoin, marketValue: drawMV } });
     } else {
       await Team.findByIdAndUpdate(newWinnerTeam, { $inc: { coin: winCoin, marketValue: winMV } });
+    }
+  }
+
+  // Handle assigned goal scorers for player stats, coins & notifications
+  if (Array.isArray(payload.goalScorers) && payload.goalScorers.length > 0) {
+    const pe = await PlayerEconomy.findOne();
+    const goalCoin = pe?.goal?.coin ?? 2000;
+    const goalMV = pe?.goal?.marketValue ?? 20000;
+    const assistCoin = pe?.assist?.coin ?? 1000;
+    const assistMV = pe?.assist?.marketValue ?? 10000;
+
+    for (const scorer of payload.goalScorers) {
+      if (scorer.player && scorer.team) {
+        const min = Number(scorer.minute) || 1;
+
+        // 1. Create MatchResult
+        await MatchResult.create({
+          match: match._id,
+          league: match.league,
+          team: scorer.team,
+          player: scorer.player,
+          eventType: 'goal',
+          minute: min,
+          addedBy: scorer.player,
+          eventMeta: scorer.assistPlayer ? { assist: scorer.assistPlayer } : undefined,
+        });
+
+        // 2. Increment player stats
+        await PlayerStats.findOneAndUpdate(
+          { player: scorer.player },
+          { $inc: { goals: 1 }, $set: { team: scorer.team } },
+          { upsert: true, new: true }
+        );
+
+        // 3. Increment player coins & MV
+        const scorerUser = await User.findById(scorer.player);
+        if (scorerUser) {
+          await User.findByIdAndUpdate(scorer.player, {
+            $inc: { engCoine: goalCoin, marketValue: goalMV }
+          });
+        }
+
+        // 4. Handle assist if provided
+        if (scorer.assistPlayer) {
+          await PlayerStats.findOneAndUpdate(
+            { player: scorer.assistPlayer },
+            { $inc: { assists: 1 } },
+            { upsert: true, new: true }
+          );
+          const assistUser = await User.findById(scorer.assistPlayer);
+          if (assistUser) {
+            await User.findByIdAndUpdate(scorer.assistPlayer, {
+              $inc: { engCoine: assistCoin, marketValue: assistMV }
+            });
+          }
+        }
+
+        // 5. Send notifications
+        try {
+          await NotificationQueueHelper.sendNotification(
+            String(scorer.player),
+            `Congratulations! You scored a goal at minute ${min}.`,
+            "Goal Scored! ⚽",
+            NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED
+          );
+          if (scorer.assistPlayer) {
+            await NotificationQueueHelper.sendNotification(
+              String(scorer.assistPlayer),
+              `Well done! You assisted a goal at minute ${min}.`,
+              "Assist Recorded! 👟⚽",
+              NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED
+            );
+          }
+        } catch (err) {
+          console.error("Failed to send goal notification", err);
+        }
+      }
     }
   }
 

@@ -48,6 +48,12 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
         await handleSubscriptionDeleted(data);
         break;
 
+      case "invoice.payment_succeeded":
+        if (data.subscription) {
+          await handleSubscriptionUpdated({ id: data.subscription });
+        }
+        break;
+
       default:
         console.warn(`⚠️ Unhandled event: ${eventType}`);
         logger.warn(colors.yellow(`Unhandled event: ${eventType}`));

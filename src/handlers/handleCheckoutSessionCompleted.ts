@@ -9,45 +9,41 @@ import { NotificationQueueHelper } from '../helpers/bullMQ/bullHelper';
 import { USER_ROLES } from '../enums/user';
 
 export const handleCheckoutSessionCompleted = async (session: any) => {
-  const userId = session.client_reference_id as string | null;
+  const userId = (session.client_reference_id || session.metadata?.userId) as string | null;
+  const customerEmail = (session.customer_email || session.customer_details?.email) as string | null;
   const subscriptionId = session.subscription as string | null;
   const customerId = session.customer as string | null;
-
-  // If no client_reference_id, we can't reliably find the user — skip
-  if (!userId) {
-    console.warn('⚠️ checkout.session.completed received without client_reference_id — skipping');
-    return;
-  }
 
   if (!subscriptionId) {
     console.warn('⚠️ checkout.session.completed received without subscriptionId — skipping');
     return;
   }
 
-  // Find user directly by MongoDB ID — no email matching needed
-  const user = await User.findById(userId);
-  if (!user) {
-    console.error(`❌ User not found in DB for client_reference_id: ${userId}`);
-    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+  // 1. Find user by userId, metadata.userId, or customer Email
+  let user = null;
+  if (userId) {
+    user = await User.findById(userId);
+  }
+  if (!user && customerEmail) {
+    user = await User.findOne({ email: customerEmail.trim() });
   }
 
-  // Check if subscription already exists (idempotency guard)
+  if (!user) {
+    console.error(`❌ User not found in DB for checkout session: ${session.id}`);
+    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found for completed checkout session');
+  }
+
+  // 2. Check if this exact subscription ID already exists in DB
   const alreadyExists = await Subscription.findOne({ subscriptionId });
   if (alreadyExists) {
-    
-    return;
+    // If it's already active in DB, ensure user has access
+    if (alreadyExists.status === 'active' && (!(user as any).isSubscribed || !(user as any).hasAccess)) {
+      await User.findByIdAndUpdate(user._id, { isSubscribed: true, hasAccess: true });
+    }
+    return alreadyExists;
   }
 
-  // Check if user already has an active subscription
-  const activeSubscription = await Subscription.findOne({
-    user: user._id,
-    status: 'active',
-  });
-  if (activeSubscription) {
-    return;
-  }
-
-  // Retrieve full subscription details from Stripe
+  // 3. Retrieve full subscription details from Stripe
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   const priceId = subscription.items.data[0]?.price?.id;
 
@@ -70,17 +66,23 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
     ? subscription.items.data[0].price.unit_amount / 100
     : 0;
 
-  // Find package by stripePriceId
+  // Find package by priceId
   const pkg = await Package.findOne({ stripePriceId: priceId });
   if (!pkg) {
     console.error(`❌ Package not found for priceId: ${priceId}`);
     throw new ApiError(StatusCodes.NOT_FOUND, `Package not found for Stripe Price ID: ${priceId}`);
   }
 
-  // Create subscription in DB
+  // 4. Cancel any previous active subscription for this user
+  await Subscription.updateMany(
+    { user: user._id, status: 'active' },
+    { status: 'cancel' }
+  );
+
+  // 5. Create new active subscription in DB
   const newSub = await Subscription.create({
     customerId: customerId || subscription.customer,
-    price,
+    price: price || pkg.price,
     user: user._id,
     package: pkg._id,
     trxId,
@@ -91,8 +93,7 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
     status: 'active',
   });
 
-  // Activate user access and add package credit to coin (engCoine)
-  // ⚠️ status (APPROVED/REJECTED) is NOT changed here — admin must approve separately
+  // 6. Activate user access and add package credit to coin (engCoine) & marketValue
   const creditToAdd = Number(pkg.credit) || 0;
   const marketValueToAdd = creditToAdd * 100;
 
@@ -118,13 +119,17 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
     $inc: incData,
   });
 
-  // Queue push + in-app notification
-  await NotificationQueueHelper.sendNotification(
-    user._id.toString(),
-    `Your subscription for package "${pkg.title}" is now active. Enjoy all premium features!`,
-    'Subscription Activated! 🚀',
-    NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED
-  );
+  // 7. Queue push + in-app notification
+  try {
+    await NotificationQueueHelper.sendNotification(
+      user._id.toString(),
+      `Your subscription for package "${pkg.title}" is now active. Enjoy all premium features!`,
+      'Subscription Activated! 🚀',
+      NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED
+    );
+  } catch (notifErr) {
+    console.error('Failed to send subscription activation notification:', notifErr);
+  }
 
   return newSub;
 };

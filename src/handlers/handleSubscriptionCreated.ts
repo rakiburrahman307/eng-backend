@@ -9,44 +9,46 @@ import { USER_ROLES } from "../enums/user";
 import { NotificationQueueHelper } from "../helpers/bullMQ/bullHelper";
 
 export const handleSubscriptionCreated = async (data: any) => {
-
-
   const subscription = await stripe.subscriptions.retrieve(data.id);
-
-  
 
   const customer = (await stripe.customers.retrieve(
     subscription.customer as string
   )) as any;
 
-
-  if (!customer?.email) {
-    console.error("❌ Missing customer email");
-    throw new ApiError(400, "Customer email not found");
-  }
-
+  // 1. Idempotency check: if subscription already exists in DB, make sure user access is active
   const alreadyExists = await Subscription.findOne({
     subscriptionId: subscription.id,
   });
 
-
   if (alreadyExists) {
+    if (alreadyExists.status === "active") {
+      await User.findByIdAndUpdate(alreadyExists.user, { isSubscribed: true, hasAccess: true });
+    }
+    return alreadyExists;
+  }
 
+  // 2. Find user by email or metadata.userId
+  const userId = subscription.metadata?.userId || customer?.metadata?.userId;
+  let user = null;
+  if (userId) {
+    user = await User.findById(userId);
+  }
+  if (!user && customer?.email) {
+    user = await User.findOne({ email: customer.email });
+  }
+
+  if (!user) {
+    console.warn(`⚠️ handleSubscriptionCreated: User not found for customer email "${customer?.email}". Will rely on checkout.session.completed event for activation.`);
     return;
   }
 
   const priceId = subscription.items.data[0]?.price?.id;
 
-
-
   const invoice = subscription.latest_invoice
     ? await stripe.invoices.retrieve(subscription.latest_invoice as string)
     : null;
 
-
-
-  const trxId = (invoice as any)?.payment_intent || null;
-
+  const trxId = (invoice as any)?.payment_intent || subscription.id;
 
   const currentPeriodStart = new Date(
     subscription.current_period_start * 1000
@@ -56,47 +58,26 @@ export const handleSubscriptionCreated = async (data: any) => {
     subscription.current_period_end * 1000
   ).toISOString();
 
-
-
-  const user = await User.findOne({ email: customer.email });
-
- 
-
-  if (!user) {
-    console.warn(`⚠️ handleSubscriptionCreated: User not found for email "${customer.email}". Will rely on checkout.session.completed event for activation.`);
-    return;
-  }
-
   const pkg = await Package.findOne({
     stripePriceId: priceId
-    });
-
-
+  });
 
   if (!pkg) {
     console.error("❌ Package not found for priceId:", priceId);
     throw new ApiError(StatusCodes.NOT_FOUND, "Package not found");
   }
 
-  const active = await Subscription.findOne({
-    user: user._id,
-    status: "active",
-  });
-
-
-
-  if (active) {
-
-    return;
-  }
-
-
+  // Cancel any old active subscriptions for this user
+  await Subscription.updateMany(
+    { user: user._id, status: "active" },
+    { status: "cancel" }
+  );
 
   const newSub = await Subscription.create({
     customerId: customer.id,
     price: subscription.items.data[0]?.price?.unit_amount
       ? subscription.items.data[0].price.unit_amount / 100
-      : 0,
+      : pkg.price,
     user: user._id,
     package: pkg._id,
     trxId,
@@ -107,13 +88,9 @@ export const handleSubscriptionCreated = async (data: any) => {
     status: "active",
   });
 
-
-
   const creditToAdd = Number(pkg.credit) || 0;
   const marketValueToAdd = creditToAdd * 100;
 
-  // Activate user access and add coins
-  // ⚠️ status (APPROVED/REJECTED) is NOT changed here — admin must approve separately
   const updateData: any = {
     isSubscribed: true,
     hasAccess: true,
@@ -136,17 +113,17 @@ export const handleSubscriptionCreated = async (data: any) => {
     $inc: incData,
   });
 
-
-
-
-
-  // 🔔 Queue push + in-app notification to User about subscription activation
-  await NotificationQueueHelper.sendNotification(
-    user._id.toString(),
-    `Your subscription for package "${pkg.title}" is now active. Enjoy all premium features!`,
-    "Subscription Activated! 🚀",
-    NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED
-  );
+  // 🔔 Queue push + in-app notification
+  try {
+    await NotificationQueueHelper.sendNotification(
+      user._id.toString(),
+      `Your subscription for package "${pkg.title}" is now active. Enjoy all premium features!`,
+      "Subscription Activated! 🚀",
+      NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED
+    );
+  } catch (err) {
+    console.error("Failed to send subscription notification:", err);
+  }
 
   return newSub;
 };

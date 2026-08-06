@@ -9,7 +9,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "queue:stats": "ts-node src/scripts/queueStats.ts",
     "queue:clean": "ts-node src/scripts/cleanQueues.ts",
-    "stripe": "stripe listen --forward-to=https://rakibur5002.binarybards.online/api/v1/stripe/webhook"
+    "stripe": "stripe listen --forward-to=https://rakibur5002.binarybards.online/api/v1/payment/webhook"
   },
   "author": "Md Rakibur Rahman",
   "license": "ISC",

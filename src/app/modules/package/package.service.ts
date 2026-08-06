@@ -252,6 +252,16 @@ const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail
         cancel_url: `${config.stripe.paymentSuccess || 'http://localhost:3000/success'}`,
         customer_email: userEmail,
         client_reference_id: userId,
+        subscription_data: {
+          metadata: {
+            userId,
+            packageId,
+          },
+        },
+        metadata: {
+          userId,
+          packageId,
+        },
     });
 
     if (!session.url) {

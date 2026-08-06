@@ -15,9 +15,6 @@ export function configureMiddlewares(app: Express): void {
      app.post(
           '/api/v1/payment/webhook',
           express.raw({ type: 'application/json' }),
-          (req, res, next) => {
-               next();
-          },
           handleStripeWebhook
      );
 
