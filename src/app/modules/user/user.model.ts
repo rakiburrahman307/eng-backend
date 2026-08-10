@@ -1,6 +1,6 @@
 import { model, Schema } from "mongoose";
 import { USER_ROLES } from "../../../enums/user";
-import { IUser, UserModal, AGE_GROUP } from "./user.interface";
+import { IUser, UserModal } from "./user.interface";
 import bcrypt from "bcrypt";
 import config from "../../../config";
 
@@ -155,11 +155,36 @@ const userSchema = new Schema<IUser, UserModal>(
       type: Boolean,
       default: false,
     },
+    parentId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: false,
+      default: null,
+    },
+    previousClub: {
+      type: String,
+      default: "",
+    },
+    rejectionReason: {
+      type: String,
+      default: "",
+    },
+    emergencyEmail: {
+      type: String,
+      default: "",
+    },
+    emergencyPhone: {
+      type: String,
+      default: "",
+    },
   },
   {
     timestamps: true,
   }
 );
+
+userSchema.index({ parentId: 1, role: 1 });
+userSchema.index({ status: 1 });
 
 //
 // ✅ STATIC METHODS

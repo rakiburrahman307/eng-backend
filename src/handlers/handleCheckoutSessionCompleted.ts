@@ -73,17 +73,27 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
     throw new ApiError(StatusCodes.NOT_FOUND, `Package not found for Stripe Price ID: ${priceId}`);
   }
 
-  // 4. Cancel any previous active subscription for this user
+  // 4. Identify target user (Child Player or Parent)
+  const targetUserId = session.metadata?.targetUserId || session.subscription_data?.metadata?.targetUserId || userId;
+  let targetUser = user;
+  if (targetUserId && targetUserId.toString() !== user._id.toString()) {
+    const foundTarget = await User.findById(targetUserId);
+    if (foundTarget) {
+      targetUser = foundTarget;
+    }
+  }
+
+  // 5. Cancel any previous active subscription for targetUser or Parent
   await Subscription.updateMany(
-    { user: user._id, status: 'active' },
+    { user: { $in: [targetUser._id, user._id] }, status: 'active' },
     { status: 'cancel' }
   );
 
-  // 5. Create new active subscription in DB
+  // 6. Create new active subscription in DB linked to targetUser (Player)
   const newSub = await Subscription.create({
     customerId: customerId || subscription.customer,
     price: price || pkg.price,
-    user: user._id,
+    user: targetUser._id,
     package: pkg._id,
     trxId,
     subscriptionId,
@@ -93,7 +103,6 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
     status: 'active',
   });
 
-  // 6. Activate user access and add package credit to coin (engCoine) & marketValue
   const creditToAdd = Number(pkg.credit) || 0;
   const marketValueToAdd = creditToAdd * 100;
 
@@ -102,22 +111,26 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
     hasAccess: true,
   };
 
-  if (user.role === USER_ROLES.PLAYER) {
+  if (targetUser.role === USER_ROLES.PLAYER || targetUser.parentId) {
     updateData.blueTick = true;
   }
 
   const incData: any = {
     engCoine: creditToAdd,
+    marketValue: marketValueToAdd,
   };
 
-  if (user.role === USER_ROLES.PLAYER) {
-    incData.marketValue = marketValueToAdd;
-  }
-
-  await User.findByIdAndUpdate(user._id, {
+  await User.findByIdAndUpdate(targetUser._id, {
     $set: updateData,
     $inc: incData,
   });
+
+  // Ensure Parent account also has active access
+  if (user._id.toString() !== targetUser._id.toString()) {
+    await User.findByIdAndUpdate(user._id, {
+      $set: { isSubscribed: true, hasAccess: true },
+    });
+  }
 
   // 7. Queue push + in-app notification
   try {

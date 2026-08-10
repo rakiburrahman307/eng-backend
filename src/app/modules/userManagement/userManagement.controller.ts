@@ -71,10 +71,22 @@ const getAllManagers = catchAsync(async (req: Request, res: Response) => {
 });
 
 
+const getUserAnalytics = catchAsync(async (req: Request, res: Response) => {
+  const result = await UserManagementService.getUserAnalyticsFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "User management analytics retrieved successfully",
+    data: result,
+  });
+});
+
 export const UserManagementController = {
   getAllUsers,
   toggleVerified,
-    deleteUser,
+  deleteUser,
   getAllReferees,
-  getAllManagers
+  getAllManagers,
+  getUserAnalytics,
 };

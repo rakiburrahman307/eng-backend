@@ -7,14 +7,22 @@ import ApiError from '../../../errors/ApiErrors';
 
 // register user
 const createUser = catchAsync( async (req: Request, res: Response, next: NextFunction) => {
-    const { ...userData } = req.body;
+    const rawData = req.body?.data ? (typeof req.body.data === 'string' ? JSON.parse(req.body.data) : req.body.data) : req.body;
+    const userData = { ...rawData };
+    if (!userData.role) {
+        userData.role = 'PLAYER';
+    }
+    if (userData.phoneNumber && !userData.phone) {
+        userData.phone = userData.phoneNumber;
+    }
     const result = await UserService.createUserToDB(userData);
 
     sendResponse(res, {
         success: true,
         statusCode: StatusCodes.OK,
         message: 'Your account has been successfully created. Verify Your Email By OTP. Check your email',
-    })
+        data: result,
+    });
 });
 
 // register admin
@@ -143,24 +151,24 @@ const createPlayer = catchAsync(async (req: Request, res: Response) => {
         throw new ApiError(400, "Invalid JSON format in request body");
     }
 
-    // 🔥 REQUIRED FIELD CHECK
-    const requiredFields = [
-        "firstName",
-        "lastName",
-        "dateOfBirth",
+    // // 🔥 REQUIRED FIELD CHECK
+    // const requiredFields = [
+    //     "firstName",
+    //     "lastName",
+    //     "dateOfBirth",
         
-    ];
+    // ];
 
-    const missingFields = requiredFields.filter(
-        (field) => !parsedData?.[field]
-    );
+    // const missingFields = requiredFields.filter(
+    //     (field) => !parsedData?.[field]
+    // );
 
-    if (missingFields.length > 0) {
-        throw new ApiError(
-            400,
-            `Missing required fields: ${missingFields.join(", ")}`
-        );
-    }
+    // if (missingFields.length > 0) {
+    //     throw new ApiError(
+    //         400,
+    //         `Missing required fields: ${missingFields.join(", ")}`
+    //     );
+    // }
 
     // 🚨 PLAYER ROLE SPECIFIC VALIDATION
     if (role === "PLAYER") {

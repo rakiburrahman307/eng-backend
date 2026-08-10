@@ -9,6 +9,9 @@ import { StatusCodes } from "http-status-codes";
 import { USER_ROLES } from "../../../enums/user";
 import ApiError from "../../../errors/ApiErrors";
 
+import { Subscription } from "../subscription/subscription.model";
+import { isPremiumPlayerPackage } from "../../../helpers/packageHelper";
+
 const getPlayerDashboardFromDB = async (playerId: string) => {
   const playerObjectId = new mongoose.Types.ObjectId(playerId);
 
@@ -81,15 +84,31 @@ const getPlayerDashboardFromDB = async (playerId: string) => {
     .limit(10)
     .populate("match team");
 
+  const activeSub = await Subscription.findOne({
+    user: player._id,
+    status: "active",
+  }).populate("package").lean();
+
+  const pkg: any = activeSub?.package;
+  const isPremium = await isPremiumPlayerPackage(pkg);
+
+  if (!isPremium) {
+    playerData.engCoine = null;
+    playerData.marketValue = null;
+  }
+
   return {
     player: playerData,
-    stats: {
+    activeSubscription: activeSub || null,
+    activePackage: activeSub?.package || null,
+    isPremium,
+    stats: isPremium ? {
       goals,
       assists,
       yellowCards,
       redCards,
-    },
-    recentMatches,
+    } : null,
+    recentMatches: isPremium ? recentMatches : [],
   };
 };
 

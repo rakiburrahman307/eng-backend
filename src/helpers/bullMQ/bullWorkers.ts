@@ -1,6 +1,8 @@
 import { Worker } from 'bullmq';
 import colors from 'colors';
 import { Notification } from '../../app/modules/notification/notification.model';
+import { User } from '../../app/modules/user/user.model';
+import { Subscription } from '../../app/modules/subscription/subscription.model';
 import { redisConnection } from './redisConnection';
 import { emailTemplate } from '../../shared/emailTemplate';
 import { errorLogger, logger } from '../../shared/logger';
@@ -188,6 +190,41 @@ export const cleanupWorker = new Worker<CleanupJobData>(
 
                          deletedCount = allResult.deletedCount || 0;
                          logger.info(colors.cyan(`🗑️  Deleted ${deletedCount} very old notifications`));
+                         break;
+
+                    case 'subscription-sync':
+                         const now = new Date();
+                         const mistakenlyExpired = await Subscription.find({
+                              status: { $in: ['expired', 'cancel'] },
+                         }).populate('user');
+
+                         let restoredCount = 0;
+                         for (const sub of mistakenlyExpired) {
+                              if (sub.currentPeriodEnd) {
+                                   const endDate = new Date(sub.currentPeriodEnd);
+                                   if (!isNaN(endDate.getTime()) && now < endDate) {
+                                        sub.status = 'active';
+                                        await sub.save();
+                                        if (sub.user) {
+                                             await User.findByIdAndUpdate((sub.user as any)._id || sub.user, {
+                                                  isSubscribed: true,
+                                                  hasAccess: true,
+                                             });
+                                        }
+                                        restoredCount++;
+                                   }
+                              }
+                         }
+                         logger.info(colors.cyan(`🔄 [BullMQ] Restored ${restoredCount} valid subscriptions back to 'active'`));
+                         break;
+
+                    case 'unverified-users':
+                         const cutoffDate = new Date(Date.now() - 5 * 60 * 1000);
+                         const delRes = await User.deleteMany({
+                              verified: false,
+                              createdAt: { $lt: cutoffDate },
+                         });
+                         logger.info(colors.cyan(`🗑️  [BullMQ] Deleted ${delRes.deletedCount || 0} unverified accounts`));
                          break;
 
                     default:

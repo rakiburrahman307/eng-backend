@@ -9,7 +9,6 @@ export enum USER_ROLES {
     OTHER_CLUBS = 'OTHER_CLUBS',
     REFEREE = 'REFEREE',
     TOURNAMENT_PLAYER = 'TOURNAMENT_PLAYER'
-
 }
 
 export const ROLE_GROUPS = {

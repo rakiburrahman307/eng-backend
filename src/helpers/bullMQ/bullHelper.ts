@@ -206,3 +206,28 @@ export class SMSQueueHelper {
           }
      }
 }
+
+// ==========================================
+// CLEANUP & REPEATABLE QUEUE HELPERS (BULLMQ)
+// ==========================================
+export class CleanupQueueHelper {
+     static async scheduleRepeatableJobs() {
+          try {
+               await cleanupQueue.add(
+                    'subscription-sync',
+                    { type: 'subscription-sync' },
+                    { repeat: { pattern: '0 0 * * *' } } as any
+               );
+
+               await cleanupQueue.add(
+                    'unverified-users',
+                    { type: 'unverified-users' },
+                    { repeat: { pattern: '*/15 * * * *' } } as any
+               );
+
+               logger.info(colors.green('🚀 BullMQ repeatable background jobs scheduled successfully in Redis'));
+          } catch (error) {
+               logger.error(colors.red('Failed to schedule BullMQ background jobs:'), error);
+          }
+     }
+}

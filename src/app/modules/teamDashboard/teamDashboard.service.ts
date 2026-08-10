@@ -11,27 +11,28 @@ import { USER_ROLES } from "../../../enums/user";
 const getTeamDashboardFromDB = async (teamId: string) => {
   const teamObjectId = new mongoose.Types.ObjectId(teamId);
 
-  // 👥 PLAYERS (Only PLAYER / TOURNAMENT_PLAYER roles)
-  const playersAgg = await User.aggregate([
-    {
-      $match: {
-        selectTeam: teamObjectId,
-        role: { $in: [USER_ROLES.PLAYER, USER_ROLES.TOURNAMENT_PLAYER] },
-      },
-    },
-    {
-      $project: {
-        _id: 1,
-        firstName: 1,
-        lastName: 1,
-        userId: "$_id",
-        profile: 1,
-        position: 1,
-      },
-    },
-  ]);
+  // 👥 PLAYERS (Only genuine Player profiles, exclude Parent accounts)
+  const rawPlayers = await User.find({
+    $or: [{ selectTeam: teamObjectId }, { selectTeam: teamId }],
+    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.TOURNAMENT_PLAYER] },
+  })
+    .select("_id firstName lastName userName profile position ageGroup dateOfBirth selectTeam status emergencyEmail emergencyPhone")
+    .lean();
 
-  const totalPlayers = playersAgg.length;
+  const players = rawPlayers.map((p: any) => ({
+    _id: p._id,
+    userId: p._id,
+    firstName: p.firstName || null,
+    lastName: p.lastName || null,
+    userName: p.userName || (p.firstName ? `${p.firstName} ${p.lastName || ''}`.trim() : 'Player'),
+    profile: p.profile || null,
+    position: p.position || 'BENCH',
+    ageGroup: p.ageGroup || null,
+    dateOfBirth: p.dateOfBirth || null,
+    status: p.status || 'APPROVED',
+  }));
+
+  const totalPlayers = players.length;
 
   // 📅 UPCOMING MATCHES
   const upcomingMatches = await Match.find({
@@ -67,7 +68,7 @@ const getTeamDashboardFromDB = async (teamId: string) => {
   return {
     team,
     totalPlayers,
-    players: playersAgg,
+    players,
     upcomingMatches,
     recentMatches,
     matchResults,

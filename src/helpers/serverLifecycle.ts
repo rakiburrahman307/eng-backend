@@ -6,9 +6,9 @@ import colors from 'colors';
 import config from '../config';
 import { logger, errorLogger } from '../shared/logger';
 import seedSuperAdmin from '../DB';
-import { scheduleSubscriptionExpirationJob } from '../shared/expirePlayerSubscriptions';
 import { connectToRedis, disconnectRedis, createSocketRedisClients } from '../DB/redis';
 import { setupQueueEvents, setupWorkerEvents, closeBullMQ } from '../DB/bullMQ';
+import { CleanupQueueHelper } from './bullMQ/bullHelper';
 import { socketHelper } from './socketHelper';
 import { allowedOrigins } from './appLoaders';
 
@@ -38,21 +38,14 @@ export async function connectServices(): Promise<void> {
           throw redisError;
      }
 
-     // 4. Initialize BullMQ Queue & Worker Events
+     // 4. Initialize BullMQ Queue & Worker Events + Schedule Repeatable Jobs
      try {
           setupQueueEvents();
           setupWorkerEvents();
+          await CleanupQueueHelper.scheduleRepeatableJobs();
      } catch (bullMQError) {
           errorLogger.error(colors.red('🤢 Failed to initialize BullMQ:'), bullMQError);
           throw bullMQError;
-     }
-
-     // 5. Start Subscription Expiration Job
-     try {
-          scheduleSubscriptionExpirationJob();
-     } catch (cronError) {
-          errorLogger.error(colors.red('🤢 Failed to schedule subscription expiration job:'), cronError);
-          throw cronError;
      }
 }
 

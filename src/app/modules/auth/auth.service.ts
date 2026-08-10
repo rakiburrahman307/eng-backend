@@ -3,6 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import { JwtPayload, Secret } from 'jsonwebtoken';
 import config from '../../../config';
 import ApiError from '../../../errors/ApiErrors';
+import { USER_ROLES } from '../../../enums/user';
 import { jwtHelper } from '../../../helpers/jwtHelper';
 import { EmailQueueHelper } from '../../../helpers/bullMQ/bullHelper';
 import {
@@ -39,18 +40,18 @@ const loginUserFromDB = async (payload: ILoginData) => {
     );
   }
 
-  // ✅ Block login if profile not yet approved by admin
-  // Only applies to PLAYER, MANAGER, REFEREE, OTHER_CLUBS
-  const rolesRequiringApproval = ['PLAYER', 'MANAGER', 'REFEREE', 'OTHER_CLUBS'];
-  if (
-    rolesRequiringApproval.includes(isExistUser.role) &&
-    isExistUser.status !== 'APPROVED'
-  ) {
-    throw new ApiError(
-      StatusCodes.FORBIDDEN,
-      'Your account is pending admin approval. Please wait for an admin to approve your profile before logging in.'
-    );
-  }
+  // ✅ Only MANAGER & REFEREE require admin account approval before login
+  // Parent (Account Owner) & OTHER_CLUBS log in immediately upon email verification
+//   const rolesRequiringApproval = ['MANAGER', 'REFEREE'];
+//   if (
+//     rolesRequiringApproval.includes(isExistUser.role) &&
+//     isExistUser.status !== 'APPROVED'
+//   ) {
+//     throw new ApiError(
+//       StatusCodes.FORBIDDEN,
+//       'Your account is pending admin approval. Please wait for an admin to approve your profile before logging in.'
+//     );
+//   }
 
   // check password
   if (
@@ -155,15 +156,23 @@ const verifyEmailToDB = async (payload: IVerifyEmail) => {
     // =========================
     if (!isExistUser.verified) {
 
+        const updatePayload: any = {
+            verified: true,
+            authentication: {
+                oneTimeCode: null,
+                expireAt: null,
+            }
+        };
+
+        // Parent / Account owner OTP email verification automatically approves account status
+        const rolesAutoApproved = ['USER', 'PARENT', USER_ROLES.OTHER_CLUBS];
+        if (rolesAutoApproved.includes(isExistUser.role) || (!isExistUser.parentId && isExistUser.role !== USER_ROLES.MANAGER && isExistUser.role !== USER_ROLES.REFEREE)) {
+            updatePayload.status = 'APPROVED';
+        }
+
         await User.findOneAndUpdate(
             { _id: isExistUser._id },
-            {
-                verified: true,
-                authentication: {
-                    oneTimeCode: null,
-                    expireAt: null,
-                }
-            }
+            updatePayload
         );
 
         // 🔥 SAME LOGIN TOKEN LIKE LOGIN API

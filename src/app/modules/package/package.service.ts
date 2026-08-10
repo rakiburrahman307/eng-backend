@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import { createSubscriptionProduct } from "../../../helpers/createSubscriptionProductHelper";
 import stripe from "../../../config/stripe";
 import config from "../../../config";
+import { User } from "../user/user.model";
 
 const createPackageToDB = async (payload: IPackage): Promise<IPackage | null> => {
     // Set default permissions based on packageType if not explicitly passed
@@ -219,13 +220,27 @@ const getActivePackagesFromDB = async (
 
   return result;
 };
-const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail: string): Promise<{ checkoutUrl: string }> => {
+const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail: string, playerId?: string): Promise<{ checkoutUrl: string }> => {
     if (!mongoose.Types.ObjectId.isValid(packageId)) {
         throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid package ID');
     }
 
     if (!userEmail) {
         throw new ApiError(StatusCodes.BAD_REQUEST, 'User email is required');
+    }
+
+    // If playerId provided, verify ownership and APPROVED status
+    if (playerId) {
+        if (!mongoose.Types.ObjectId.isValid(playerId)) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid player ID');
+        }
+        const player = await User.findById(playerId);
+        if (!player) {
+            throw new ApiError(StatusCodes.NOT_FOUND, 'Player profile not found');
+        }
+        if (!player.parentId || player.parentId.toString() !== userId.toString()) {
+            throw new ApiError(StatusCodes.FORBIDDEN, 'You can only register players belonging to your account');
+        }
     }
 
     const pkg = await Package.findById(packageId);
@@ -256,11 +271,13 @@ const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail
           metadata: {
             userId,
             packageId,
+            targetUserId: playerId || userId,
           },
         },
         metadata: {
           userId,
           packageId,
+          targetUserId: playerId || userId,
         },
     });
 

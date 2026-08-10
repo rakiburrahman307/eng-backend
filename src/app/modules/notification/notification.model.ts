@@ -18,7 +18,7 @@ const notificationSchema = new Schema<INotification>(
     },
     type: {
       type: String,
-      enum: Object.values(NOTIFICATION_TYPE),
+      required: true,
       default: NOTIFICATION_TYPE.GENERAL,
     },
     isRead: {

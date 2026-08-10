@@ -6,15 +6,36 @@ import { User } from "../user/user.model";
 
 // GET ALL USERS
 const getAllUsersFromDB = async (query: Record<string, any>) => {
+  const queryObj = { ...query };
+  const filterQuery: Record<string, any> = {
+    role: { $ne: USER_ROLES.SUPER_ADMIN },
+  };
+
+  if (queryObj.role === 'PARENT') {
+    filterQuery.parentId = null;
+    filterQuery.email = { $ne: null };
+    filterQuery.role = { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER, USER_ROLES.REFEREE, USER_ROLES.OTHER_CLUBS] };
+    filterQuery.position = { $exists: false };
+    filterQuery.dateOfBirth = { $exists: false };
+    delete queryObj.role;
+  } else if (queryObj.role === 'PENDING_REQUESTS' || queryObj.status === 'PENDING') {
+    filterQuery.status = 'PENDING';
+    delete queryObj.role;
+    delete queryObj.status;
+  } else if (queryObj.role === 'ALL') {
+    delete queryObj.role;
+  }
+
   const userQuery = new QueryBuilder(
-    User.find({
-      role: { $ne: USER_ROLES.SUPER_ADMIN },
-    })
-      .select('userName role profile verified status document selectTeam firstName lastName email location')
-      .populate('selectTeam', 'teamName shortName teamLogo'),
-    query
+    User.find(filterQuery)
+      .select(
+        'userName role profile verified status document selectTeam firstName lastName email phone location parentId ageGroup dateOfBirth position strongFoot previousClub rejectionReason emergencyEmail emergencyPhone playForAcademy academyClubName isDevelopmentPlayer mediaConsent createdAt'
+      )
+      .populate('selectTeam', 'teamName shortName teamLogo')
+      .populate('parentId', 'firstName lastName email phone'),
+    queryObj
   )
-    .search(['userName', 'email', 'location'])
+    .search(['userName', 'email', 'firstName', 'lastName', 'phone', 'location'])
     .filter()
     .sort()
     .paginate()
@@ -63,27 +84,22 @@ const deleteUserFromDB = async (id: string) => {
 
 
 const getAllRefereesFromDB = async () => {
-  const result = await User.aggregate([
-    {
-      $match: {
-        role: USER_ROLES.REFEREE,
-      },
-    },
-    {
-      $project: {
-        _id: 1,
-        userName: 1,
-        firstName: {
-          $ifNull: ["$firstName", null],
-        },
-        lastName: {
-          $ifNull: ["$lastName", null],
-        },
-      },
-    },
-  ]);
+  const result = await User.find({
+    role: { $in: [USER_ROLES.REFEREE] },
+  })
+    .select('_id userName firstName lastName email phone profile status')
+    .lean();
 
-  return result;
+  return result.map((r: any) => {
+    const fullName = r.firstName ? `${r.firstName} ${r.lastName || ''}`.trim() : '';
+    const displayName = fullName || r.userName || r.name || r.email || `Referee (${r._id.toString().slice(-4)})`;
+    return {
+      ...r,
+      userName: displayName,
+      name: displayName,
+      displayName,
+    };
+  });
 };
 
 const getAllManagersFromDB = async () => {
@@ -94,11 +110,76 @@ const getAllManagersFromDB = async () => {
   return result;
 };
 
+// GET USER MANAGEMENT ANALYTICS
+const getUserAnalyticsFromDB = async () => {
+  const [
+    totalUsers,
+    totalParents,
+    totalPlayers,
+    pendingRequests,
+    approvedPlayers,
+    rejectedPlayers,
+    totalManagers,
+    totalClubs,
+    totalReferees,
+    verifiedUsers,
+  ] = await Promise.all([
+    User.countDocuments({ role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] } }),
+    User.countDocuments({
+      parentId: null,
+      email: { $ne: null },
+      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER, USER_ROLES.REFEREE, USER_ROLES.OTHER_CLUBS] },
+      position: { $exists: false },
+      dateOfBirth: { $exists: false },
+    }),
+    User.countDocuments({
+      $or: [
+        { parentId: { $ne: null } },
+        { password: null },
+        { email: null },
+      ],
+      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
+    }),
+    User.countDocuments({
+      status: "PENDING",
+      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
+    }),
+    User.countDocuments({
+      status: "APPROVED",
+      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
+      $or: [{ parentId: { $ne: null } }, { password: null }, { email: null }],
+    }),
+    User.countDocuments({
+      status: "REJECTED",
+      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
+    }),
+    User.countDocuments({ role: USER_ROLES.MANAGER }),
+    User.countDocuments({
+      role: USER_ROLES.OTHER_CLUBS,
+    }),
+    User.countDocuments({ role: USER_ROLES.REFEREE }),
+    User.countDocuments({ verified: true, role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] } }),
+  ]);
+
+  return {
+    totalUsers,
+    totalParents,
+    totalPlayers,
+    pendingRequests,
+    approvedPlayers,
+    rejectedPlayers,
+    totalManagers,
+    totalClubs,
+    totalReferees,
+    verifiedUsers,
+  };
+};
 
 export const UserManagementService = {
   getAllUsersFromDB,
   toggleVerifiedToDB,
-    deleteUserFromDB,
+  deleteUserFromDB,
   getAllRefereesFromDB,
-  getAllManagersFromDB
+  getAllManagersFromDB,
+  getUserAnalyticsFromDB,
 };

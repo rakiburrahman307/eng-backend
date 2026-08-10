@@ -7,6 +7,7 @@ import { Subscription } from "../app/modules/subscription/subscription.model";
 import { NOTIFICATION_TYPE } from "../app/modules/notification/notification.interface";
 import { USER_ROLES } from "../enums/user";
 import { NotificationQueueHelper } from "../helpers/bullMQ/bullHelper";
+import { isPremiumPlayerPackage } from "../helpers/packageHelper";
 
 export const handleSubscriptionCreated = async (data: any) => {
   const subscription = await stripe.subscriptions.retrieve(data.id);
@@ -67,9 +68,18 @@ export const handleSubscriptionCreated = async (data: any) => {
     throw new ApiError(StatusCodes.NOT_FOUND, "Package not found");
   }
 
-  // Cancel any old active subscriptions for this user
+  const targetUserId = subscription.metadata?.targetUserId || customer?.metadata?.targetUserId || userId;
+  let targetUser = user;
+  if (targetUserId && targetUserId.toString() !== user._id.toString()) {
+    const foundTarget = await User.findById(targetUserId);
+    if (foundTarget) {
+      targetUser = foundTarget;
+    }
+  }
+
+  // Cancel any old active subscriptions for targetUser or Parent
   await Subscription.updateMany(
-    { user: user._id, status: "active" },
+    { user: { $in: [targetUser._id, user._id] }, status: "active" },
     { status: "cancel" }
   );
 
@@ -78,7 +88,7 @@ export const handleSubscriptionCreated = async (data: any) => {
     price: subscription.items.data[0]?.price?.unit_amount
       ? subscription.items.data[0].price.unit_amount / 100
       : pkg.price,
-    user: user._id,
+    user: targetUser._id,
     package: pkg._id,
     trxId,
     subscriptionId: subscription.id,
@@ -88,30 +98,35 @@ export const handleSubscriptionCreated = async (data: any) => {
     status: "active",
   });
 
-  const creditToAdd = Number(pkg.credit) || 0;
-  const marketValueToAdd = creditToAdd * 100;
+  const isPremium = await isPremiumPlayerPackage(pkg);
+
+  const creditToAdd = isPremium ? (Number(pkg.credit) || 0) : 0;
+  const marketValueToAdd = isPremium ? (creditToAdd * 100) : 0;
 
   const updateData: any = {
     isSubscribed: true,
     hasAccess: true,
   };
 
-  if (user.role === USER_ROLES.PLAYER) {
+  if (targetUser.role === USER_ROLES.PLAYER || targetUser.parentId) {
     updateData.blueTick = true;
   }
 
   const incData: any = {
     engCoine: creditToAdd,
+    marketValue: marketValueToAdd,
   };
 
-  if (user.role === USER_ROLES.PLAYER) {
-    incData.marketValue = marketValueToAdd;
-  }
-
-  await User.findByIdAndUpdate(user._id, {
+  await User.findByIdAndUpdate(targetUser._id, {
     $set: updateData,
     $inc: incData,
   });
+
+  if (user._id.toString() !== targetUser._id.toString()) {
+    await User.findByIdAndUpdate(user._id, {
+      $set: { isSubscribed: true, hasAccess: true },
+    });
+  }
 
   // 🔔 Queue push + in-app notification
   try {

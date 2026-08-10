@@ -60,6 +60,11 @@ export type IUser = {
     academyClubName?: string;
     isDevelopmentPlayer?: boolean;
     mediaConsent?: boolean;
+    parentId?: Types.ObjectId;
+    previousClub?: string;
+    rejectionReason?: string;
+    emergencyEmail?: string;
+    emergencyPhone?: string;
 }
 
 export type UserModal = {

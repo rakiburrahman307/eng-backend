@@ -12,6 +12,13 @@ router.get(
   UserManagementController.getAllUsers
 );
 
+// GET USER ANALYTICS
+router.get(
+  "/analytics",
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  UserManagementController.getUserAnalytics
+);
+
 // GET REFEREES
 router.get("/referees", UserManagementController.getAllReferees);
 

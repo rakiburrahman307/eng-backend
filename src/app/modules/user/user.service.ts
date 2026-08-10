@@ -45,13 +45,28 @@ const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
         payload.marketValue = 0;
     }
 
+    // Roles requiring Admin Approval: PLAYER, MANAGER, REFEREE, OTHER_CLUBS
+    const rolesRequiringApproval = [
+      USER_ROLES.PLAYER,
+      USER_ROLES.MANAGER,
+      USER_ROLES.REFEREE,
+      USER_ROLES.OTHER_CLUBS,
+    ];
+
+    if (payload.role && rolesRequiringApproval.includes(payload.role as any)) {
+      payload.status = 'PENDING';
+    } else {
+      payload.status = 'APPROVED';
+    }
+
     const createUser = await User.create(payload);
     if (!createUser) {
         throw new ApiError(StatusCodes.BAD_REQUEST, 'Failed to create user');
     }
 
     const otp = generateOTP();
-    await EmailQueueHelper.sendWelcomeEmail(createUser.email!, createUser.userName || '', otp.toString());
+    const recipientName = createUser.firstName ? `${createUser.firstName} ${createUser.lastName || ''}`.trim() : (createUser.userName || createUser.email || 'User');
+    await EmailQueueHelper.sendWelcomeEmail(createUser.email!, recipientName, otp.toString());
 
     //save to DB
     const authentication = {
@@ -65,16 +80,16 @@ const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
     );
 
     // 🔔 Notify all admins: new user registered
-    await sendNotificationToAdmins({
-      title: "New User Registered",
-      message: `A new user (${createUser.email}) has registered on the platform.`,
-      type: NOTIFICATION_TYPE.USER_REGISTERED,
-      metadata: {
-        userId: createUser._id,
-        email: createUser.email,
-        role: createUser.role,
-      },
-    });
+    // await sendNotificationToAdmins({
+    //   title: "New User Registered",
+    //   message: `A new user (${createUser.email}) has registered on the platform.`,
+    //   type: NOTIFICATION_TYPE.USER_REGISTERED,
+    //   metadata: {
+    //     userId: createUser._id,
+    //     email: createUser.email,
+    //     role: createUser.role,
+    //   },
+    // });
 
     return createUser;
 };
@@ -236,7 +251,17 @@ const getPlayerByUserId = async (userId: string) => {
     );
   }
 
-  return { ...result, userId: result._id };
+  const activeSub = await Subscription.findOne({
+    user: userId,
+    status: "active",
+  }).populate("package");
+
+  return {
+    ...result,
+    userId: result._id,
+    activeSubscription: activeSub || null,
+    activePackage: activeSub?.package || null,
+  };
 };
 
 
@@ -343,6 +368,9 @@ const updateUserCoinOrMarketValue = async (
       throw new ApiError(StatusCodes.BAD_REQUEST, 'engCoine must be a non-negative number');
     }
     updateData.engCoine = payload.engCoine;
+    if (payload.marketValue === undefined) {
+      updateData.marketValue = payload.engCoine * 100;
+    }
   }
 
   if (payload.marketValue !== undefined) {

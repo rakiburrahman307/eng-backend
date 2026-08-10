@@ -488,12 +488,31 @@ const getAvailablePlayersFromDB = async (
   const managerObjectId = new mongoose.Types.ObjectId(managerId);
   const skip = (page - 1) * limit;
 
+  // Find requesting manager's assigned team
+  const managerTeam = await ManagerTeam.findOne({ manager: managerObjectId });
+  const managerTeamId = managerTeam ? managerTeam.team : null;
+
+  const matchConditions: any = {
+    status: 'APPROVED',
+    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.TOURNAMENT_PLAYER, USER_ROLES.OTHER_CLUBS] },
+    $or: [
+      { parentId: { $ne: null } },
+      { password: null },
+      { email: null },
+      { position: { $exists: true, $ne: null } },
+      { dateOfBirth: { $exists: true, $ne: null } },
+    ],
+  };
+
+  // Exclude players already belonging to requesting manager's own team
+  if (managerTeamId) {
+    matchConditions.selectTeam = { $ne: managerTeamId };
+  }
+
   const result = await User.aggregate([
-    // 1️⃣ Filter players
+    // 1️⃣ Filter players (Exclude Parent accounts & manager's own team players)
     {
-      $match: {
-        role: USER_ROLES.OTHER_CLUBS,
-      },
+      $match: matchConditions,
     },
 
     // 2️⃣ Approved transfers

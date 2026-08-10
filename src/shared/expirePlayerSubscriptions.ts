@@ -1,84 +1,59 @@
 import cron from 'node-cron';
 import { Subscription } from '../app/modules/subscription/subscription.model';
+import { User } from '../app/modules/user/user.model';
 import { USER_ROLES } from '../enums/user';
 import { logger } from './logger';
 import { sendNotification } from '../helpers/notificationsHelper';
 import { NOTIFICATION_TYPE } from '../app/modules/notification/notification.interface';
 
 /**
- * Cron Job to check and expire Player subscriptions.
- * Runs daily at midnight (00:00) and checks for July 31st deadline & period expiration.
+ * Subscription Status Sync & Recovery.
+ * Ensures active subscriptions with valid end dates remain 'active' in DB.
+ * Status cancellation and expiration are strictly managed via Stripe Webhooks.
  */
 export const scheduleSubscriptionExpirationJob = () => {
-  const checkAndExpireSubscriptions = async () => {
+  const syncAndRestoreSubscriptions = async () => {
     try {
       const now = new Date();
 
-      // Find all active subscriptions
-      const activeSubscriptions = await Subscription.find({ status: 'active' }).populate('user');
+      // Restore any subscriptions marked 'expired' or 'cancel' whose period has NOT ended yet
+      const mistakenlyExpired = await Subscription.find({
+        status: { $in: ['expired', 'cancel'] },
+      }).populate('user');
 
-      let expiredCount = 0;
-
-      for (const sub of activeSubscriptions) {
-        const userObj: any = sub.user;
-        if (!userObj) continue;
-
-        // Check if user is PLAYER or TOURNAMENT_PLAYER
-        const isPlayer =
-          userObj.role === USER_ROLES.PLAYER ||
-          userObj.role === USER_ROLES.TOURNAMENT_PLAYER;
-
-        if (!isPlayer) continue;
-
-        let shouldExpire = false;
-
-        // 1. Check if currentPeriodEnd has passed
+      let restoredCount = 0;
+      for (const sub of mistakenlyExpired) {
         if (sub.currentPeriodEnd) {
           const endDate = new Date(sub.currentPeriodEnd);
-          if (!isNaN(endDate.getTime()) && now >= endDate) {
-            shouldExpire = true;
+          if (!isNaN(endDate.getTime()) && now < endDate) {
+            sub.status = 'active';
+            await sub.save();
+            if (sub.user) {
+              await User.findByIdAndUpdate((sub.user as any)._id || sub.user, {
+                isSubscribed: true,
+                hasAccess: true,
+              });
+            }
+            restoredCount++;
           }
         }
-
-        // 2. Check July 31st deadline (July is month index 6)
-        const july31st = new Date(now.getFullYear(), 6, 31, 23, 59, 59);
-        if (now >= july31st) {
-          shouldExpire = true;
-        }
-
-        if (shouldExpire) {
-          sub.status = 'expired';
-          await sub.save();
-          expiredCount++;
-
-          // 🔔 Send expiration notification to player
-          await sendNotification({
-            receiver: userObj._id.toString(),
-            title: 'Subscription Expired ⌛',
-            message:
-              'Your player subscription has ended/expired. Please renew your package to continue enjoying premium features.',
-            type: NOTIFICATION_TYPE.GENERAL,
-            metadata: { subscriptionId: sub._id },
-          });
-        }
       }
 
-      if (expiredCount > 0) {
-        logger.info(`[CRON] Expired ${expiredCount} player subscriptions.`);
+      if (restoredCount > 0) {
+        logger.info(`[Stripe Sync] Restored ${restoredCount} valid subscriptions back to 'active'.`);
       }
     } catch (error) {
-      logger.error('[CRON Error] Error during player subscription expiration job:', error);
+      logger.error('[Stripe Sync Error] Error during subscription sync:', error);
     }
   };
 
-  // Run immediately on server start
-  checkAndExpireSubscriptions();
+  // Run immediately on server start to recover any valid subscriptions
+  syncAndRestoreSubscriptions();
 
-  // Schedule cron job to run every day at midnight (00:00)
+  // Schedule sync check every day at midnight (00:00)
   cron.schedule('0 0 * * *', async () => {
-    logger.info('[CRON] Running daily subscription expiration check...');
-    await checkAndExpireSubscriptions();
+    await syncAndRestoreSubscriptions();
   });
 
-  logger.info('[CRON] Player subscription expiration cron job initialized successfully.');
+  logger.info('[Stripe Sync] Subscription sync initialized successfully.');
 };
