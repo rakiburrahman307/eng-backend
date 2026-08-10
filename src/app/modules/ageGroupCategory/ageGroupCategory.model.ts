@@ -63,3 +63,14 @@ export const AgeGroupCategory = model<IAgeGroupCategory, AgeGroupCategoryModel>(
   'AgeGroupCategory',
   ageGroupCategorySchema
 );
+
+// Auto-drop legacy MongoDB single-field unique index 'name_1' if present from older schema
+AgeGroupCategory.collection.dropIndex('name_1').catch(() => {
+  // Ignore error if index does not exist
+});
+AgeGroupCategory.collection.dropIndex('slug_1').catch(() => {
+  // Ignore error if index does not exist
+});
+AgeGroupCategory.collection.dropIndex('order_1').catch(() => {
+  // Ignore error if index does not exist
+});

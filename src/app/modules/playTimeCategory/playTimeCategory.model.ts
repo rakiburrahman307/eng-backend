@@ -50,3 +50,8 @@ export const PlayTimeCategory = model<IPlayTimeCategory, PlayTimeCategoryModel>(
   'PlayTimeCategory',
   playTimeCategorySchema
 );
+
+// Auto-drop legacy MongoDB single-field unique indexes if present from older schema
+PlayTimeCategory.collection.dropIndex('name_1').catch(() => {});
+PlayTimeCategory.collection.dropIndex('slug_1').catch(() => {});
+PlayTimeCategory.collection.dropIndex('order_1').catch(() => {});

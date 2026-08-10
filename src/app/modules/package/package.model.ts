@@ -20,13 +20,13 @@ const packageSchema = new Schema<IPackage, PackageModel>({
 
     userType: {
         type: String,
-        enum: ['Player', 'Manager', 'Club', 'Referee', 'Other'],
+        enum: ['Player', 'Manager', 'Club', 'Referee', 'Other', 'Tournament Player', 'Trial Player', 'OTHER_CLUBS'],
         required: true
     },
 
     packageType: {
         type: String,
-        enum: ['Semi Pro', 'Professional', 'Other'],
+        enum: ['Semi Pro', 'Professional', 'Other', 'Tournament Player', 'Trial Player'],
         default: 'Professional'
     },
 

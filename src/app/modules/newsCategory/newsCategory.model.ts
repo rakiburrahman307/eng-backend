@@ -50,3 +50,8 @@ export const NewsCategory = model<INewsCategory, NewsCategoryModel>(
   'NewsCategory',
   newsCategorySchema
 );
+
+// Auto-drop legacy MongoDB single-field unique indexes if present from older schema
+NewsCategory.collection.dropIndex('name_1').catch(() => {});
+NewsCategory.collection.dropIndex('slug_1').catch(() => {});
+NewsCategory.collection.dropIndex('order_1').catch(() => {});

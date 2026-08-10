@@ -403,7 +403,7 @@ const rollbackPlayerStats = async (payload: any) => {
 };
 
 // ============================================================
-// 🔥 MATCH SCORE LOGIC (NEW)
+// MATCH SCORE LOGIC (NEW)
 // ============================================================
 const applyMatchScore = async (payload: any) => {
   const { match, team, eventType, eventMeta } = payload;
@@ -413,7 +413,7 @@ const applyMatchScore = async (payload: any) => {
   const matchData = await Match.findById(match);
   if (!matchData) return;
 
-  // ❌ own goal হলে score reverse team এ যাবে
+  // own goal হলে score reverse team এ যাবে
   const isOwnGoal = eventMeta?.goalType === "own_goal";
 
   let scoringTeam = team;
@@ -471,7 +471,7 @@ const rollbackMatchScore = async (payload: any) => {
 };
 
 // ============================================================
-// 🔥 WINNER UPDATE (NEW)
+//  WINNER UPDATE (NEW)
 // ============================================================
 const updateMatchWinner = async (matchId: any) => {
   const match = await Match.findById(matchId);
@@ -484,7 +484,7 @@ const updateMatchWinner = async (matchId: any) => {
   const homeScore = match.homeScore;
   const awayScore = match.awayScore;
 
-  // 🟢 WIN CONDITION
+  // WIN CONDITION
   if (homeScore > awayScore) {
     winnerTeam = homeTeamId;
   } else if (awayScore > homeScore) {
@@ -498,21 +498,21 @@ const updateMatchWinner = async (matchId: any) => {
   const ce = await ClubEconomy.findOne();
 
   // ===============================
-  // 💰 COIN DISTRIBUTION LOGIC
+  //  COIN DISTRIBUTION LOGIC
   // ===============================
 
   if (homeScore === awayScore) {
-    // 🔵 DRAW — both teams get drawMatch.coin and drawMatch.budgetValue as market value
+    // 🔵 DRAW — both teams get drawMatch.coin and (drawMatch.coin * 100) market value
     const drawCoin = ce?.drawMatch?.coin ?? 2000;
-    const drawMV = ce?.drawMatch?.budgetValue ?? 20000;
+    const drawMV = drawCoin * 100;
     await Team.findByIdAndUpdate(homeTeamId, { $inc: { coin: drawCoin, marketValue: drawMV } });
     await Team.findByIdAndUpdate(awayTeamId, { $inc: { coin: drawCoin, marketValue: drawMV } });
     return;
   }
 
-  // 🟢 WIN — winner gets winMatch.coin and winMatch.budgetValue as market value
+  // 🟢 WIN — winner gets winMatch.coin and (winMatch.coin * 100) market value
   const winCoin = ce?.winMatch?.coin ?? 5000;
-  const winMV = ce?.winMatch?.budgetValue ?? 50000;
+  const winMV = winCoin * 100;
   await Team.findByIdAndUpdate(winnerTeam, { $inc: { coin: winCoin, marketValue: winMV } });
 };
 

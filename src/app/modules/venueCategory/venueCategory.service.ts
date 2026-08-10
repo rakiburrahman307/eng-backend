@@ -48,6 +48,34 @@ const createCategoryToDB = async (payload: Partial<IVenueCategory>): Promise<IVe
   return result;
 };
 
+const sortCategoriesNaturally = (categories: any[]) => {
+  return categories
+    .map((cat: any) => {
+      const plainCat = typeof cat.toObject === 'function' ? cat.toObject() : cat;
+      if (Array.isArray(plainCat.subCategories)) {
+        plainCat.subCategories.sort((a: any, b: any) => {
+          if ((a.order ?? 0) !== (b.order ?? 0)) {
+            return (a.order ?? 0) - (b.order ?? 0);
+          }
+          return (a.name || '').localeCompare(b.name || '', undefined, {
+            numeric: true,
+            sensitivity: 'base',
+          });
+        });
+      }
+      return plainCat;
+    })
+    .sort((a: any, b: any) => {
+      if ((a.order ?? 0) !== (b.order ?? 0)) {
+        return (a.order ?? 0) - (b.order ?? 0);
+      }
+      return (a.name || '').localeCompare(b.name || '', undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    });
+};
+
 const getAllCategoriesFromDB = async (): Promise<IVenueCategory[]> => {
   const result = await VenueCategory.find({
     status: 'active',
@@ -61,7 +89,7 @@ const getAllCategoriesFromDB = async (): Promise<IVenueCategory[]> => {
       options: { sort: { order: 1, name: 1 } },
     });
 
-  return result;
+  return sortCategoriesNaturally(result);
 };
 
 const getAllCategoriesForAdminFromDB = async (): Promise<IVenueCategory[]> => {
@@ -75,7 +103,7 @@ const getAllCategoriesForAdminFromDB = async (): Promise<IVenueCategory[]> => {
       options: { sort: { order: 1, name: 1 } },
     });
 
-  return result;
+  return sortCategoriesNaturally(result);
 };
 
 const getSingleCategoryFromDB = async (id: string): Promise<IVenueCategory | null> => {

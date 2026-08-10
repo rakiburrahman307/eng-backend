@@ -28,6 +28,8 @@ const fileUploadHandler = () => {
 
       switch (file.fieldname) {
         case 'image':
+        case 'profile':
+        case 'profilePic':
           uploadDir = path.join(baseUploadDir, 'images');
           break;
 
@@ -70,7 +72,7 @@ const fileUploadHandler = () => {
 
 
     // IMAGE validation
-    if (file.fieldname === 'image') {
+    if (file.fieldname === 'image' || file.fieldname === 'profile' || file.fieldname === 'profilePic') {
       const allowedImageTypes = [
         'image/jpeg',
         'image/png',
@@ -131,6 +133,8 @@ const fileUploadHandler = () => {
     },
   }).fields([
     { name: 'image', maxCount: 3 },
+    { name: 'profile', maxCount: 1 },
+    { name: 'profilePic', maxCount: 1 },
     { name: 'document', maxCount: 2 },
     { name: 'video', maxCount: 1 },
   ]);

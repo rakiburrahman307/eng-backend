@@ -19,11 +19,11 @@ const createCategoryToDB = async (payload: Partial<IAgeGroupCategory>): Promise<
   }
 
   const existing = await AgeGroupCategory.findOne({
-    name: payload.name.trim(),
+    name: { $regex: new RegExp(`^${payload.name.trim()}$`, 'i') },
     parentCategory: payload.parentCategory || null,
   });
   if (existing) {
-    throw new ApiError(StatusCodes.CONFLICT, 'Age Group category already exists with this name');
+    throw new ApiError(StatusCodes.CONFLICT, 'Age Group category already exists with this name under this parent category');
   }
 
   if (payload.order !== undefined && payload.order !== null) {
@@ -43,6 +43,34 @@ const createCategoryToDB = async (payload: Partial<IAgeGroupCategory>): Promise<
   return result;
 };
 
+const sortCategoriesNaturally = (categories: any[]) => {
+  return categories
+    .map((cat: any) => {
+      const plainCat = typeof cat.toObject === 'function' ? cat.toObject() : cat;
+      if (Array.isArray(plainCat.subCategories)) {
+        plainCat.subCategories.sort((a: any, b: any) => {
+          if ((a.order ?? 0) !== (b.order ?? 0)) {
+            return (a.order ?? 0) - (b.order ?? 0);
+          }
+          return (a.name || '').localeCompare(b.name || '', undefined, {
+            numeric: true,
+            sensitivity: 'base',
+          });
+        });
+      }
+      return plainCat;
+    })
+    .sort((a: any, b: any) => {
+      if ((a.order ?? 0) !== (b.order ?? 0)) {
+        return (a.order ?? 0) - (b.order ?? 0);
+      }
+      return (a.name || '').localeCompare(b.name || '', undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    });
+};
+
 // ========================== GET ALL (Public) ==========================
 const getAllCategoriesFromDB = async (): Promise<IAgeGroupCategory[]> => {
   // Return only top-level categories with their subcategories populated
@@ -56,7 +84,7 @@ const getAllCategoriesFromDB = async (): Promise<IAgeGroupCategory[]> => {
       match: { status: 'active' },
       options: { sort: { order: 1, name: 1 } },
     });
-  return result;
+  return sortCategoriesNaturally(result);
 };
 
 // ========================== GET ALL (Admin) ==========================
@@ -67,7 +95,7 @@ const getAllCategoriesForAdminFromDB = async (): Promise<IAgeGroupCategory[]> =>
       path: 'subCategories',
       options: { sort: { order: 1, name: 1 } },
     });
-  return result;
+  return sortCategoriesNaturally(result);
 };
 
 // ========================== GET SINGLE ==========================
@@ -79,7 +107,8 @@ const getSingleCategoryFromDB = async (id: string): Promise<IAgeGroupCategory | 
   if (!result) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Category not found');
   }
-  return result;
+  const [sorted] = sortCategoriesNaturally([result]);
+  return sorted;
 };
 
 // ========================== UPDATE ==========================

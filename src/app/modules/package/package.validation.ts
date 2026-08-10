@@ -9,8 +9,8 @@ const createPackageZodSchema = z.object({
             .transform((val) => (typeof val === "string" ? parseFloat(val) : val))
             .refine((val) => !isNaN(val), { message: "Price must be a valid number." }),
         duration: z.enum(["1 month", "3 months", "6 months", "1 year"], { error: "Duration is required" }),
-        userType: z.enum(['Player', 'Manager', 'Club', 'Referee', 'Other']).optional(),
-        packageType: z.enum(['Semi Pro', 'Professional', 'Other']).optional(),
+        userType: z.enum(['Player', 'Manager', 'Club', 'Referee', 'Other', 'Tournament Player', 'Trial Player', 'OTHER_CLUBS']).optional(),
+        packageType: z.enum(['Semi Pro', 'Professional', 'Other', 'Tournament Player', 'Trial Player']).optional(),
         canViewOtherPlayers: z.boolean().optional(),
         canRedeemPoints: z.boolean().optional(),
         canViewOtherPlayerStats: z.boolean().optional(),

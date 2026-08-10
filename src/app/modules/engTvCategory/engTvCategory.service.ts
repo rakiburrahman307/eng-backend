@@ -48,6 +48,34 @@ const createCategoryToDB = async (payload: Partial<IEngTvCategory>): Promise<IEn
   return result;
 };
 
+const sortCategoriesNaturally = (categories: any[]) => {
+  return categories
+    .map((cat: any) => {
+      const plainCat = typeof cat.toObject === 'function' ? cat.toObject() : cat;
+      if (Array.isArray(plainCat.subCategories)) {
+        plainCat.subCategories.sort((a: any, b: any) => {
+          if ((a.order ?? 0) !== (b.order ?? 0)) {
+            return (a.order ?? 0) - (b.order ?? 0);
+          }
+          return (a.name || '').localeCompare(b.name || '', undefined, {
+            numeric: true,
+            sensitivity: 'base',
+          });
+        });
+      }
+      return plainCat;
+    })
+    .sort((a: any, b: any) => {
+      if ((a.order ?? 0) !== (b.order ?? 0)) {
+        return (a.order ?? 0) - (b.order ?? 0);
+      }
+      return (a.name || '').localeCompare(b.name || '', undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    });
+};
+
 // ========================== GET ALL (Public) ==========================
 const getAllCategoriesFromDB = async (): Promise<IEngTvCategory[]> => {
   const result = await EngTvCategory.find({
@@ -62,7 +90,7 @@ const getAllCategoriesFromDB = async (): Promise<IEngTvCategory[]> => {
       options: { sort: { order: 1, name: 1 } },
     });
 
-  return result;
+  return sortCategoriesNaturally(result);
 };
 
 // ========================== GET ALL (Admin) ==========================
@@ -77,7 +105,7 @@ const getAllCategoriesForAdminFromDB = async (): Promise<IEngTvCategory[]> => {
       options: { sort: { order: 1, name: 1 } },
     });
 
-  return result;
+  return sortCategoriesNaturally(result);
 };
 
 // ========================== GET SINGLE ==========================

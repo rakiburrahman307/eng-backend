@@ -27,14 +27,28 @@ const createCategoryToDB = async (payload: Partial<IPlayTimeCategory>): Promise<
   return result;
 };
 
+const sortCategoriesNaturally = (categories: any[]) => {
+  return categories
+    .map((cat: any) => (typeof cat.toObject === 'function' ? cat.toObject() : cat))
+    .sort((a: any, b: any) => {
+      if ((a.order ?? 0) !== (b.order ?? 0)) {
+        return (a.order ?? 0) - (b.order ?? 0);
+      }
+      return (a.name || '').localeCompare(b.name || '', undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    });
+};
+
 const getAllCategoriesFromDB = async (): Promise<IPlayTimeCategory[]> => {
   const result = await PlayTimeCategory.find({ status: 'active' }).sort({ order: 1, name: 1 });
-  return result;
+  return sortCategoriesNaturally(result);
 };
 
 const getAllCategoriesForAdminFromDB = async (): Promise<IPlayTimeCategory[]> => {
   const result = await PlayTimeCategory.find().sort({ order: 1, name: 1 });
-  return result;
+  return sortCategoriesNaturally(result);
 };
 
 const getSingleCategoryFromDB = async (id: string): Promise<IPlayTimeCategory | null> => {

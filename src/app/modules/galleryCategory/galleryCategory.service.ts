@@ -18,7 +18,7 @@ const createCategoryToDB = async (payload: Partial<IGalleryCategory>): Promise<I
   }
 
   const existing = await GalleryCategory.findOne({
-    name: payload.name.trim(),
+    name: { $regex: new RegExp(`^${payload.name.trim()}$`, 'i') },
     parentCategory: parentCategoryId,
   });
 
@@ -32,11 +32,14 @@ const createCategoryToDB = async (payload: Partial<IGalleryCategory>): Promise<I
   }
 
   if (payload.order !== undefined && payload.order !== null) {
-    const orderExist = await GalleryCategory.findOne({ order: payload.order });
+    const orderExist = await GalleryCategory.findOne({
+      order: payload.order,
+      parentCategory: parentCategoryId,
+    });
     if (orderExist) {
       throw new ApiError(
         StatusCodes.CONFLICT,
-        `Category order must be unique. Order ${payload.order} is already in use.`
+        `Category order must be unique under this parent category. Order ${payload.order} is already in use.`
       );
     }
   }
@@ -46,6 +49,34 @@ const createCategoryToDB = async (payload: Partial<IGalleryCategory>): Promise<I
     parentCategory: parentCategoryId,
   });
   return result;
+};
+
+const sortCategoriesNaturally = (categories: any[]) => {
+  return categories
+    .map((cat: any) => {
+      const plainCat = typeof cat.toObject === 'function' ? cat.toObject() : cat;
+      if (Array.isArray(plainCat.subCategories)) {
+        plainCat.subCategories.sort((a: any, b: any) => {
+          if ((a.order ?? 0) !== (b.order ?? 0)) {
+            return (a.order ?? 0) - (b.order ?? 0);
+          }
+          return (a.name || '').localeCompare(b.name || '', undefined, {
+            numeric: true,
+            sensitivity: 'base',
+          });
+        });
+      }
+      return plainCat;
+    })
+    .sort((a: any, b: any) => {
+      if ((a.order ?? 0) !== (b.order ?? 0)) {
+        return (a.order ?? 0) - (b.order ?? 0);
+      }
+      return (a.name || '').localeCompare(b.name || '', undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    });
 };
 
 const getAllCategoriesFromDB = async (): Promise<IGalleryCategory[]> => {
@@ -61,7 +92,7 @@ const getAllCategoriesFromDB = async (): Promise<IGalleryCategory[]> => {
       options: { sort: { order: 1, name: 1 } },
     });
 
-  return result;
+  return sortCategoriesNaturally(result);
 };
 
 const getAllCategoriesForAdminFromDB = async (): Promise<IGalleryCategory[]> => {
@@ -75,7 +106,7 @@ const getAllCategoriesForAdminFromDB = async (): Promise<IGalleryCategory[]> => 
       options: { sort: { order: 1, name: 1 } },
     });
 
-  return result;
+  return sortCategoriesNaturally(result);
 };
 
 const getSingleCategoryFromDB = async (id: string): Promise<IGalleryCategory | null> => {

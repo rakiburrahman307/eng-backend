@@ -63,3 +63,8 @@ export const VenueCategory = model<IVenueCategory, VenueCategoryModel>(
   'VenueCategory',
   venueCategorySchema
 );
+
+// Auto-drop legacy MongoDB single-field unique indexes if present from older schema
+VenueCategory.collection.dropIndex('name_1').catch(() => {});
+VenueCategory.collection.dropIndex('slug_1').catch(() => {});
+VenueCategory.collection.dropIndex('order_1').catch(() => {});

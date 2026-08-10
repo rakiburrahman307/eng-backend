@@ -1,3 +1,5 @@
+import { StatusCodes } from 'http-status-codes';
+import ApiError from '../../../errors/ApiErrors';
 import { USER_ROLES } from "../../../enums/user";
 import QueryBuilder from "../../../util/queryBuilder";
 import { User } from "../user/user.model";
@@ -179,6 +181,50 @@ const getUserAnalyticsFromDB = async () => {
   };
 };
 
+// UPDATE USER ROLE (Admin only)
+const updateUserRoleToDB = async (userId: string, role: string) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+  }
+
+  const validRoles = [
+    USER_ROLES.PLAYER,
+    USER_ROLES.TOURNAMENT_PLAYER,
+    USER_ROLES.OTHER_CLUBS,
+    USER_ROLES.MANAGER,
+    USER_ROLES.REFEREE,
+  ];
+
+  if (!validRoles.includes(role as any)) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid role type');
+  }
+
+  const updated = await User.findByIdAndUpdate(
+    userId,
+    { $set: { role } },
+    { new: true, runValidators: true }
+  );
+
+  return updated;
+};
+
+// UPDATE USER PROFILE BY ADMIN (Profile Picture, Name, Details)
+const updateUserProfileByAdminToDB = async (userId: string, payload: any) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+  }
+
+  const updated = await User.findByIdAndUpdate(
+    userId,
+    { $set: payload },
+    { new: true, runValidators: true }
+  );
+
+  return updated;
+};
+
 export const UserManagementService = {
   getAllUsersFromDB,
   toggleVerifiedToDB,
@@ -186,4 +232,6 @@ export const UserManagementService = {
   getAllRefereesFromDB,
   getAllManagersFromDB,
   getUserAnalyticsFromDB,
+  updateUserRoleToDB,
+  updateUserProfileByAdminToDB,
 };

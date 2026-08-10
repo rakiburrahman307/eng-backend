@@ -27,14 +27,28 @@ const createCategoryToDB = async (payload: Partial<INewsCategory>): Promise<INew
   return result;
 };
 
+const sortCategoriesNaturally = (categories: any[]) => {
+  return categories
+    .map((cat: any) => (typeof cat.toObject === 'function' ? cat.toObject() : cat))
+    .sort((a: any, b: any) => {
+      if ((a.order ?? 0) !== (b.order ?? 0)) {
+        return (a.order ?? 0) - (b.order ?? 0);
+      }
+      return (a.name || '').localeCompare(b.name || '', undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    });
+};
+
 const getAllCategoriesFromDB = async (): Promise<INewsCategory[]> => {
   const result = await NewsCategory.find({ status: 'active' }).sort({ order: 1, name: 1 });
-  return result;
+  return sortCategoriesNaturally(result);
 };
 
 const getAllCategoriesForAdminFromDB = async (): Promise<INewsCategory[]> => {
   const result = await NewsCategory.find().sort({ order: 1, name: 1 });
-  return result;
+  return sortCategoriesNaturally(result);
 };
 
 const getSingleCategoryFromDB = async (id: string): Promise<INewsCategory | null> => {

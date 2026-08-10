@@ -63,3 +63,8 @@ export const GalleryCategory = model<IGalleryCategory, GalleryCategoryModel>(
   'GalleryCategory',
   galleryCategorySchema
 );
+
+// Auto-drop legacy MongoDB single-field unique indexes if present from older schema
+GalleryCategory.collection.dropIndex('name_1').catch(() => {});
+GalleryCategory.collection.dropIndex('slug_1').catch(() => {});
+GalleryCategory.collection.dropIndex('order_1').catch(() => {});

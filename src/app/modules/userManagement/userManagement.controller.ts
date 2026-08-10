@@ -82,6 +82,50 @@ const getUserAnalytics = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const updateUserRole = catchAsync(async (req: Request, res: Response) => {
+  const result = await UserManagementService.updateUserRoleToDB(
+    req.params.id as string,
+    req.body.role as string
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "User role updated successfully",
+    data: result,
+  });
+});
+
+const updateUserProfileByAdmin = catchAsync(async (req: Request, res: Response) => {
+  let profile = req.body.profile;
+  const files = req.files as any;
+  if (files) {
+    const profileFile = files.profile?.[0] || files.image?.[0] || files.profilePic?.[0];
+    if (profileFile) {
+      profile = `/images/${profileFile.filename}`;
+    }
+  }
+
+  const payload: Record<string, any> = {
+    ...req.body,
+  };
+  if (profile) {
+    payload.profile = profile;
+  }
+
+  const result = await UserManagementService.updateUserProfileByAdminToDB(
+    req.params.id as string,
+    payload
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "User profile updated successfully by Admin",
+    data: result,
+  });
+});
+
 export const UserManagementController = {
   getAllUsers,
   toggleVerified,
@@ -89,4 +133,6 @@ export const UserManagementController = {
   getAllReferees,
   getAllManagers,
   getUserAnalytics,
+  updateUserRole,
+  updateUserProfileByAdmin,
 };
