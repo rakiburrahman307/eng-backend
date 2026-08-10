@@ -220,6 +220,11 @@ userSchema.pre("save", async function () {
       Number(config.bcrypt_salt_rounds)
     );
   }
+
+  // 💰 Dynamic Market Value calculation: 1 Coin = £100 Market Value (only if marketValue not explicitly modified)
+  if (this.isModified("engCoine") && !this.isModified("marketValue")) {
+    this.marketValue = (this.engCoine || 0) * 100;
+  }
 });
 
 export const User = model<IUser, UserModal>("User", userSchema);

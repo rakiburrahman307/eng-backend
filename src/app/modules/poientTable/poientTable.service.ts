@@ -2,103 +2,134 @@ import { League } from '../league/league.model';
 import { LeagueTeam } from '../leagueTeam/leagueTeam.model';
 import { Match } from '../match/match.model';
 
-const demoStandings = [
-  {
-    team: {
-      _id: 'demo1',
-      teamName: 'Demo FC',
-      shortName: 'DFC',
-      teamLogo: '',
-    },
-    played: 3,
-    win: 2,
-    draw: 1,
-    loss: 0,
-    goalsFor: 5,
-    goalsAgainst: 2,
-    goalDifference: 3,
-    points: 7,
-  },
-  {
-    team: {
-      _id: 'demo2',
-      teamName: 'Mock United',
-      shortName: 'MU',
-      teamLogo: '',
-    },
-    played: 3,
-    win: 1,
-    draw: 1,
-    loss: 1,
-    goalsFor: 3,
-    goalsAgainst: 4,
-    goalDifference: -1,
-    points: 4,
-  },
-];
 
 // Helper to calculate standings synchronously from prefetched teams & matches
 const computeStandings = (leagueTeams: any[], matches: any[]) => {
-  const table: Record<string, any> = {};
+  // Sort matches chronologically
+  const sortedMatches = [...matches].sort((a, b) => {
+    const dateA = new Date(a.matchDate || a.createdAt || 0).getTime();
+    const dateB = new Date(b.matchDate || b.createdAt || 0).getTime();
+    return dateA - dateB;
+  });
 
-  for (const lt of leagueTeams) {
-    if (!lt.team) continue;
+  // Helper to build raw table from given match list
+  const buildRawTable = (matchList: any[]) => {
+    const table: Record<string, any> = {};
 
-    const team: any = lt.team;
+    for (const lt of leagueTeams) {
+      if (!lt.team) continue;
+      const team: any = lt.team;
 
-    table[team._id.toString()] = {
-      team,
-      played: 0,
-      win: 0,
-      draw: 0,
-      loss: 0,
-      goalsFor: 0,
-      goalsAgainst: 0,
-      goalDifference: 0,
-      points: 0,
-    };
-  }
-
-  for (const match of matches) {
-    const homeId = match.homeTeam?.toString();
-    const awayId = match.awayTeam?.toString();
-
-    const homeScore = match.homeScore || 0;
-    const awayScore = match.awayScore || 0;
-
-    if (!table[homeId] || !table[awayId]) continue;
-
-    table[homeId].played++;
-    table[awayId].played++;
-
-    table[homeId].goalsFor += homeScore;
-    table[homeId].goalsAgainst += awayScore;
-
-    table[awayId].goalsFor += awayScore;
-    table[awayId].goalsAgainst += homeScore;
-
-    if (homeScore > awayScore) {
-      table[homeId].win++;
-      table[homeId].points += 3;
-      table[awayId].loss++;
-    } else if (awayScore > homeScore) {
-      table[awayId].win++;
-      table[awayId].points += 3;
-      table[homeId].loss++;
-    } else {
-      table[homeId].draw++;
-      table[awayId].draw++;
-      table[homeId].points += 1;
-      table[awayId].points += 1;
+      table[team._id.toString()] = {
+        team,
+        played: 0,
+        win: 0,
+        draw: 0,
+        loss: 0,
+        goalsFor: 0,
+        goalsAgainst: 0,
+        goalDifference: 0,
+        points: 0,
+      };
     }
-  }
 
-  for (const teamId in table) {
-    table[teamId].goalDifference =
-      table[teamId].goalsFor - table[teamId].goalsAgainst;
-  }
+    for (const match of matchList) {
+      const homeId = match.homeTeam?.toString();
+      const awayId = match.awayTeam?.toString();
 
-  return Object.values(table);
+      const homeScore = match.homeScore || 0;
+      const awayScore = match.awayScore || 0;
+
+      if (!table[homeId] || !table[awayId]) continue;
+
+      table[homeId].played++;
+      table[awayId].played++;
+
+      table[homeId].goalsFor += homeScore;
+      table[homeId].goalsAgainst += awayScore;
+
+      table[awayId].goalsFor += awayScore;
+      table[awayId].goalsAgainst += homeScore;
+
+      if (homeScore > awayScore) {
+        table[homeId].win++;
+        table[homeId].points += 3;
+        table[awayId].loss++;
+      } else if (awayScore > homeScore) {
+        table[awayId].win++;
+        table[awayId].points += 3;
+        table[homeId].loss++;
+      } else {
+        table[homeId].draw++;
+        table[awayId].draw++;
+        table[homeId].points += 1;
+        table[awayId].points += 1;
+      }
+    }
+
+    for (const teamId in table) {
+      table[teamId].goalDifference =
+        table[teamId].goalsFor - table[teamId].goalsAgainst;
+    }
+
+    const list = Object.values(table);
+    // Sort by Points (desc), Goal Difference (desc), Goals For (desc), Team Name (asc)
+    list.sort((a: any, b: any) => {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+      if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+      return (a.team?.teamName || '').localeCompare(b.team?.teamName || '');
+    });
+
+    return list;
+  };
+
+  // 1. Current Full Standings
+  const currentStandings = buildRawTable(sortedMatches);
+
+  // 2. Previous Standings (before last match) to determine trend (UP/DOWN/SAME)
+  const prevMatches = sortedMatches.length > 0 ? sortedMatches.slice(0, sortedMatches.length - 1) : [];
+  const prevStandings = buildRawTable(prevMatches);
+
+  const prevRankMap: Record<string, number> = {};
+  prevStandings.forEach((item: any, index: number) => {
+    if (item.team?._id) {
+      prevRankMap[item.team._id.toString()] = index + 1;
+    }
+  });
+
+  // 3. Attach position, rank, movement trend (UP/DOWN/SAME), symbol (▲/▼/•)
+  return currentStandings.map((item: any, index: number) => {
+    const position = index + 1;
+    const teamId = item.team?._id?.toString();
+    const prevPosition = teamId ? prevRankMap[teamId] : undefined;
+
+    let movement = 'SAME';
+    let symbol = '•';
+    let positionChange = 0;
+
+    if (prevPosition !== undefined && sortedMatches.length > 0 && item.played > 0) {
+      if (position < prevPosition) {
+        movement = 'UP';
+        symbol = '▲';
+        positionChange = prevPosition - position;
+      } else if (position > prevPosition) {
+        movement = 'DOWN';
+        symbol = '▼';
+        positionChange = position - prevPosition;
+      }
+    }
+
+    return {
+      position,
+      rank: position,
+      movement,
+      trend: movement,
+      symbol,
+      positionChange,
+      ...item,
+    };
+  });
 };
 
 // =========================
@@ -219,6 +250,8 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     const skip = (parsedPage - 1) * parsedLimit;
     return response.slice(skip, skip + parsedLimit);
   }
+
+  console.log(response, "point table")
 
   return response;
 };

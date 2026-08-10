@@ -63,19 +63,19 @@ const createRewardOrderToDB = async (
       );
     }
 
-    // User current ENG Coins
+    // User current ENG Coins (Must maintain minimum 10,000 balance)
     const userCoin = user.engCoine || 0;
 
-    if (userCoin < rewardProduct.point) {
-
+    if (userCoin - rewardProduct.point < 10000) {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
-        "Insufficient reward points"
+        `Insufficient coin balance! A minimum balance of 10,000 coins must be maintained in your account (Current: ${userCoin}, Required item cost: ${rewardProduct.point}).`
       );
     }
 
-    // Deduct ENG Coins
+    // Deduct ENG Coins & dynamically update marketValue (1 Coin = £100)
     user.engCoine = userCoin - rewardProduct.point;
+    user.marketValue = (user.engCoine || 0) * 100;
 
     await user.save({ session });
 

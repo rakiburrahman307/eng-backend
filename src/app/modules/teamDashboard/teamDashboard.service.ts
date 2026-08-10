@@ -13,10 +13,22 @@ const getTeamDashboardFromDB = async (teamId: string) => {
 
   // 👥 PLAYERS (Only genuine Player profiles, exclude Parent accounts)
   const rawPlayers = await User.find({
-    $or: [{ selectTeam: teamObjectId }, { selectTeam: teamId }],
-    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.TOURNAMENT_PLAYER] },
+    $or: [
+      { selectTeam: teamObjectId },
+      { selectTeam: teamId },
+      { selectTeam: teamObjectId.toString() },
+    ],
+    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.TOURNAMENT_PLAYER, USER_ROLES.OTHER_CLUBS] },
+    $nor: [
+      {
+        parentId: null,
+        email: { $ne: null },
+        position: null,
+        dateOfBirth: null,
+      }
+    ]
   })
-    .select("_id firstName lastName userName profile position ageGroup dateOfBirth selectTeam status emergencyEmail emergencyPhone")
+    .select("_id firstName lastName userName profile position ageGroup dateOfBirth selectTeam status emergencyEmail emergencyPhone role")
     .lean();
 
   const players = rawPlayers.map((p: any) => ({

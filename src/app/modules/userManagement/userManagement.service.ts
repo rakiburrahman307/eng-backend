@@ -123,6 +123,8 @@ const getUserAnalyticsFromDB = async () => {
     totalClubs,
     totalReferees,
     verifiedUsers,
+    totalTrialPlayers,
+    totalTournamentPlayers,
   ] = await Promise.all([
     User.countDocuments({ role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] } }),
     User.countDocuments({
@@ -154,11 +156,11 @@ const getUserAnalyticsFromDB = async () => {
       role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
     }),
     User.countDocuments({ role: USER_ROLES.MANAGER }),
-    User.countDocuments({
-      role: USER_ROLES.OTHER_CLUBS,
-    }),
+    User.countDocuments({ role: USER_ROLES.OTHER_CLUBS }),
     User.countDocuments({ role: USER_ROLES.REFEREE }),
     User.countDocuments({ verified: true, role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] } }),
+    User.countDocuments({ role: USER_ROLES.OTHER_CLUBS }),
+    User.countDocuments({ role: USER_ROLES.TOURNAMENT_PLAYER }),
   ]);
 
   return {
@@ -172,6 +174,8 @@ const getUserAnalyticsFromDB = async () => {
     totalClubs,
     totalReferees,
     verifiedUsers,
+    totalTrialPlayers,
+    totalTournamentPlayers,
   };
 };
 

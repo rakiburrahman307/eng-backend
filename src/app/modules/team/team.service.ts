@@ -119,6 +119,11 @@ const updateTeamToDB = async (id: string, payload: any) => {
     throw new Error("Team not found");
   }
 
+  // Auto sync marketValue (1 coin = 100 marketValue) when coin is provided without marketValue
+  if (payload.coin !== undefined && payload.marketValue === undefined) {
+    payload.marketValue = payload.coin * 100;
+  }
+
   return await Team.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
@@ -157,6 +162,10 @@ const updateTeamCoinOrMarketValue = async (
       throw new Error("coin must be a non-negative number");
     }
     updateData.coin = payload.coin;
+    // Auto sync marketValue to coin (1 coin = 100 marketValue) if marketValue is not passed
+    if (payload.marketValue === undefined) {
+      updateData.marketValue = payload.coin * 100;
+    }
   }
 
   if (payload.marketValue !== undefined) {

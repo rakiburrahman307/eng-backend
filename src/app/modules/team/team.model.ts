@@ -15,4 +15,10 @@ const teamSchema = new Schema(
   { timestamps: true }
 );
 
+teamSchema.pre('save', function (this: any) {
+  if (this.isModified('coin') && !this.isModified('marketValue')) {
+    this.marketValue = (this.coin || 0) * 100;
+  }
+});
+
 export const Team = model('Team', teamSchema);

@@ -29,8 +29,9 @@ const createTransferToDB = async (payload: any, userId: string) => {
     );
   }
 
-  // 💰 CHECK BUYING TEAM COIN BALANCE VS PLAYER MARKET VALUE
-  const playerMarketValue = player.marketValue || 0;
+  // 💰 CHECK BUYING TEAM COIN BALANCE (ONLY FOR REGULAR PLAYERS WITH A FROM-TEAM)
+  const isTrialPlayer = !fromTeam || player.role === USER_ROLES.OTHER_CLUBS;
+  const playerMarketValue = isTrialPlayer ? 0 : (player.marketValue || 0);
   const toTeamData = await Team.findById(payload.toTeam);
 
   if (!toTeamData) {
@@ -38,17 +39,17 @@ const createTransferToDB = async (payload: any, userId: string) => {
   }
 
   const buyingTeamCoin = toTeamData.coin || 0;
-  if (buyingTeamCoin < playerMarketValue) {
+  if (!isTrialPlayer && playerMarketValue > 0 && (buyingTeamCoin - playerMarketValue < 100000)) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      `Insufficient team coins! Your team has ${buyingTeamCoin} coins, but the player's market value is ${playerMarketValue} coins.`
+      `Insufficient team coin balance! Your team has ${buyingTeamCoin} coins. A minimum balance of 100,000 coins must be maintained after transferring (Player cost: ${playerMarketValue} coins).`
     );
   }
 
   // 3. Determine transfer type
   let transferType: any = 'CLUB_TO_CLUB';
 
-  if (!fromTeam) {
+  if (isTrialPlayer) {
     transferType = 'FREE_AGENT';
   }
 
@@ -66,7 +67,7 @@ const createTransferToDB = async (payload: any, userId: string) => {
   const existingPending = await Transfer.findOne({
     player: payload.player,
     toTeam: payload.toTeam,
-    status: 'PENDING',
+    status: { $in: ['PENDING', 'MANAGER_APPROVED'] },
   });
 
   if (existingPending) {
@@ -88,7 +89,7 @@ const createTransferToDB = async (payload: any, userId: string) => {
   // 🔔 Notify player: transfer request submitted via background queue helper
   await NotificationQueueHelper.sendNotification(
     payload.player,
-    'A transfer request has been submitted for you. Awaiting admin approval.',
+    'A transfer request has been submitted for you. Awaiting approval.',
     'Transfer Request Submitted',
     NOTIFICATION_TYPE.TRANSFER_REQUESTED,
     undefined,
@@ -372,35 +373,41 @@ const approveTransferToDB = async (id: string, user: any) => {
       throw new ApiError(StatusCodes.NOT_FOUND, 'Player user not found');
     }
 
-    const playerMarketValue = userDetails.marketValue || 0;
+    const isTrialPlayer = !transfer.fromTeam || userDetails.role === USER_ROLES.OTHER_CLUBS;
+    const playerMarketValue = isTrialPlayer ? 0 : (userDetails.marketValue || 0);
 
-    // 1. Deduct coins from buying team (toTeam)
-    const toTeamObj = await Team.findById(transfer.toTeam);
-    if (!toTeamObj) {
-      throw new ApiError(StatusCodes.NOT_FOUND, 'Target buying team not found');
-    }
+    // 1. Regular Player: Deduct coins from buying team (toTeam) enforcing 100,000 minimum balance
+    if (!isTrialPlayer && playerMarketValue > 0) {
+      const toTeamObj = await Team.findById(transfer.toTeam);
+      if (!toTeamObj) {
+        throw new ApiError(StatusCodes.NOT_FOUND, 'Target buying team not found');
+      }
 
-    if ((toTeamObj.coin || 0) < playerMarketValue) {
-      throw new ApiError(
-        StatusCodes.BAD_REQUEST,
-        `Cannot complete transfer: Target buying team has insufficient coins (${toTeamObj.coin || 0} available, ${playerMarketValue} required).`
-      );
-    }
+      if ((toTeamObj.coin || 0) - playerMarketValue < 100000) {
+        throw new ApiError(
+          StatusCodes.BAD_REQUEST,
+          `Cannot complete transfer: Target buying team has insufficient coins (${toTeamObj.coin || 0} available). A minimum balance of 100,000 coins must be maintained (Player cost: ${playerMarketValue} coins).`
+        );
+      }
 
-    toTeamObj.coin = (toTeamObj.coin || 0) - playerMarketValue;
-    await toTeamObj.save();
+      toTeamObj.coin = (toTeamObj.coin || 0) - playerMarketValue;
+      await toTeamObj.save();
 
-    // 2. Add coins to selling team (fromTeam), if exists
-    if (transfer.fromTeam) {
-      const fromTeamObj = await Team.findById(transfer.fromTeam);
-      if (fromTeamObj) {
-        fromTeamObj.coin = (fromTeamObj.coin || 0) + playerMarketValue;
-        await fromTeamObj.save();
+      // 2. Add coins to selling team (fromTeam)
+      if (transfer.fromTeam) {
+        const fromTeamObj = await Team.findById(transfer.fromTeam);
+        if (fromTeamObj) {
+          fromTeamObj.coin = (fromTeamObj.coin || 0) + playerMarketValue;
+          await fromTeamObj.save();
+        }
       }
     }
 
-    // 3. Swap player's team to new team
+    // 3. Swap player's team to new team & promote role if Trial Player
     userDetails.selectTeam = transfer.toTeam as any;
+    if (userDetails.role === USER_ROLES.OTHER_CLUBS) {
+      userDetails.role = USER_ROLES.PLAYER;
+    }
     await userDetails.save();
 
     transfer.status = 'APPROVED';

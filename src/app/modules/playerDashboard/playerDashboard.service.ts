@@ -15,10 +15,10 @@ import { isPremiumPlayerPackage } from "../../../helpers/packageHelper";
 const getPlayerDashboardFromDB = async (playerId: string) => {
   const playerObjectId = new mongoose.Types.ObjectId(playerId);
 
-  // 👤 PLAYER INFO (Filter by PLAYER / TOURNAMENT_PLAYER roles only)
+  // 👤 PLAYER INFO (Filter by PLAYER / TOURNAMENT_PLAYER / OTHER_CLUBS roles)
   const player = await User.findOne({
     _id: playerObjectId,
-    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.TOURNAMENT_PLAYER] },
+    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.TOURNAMENT_PLAYER, USER_ROLES.OTHER_CLUBS] },
   }).populate("selectTeam");
 
   if (!player) {
