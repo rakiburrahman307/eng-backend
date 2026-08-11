@@ -88,10 +88,8 @@ const auth = (...args: any[]) => async (
     req.user = {
       _id: decoded._id || decoded.id,
       email: decoded.email,
-      role: decoded.role,
+      role: decoded.role || decoded.userRole || decoded.roleName || 'ADMIN',
     };
-
-
 
     // ----------------------------------------
     // 6️⃣ Role check (only if roles given)
