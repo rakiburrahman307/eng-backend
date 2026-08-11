@@ -20,6 +20,7 @@ import { IUser } from '../user/user.interface';
 import { Subscription } from '../subscription/subscription.model';
 import { NotificationQueueHelper } from '../../../helpers/bullMQ/bullHelper';
 import { NOTIFICATION_TYPE } from '../notification/notification.interface';
+import { checkIsProfileCompleted } from '../user/user.service';
 
 //login
 const loginUserFromDB = async (payload: ILoginData) => {
@@ -92,6 +93,8 @@ const loginUserFromDB = async (payload: ILoginData) => {
     config.jwt.jwtRefreshExpiresIn as string
   );
 
+  const isDetailsSubmitted = checkIsProfileCompleted(isExistUser);
+
   return {
     accessToken,
     refreshToken,
@@ -99,6 +102,8 @@ const loginUserFromDB = async (payload: ILoginData) => {
     profileStatus: userDetails
       ? userDetails.status
       : "INCOMPLETE",
+
+    isDetailsSubmitted,
 
     paymentStatus: subscription ? true : false,
   };

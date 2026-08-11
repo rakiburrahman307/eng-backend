@@ -94,35 +94,59 @@ const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
     return createUser;
 };
 
-const getUserProfileFromDB = async (user: JwtPayload) => {
- 
+export const checkIsProfileCompleted = (user: any): boolean => {
+  if (!user) return false;
 
+  const role = user.role;
+
+  if (role === USER_ROLES.MANAGER) {
+    // Screen 2 details for Manager: Date of Birth, Team, DBS / 1st Aid Certificate Document
+    const hasDob = Boolean(user.dateOfBirth);
+    const hasTeam = Boolean(user.selectTeam);
+    const hasDoc = Array.isArray(user.document) ? user.document.length > 0 : Boolean(user.document);
+    return hasDob && hasTeam && hasDoc;
+  }
+
+  if (role === USER_ROLES.REFEREE) {
+    // Screen 2 details for Referee: Date of Birth, DBS / 1st Aid Certificate Document
+    const hasDob = Boolean(user.dateOfBirth);
+    const hasDoc = Array.isArray(user.document) ? user.document.length > 0 : Boolean(user.document);
+    return hasDob && hasDoc;
+  }
+
+  // if (role === USER_ROLES.PLAYER) {
+  //   // Screen 2 details for Player: Date of Birth, selectTeam or position
+  //   const hasDob = Boolean(user.dateOfBirth);
+  //   const hasTeamOrPos = Boolean(user.selectTeam || user.position);
+  //   return hasDob && hasTeamOrPos;
+  // }
+
+  return Boolean(user.firstName && user.lastName && user.email);
+};
+
+const getUserProfileFromDB = async (user: JwtPayload) => {
   const id = user?._id;
 
   if (!id) {
-
     return null;
   }
-
-
 
   const isExistUser = await User.findById(id);
 
   if (!isExistUser) {
-
     return null;
   }
 
   // user details are merged into user
   const userDetails = isExistUser;
 
-
-
   // active subscription
   const subscription = await Subscription.findOne({
     user: id,
     status: "active",
   }).populate("package");
+
+  const isDetailsSubmitted = checkIsProfileCompleted(isExistUser);
 
   return {
     _id: isExistUser._id,
@@ -133,7 +157,14 @@ const getUserProfileFromDB = async (user: JwtPayload) => {
 
     firstName: userDetails?.firstName || null,
     lastName: userDetails?.lastName || null,
+    dateOfBirth: isExistUser.dateOfBirth || null,
+    selectTeam: isExistUser.selectTeam || null,
+    document: isExistUser.document || [],
+    phone: isExistUser.phone || null,
     status: userDetails?.status || "PENDING",
+
+    // ✅ Screen 2 profile details completion status
+    isDetailsSubmitted,
 
     subscription: subscription
       ? {
@@ -256,11 +287,17 @@ const getPlayerByUserId = async (userId: string) => {
     status: "active",
   }).populate("package");
 
+  const isDetailsSubmitted = checkIsProfileCompleted(result);
+
   return {
     ...result,
     userId: result._id,
     activeSubscription: activeSub || null,
     activePackage: activeSub?.package || null,
+    isDetailsSubmitted,
+    isProfileCompleted: isDetailsSubmitted,
+    isCompleted: isDetailsSubmitted,
+    isDetailsCompleted: isDetailsSubmitted,
   };
 };
 
@@ -279,6 +316,8 @@ const getManagerByUserId = async (
     );
   }
 
+  const isDetailsSubmitted = checkIsProfileCompleted(result);
+
   return {
     ...result,
     userId: result._id,
@@ -288,6 +327,10 @@ const getManagerByUserId = async (
           teamName: (result.selectTeam as any).teamName,
         }
       : null,
+    isDetailsSubmitted,
+    isProfileCompleted: isDetailsSubmitted,
+    isCompleted: isDetailsSubmitted,
+    isDetailsCompleted: isDetailsSubmitted,
   };
 };
 
@@ -304,7 +347,16 @@ const getRefereeByUserId = async (
     );
   }
 
-  return { ...result, userId: result?._id };
+  const isDetailsSubmitted = checkIsProfileCompleted(result);
+
+  return {
+    ...result,
+    userId: result?._id,
+    isDetailsSubmitted,
+    isProfileCompleted: isDetailsSubmitted,
+    isCompleted: isDetailsSubmitted,
+    isDetailsCompleted: isDetailsSubmitted,
+  };
 };
 
 

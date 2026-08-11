@@ -387,6 +387,8 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
   const initialFilter = andConditions.length > 0 ? { $and: andConditions } : {};
 
   const queryParams = { ...otherQuery };
+  queryParams.sort = sort || "matchDate";
+
   if (searchTerm) {
     queryParams.searchTerm = searchTerm;
   }

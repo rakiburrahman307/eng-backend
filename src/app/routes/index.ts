@@ -45,6 +45,7 @@ const router = express.Router();
 
 const apiRoutes = [
     { path: "/user", route: UserRoutes },
+    { path: "/profile", route: UserRoutes },
     { path: "/user-management", route: UserManagementRoute },
     { path: "/auth", route: AuthRoutes },
     { path: "/about", route: AboutRoutes },
