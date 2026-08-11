@@ -181,6 +181,19 @@ const modifyMatchScore = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const updateMatchStatus = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  const result = await MatchService.updateMatchStatusInDB(id as string, status);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Match status updated successfully",
+    data: result,
+  });
+});
+
 export const MatchController = {
   createMatch,
   getAllMatches,
@@ -188,6 +201,7 @@ export const MatchController = {
   updateMatch,
   deleteMatch,
   toggleMatchStatus,
+  updateMatchStatus,
   getMatchesForReferee,
   addMatchReview,
   getUpcomingMatchesForManager,

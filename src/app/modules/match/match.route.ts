@@ -67,4 +67,11 @@ router.patch(
   MatchController.modifyMatchScore
 );
 
+// 🔄 DIRECT STATUS UPDATE (ADMIN / SUPER ADMIN ONLY)
+router.patch(
+  '/:id/status',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  MatchController.updateMatchStatus
+);
+
 export default router;

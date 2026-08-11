@@ -872,6 +872,70 @@ const modifyMatchScoreInDB = async (
   return await formatMatchVenue(match);
 };
 
+const updateMatchStatusInDB = async (id: string, status: string) => {
+  const match = await Match.findById(id);
+
+  if (!match) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Match not found");
+  }
+
+  const validStatuses = ["upcoming", "live", "half_time", "finished", "cancelled"];
+  const newStatus = status.toLowerCase();
+
+  if (!validStatuses.includes(newStatus)) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, `Invalid status. Must be one of: ${validStatuses.join(", ")}`);
+  }
+
+  const oldStatus = match.status;
+  match.status = newStatus as any;
+
+  // LIVE START → GIVE BOTH TEAMS 1000 COIN IF NEWLY LIVE
+  if (newStatus === "live" && oldStatus !== "live") {
+    await Team.updateMany(
+      { _id: { $in: [match.homeTeam, match.awayTeam] } },
+      { $inc: { coin: 1000 } },
+    );
+  }
+
+  await match.save();
+
+  // Send notifications if status has changed significantly
+  if ((newStatus === "live" || newStatus === "finished") && oldStatus !== newStatus) {
+    try {
+      const homeTeam = await Team.findById(match.homeTeam);
+      const awayTeam = await Team.findById(match.awayTeam);
+      const matchName = `${homeTeam?.teamName || "Home Team"} vs ${awayTeam?.teamName || "Away Team"}`;
+      
+      const userDetails = await User.find({
+        selectTeam: { $in: [match.homeTeam, match.awayTeam] }
+      });
+
+      if (userDetails.length > 0) {
+        const title = newStatus === "live" ? "Match is Live! ⚽" : "Match Finished! 🏁";
+        const message = newStatus === "live" 
+          ? `The match ${matchName} has officially started and is now live!` 
+          : `The match ${matchName} has finished. Check the final match results and ratings.`;
+
+        const userIds = userDetails.map((u) => u._id.toString());
+
+        await NotificationQueueHelper.sendBulkNotifications(
+          userIds,
+          title,
+          message,
+          NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,
+          undefined,
+          match._id.toString(),
+          "Match"
+        );
+      }
+    } catch (err) {
+      console.error("Failed to send status update notification", err);
+    }
+  }
+
+  return await formatMatchVenue(match);
+};
+
 export const MatchService = {
   createMatchToDB,
   getAllMatchesFromDB,
@@ -879,6 +943,7 @@ export const MatchService = {
   updateMatchToDB,
   deleteMatchFromDB,
   toggleMatchStatusToDB,
+  updateMatchStatusInDB,
   getMatchesByRefereeFromDB,
   addMatchReviewToDB,
   getUpcomingMatchesForManagerFromDB,
