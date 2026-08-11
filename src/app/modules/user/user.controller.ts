@@ -212,6 +212,67 @@ const createPlayer = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const updateChieldInfo = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user as any;
+
+  // ✅ AUTH CHECK
+  if (!user?._id) {
+    throw new ApiError(
+      401,
+      "Unauthorized user - token invalid or missing"
+    );
+  }
+
+  const userId = user._id;
+
+  // ✅ FILE HANDLE
+  const files = req.files as any;
+
+  let documentFiles: string[] = [];
+
+  if (files?.document?.length) {
+    documentFiles = files.document.map((file: any) => {
+      // 🖼 IMAGE
+      if (file.mimetype.startsWith("image/")) {
+        return `/images/${file.filename}`;
+      }
+
+      // 📄 DOCUMENT
+      return `/documents/${file.filename}`;
+    });
+  }
+
+  // ✅ SAFE JSON PARSE
+  let parsedData: any = {};
+
+  try {
+    parsedData =
+      typeof req.body.data === "string"
+        ? JSON.parse(req.body.data)
+        : req.body.data || req.body;
+  } catch (error) {
+    throw new ApiError(
+      400,
+      "Invalid JSON format in request body"
+    );
+  }
+
+  // ✅ UPDATE DATA
+  const updateData: any = {
+    ...parsedData,
+    document: documentFiles
+  };
+
+  const childId = req.params.childId as string;
+  const result = await UserService.updateChieldInfoToDB(childId, updateData);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Child info updated successfully",
+    data: result,
+  });
+});
 
 const updatePlayer = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as any;
@@ -481,4 +542,5 @@ export const UserController = {
     updateUserCoinOrMarketValue,
     approveOrRejectUser,
     toggleBlueTickUser,
+    updateChieldInfo,
 };

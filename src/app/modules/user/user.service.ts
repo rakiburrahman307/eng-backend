@@ -183,6 +183,33 @@ const getUserProfileFromDB = async (user: JwtPayload) => {
   };
 };
 
+
+const updateChieldInfoToDB = async (id: string, payload: any) => {
+  const isExistUser = await User.findById(id);
+  if (!isExistUser) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Child user not found");
+  }
+
+  // If document files were uploaded in this request and existing documents exist, merge them or update them
+  if (Array.isArray(payload.document) && payload.document.length === 0) {
+    delete payload.document;
+  } else if (Array.isArray(payload.document) && payload.document.length > 0 && Array.isArray(isExistUser.document)) {
+    payload.document = [...isExistUser.document, ...payload.document];
+  }
+
+  if (payload.profile && isExistUser.profile) {
+    unlinkFile(isExistUser.profile);
+  }
+
+  const result = await User.findByIdAndUpdate(
+    id,
+    { $set: payload },
+    { new: true, runValidators: true }
+  );
+
+  return result;
+};
+
 const updateProfileToDB = async (user: JwtPayload, payload: Partial<IUser>): Promise<Partial<IUser | null>> => {
     const { _id } = user;
     const isExistUser = await User.isExistUserById(_id);
@@ -556,4 +583,5 @@ export const UserService = {
     updateUserCoinOrMarketValue,
     approveOrRejectUser,
     toggleBlueTickUser,
+    updateChieldInfoToDB,
 };

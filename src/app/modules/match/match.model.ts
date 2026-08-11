@@ -65,8 +65,49 @@ const matchSchema = new Schema(
 
     status: {
       type: String,
-      enum: ['upcoming', 'live', 'half_time', 'finished', 'cancelled'],
+      enum: ['upcoming', 'scheduled', 'live', 'half_time', 'finished', 'cancelled'],
       default: 'upcoming',
+    },
+
+    period: {
+      type: String,
+      enum: ['first_half', 'second_half', null],
+      default: null,
+    },
+
+    scheduledAt: {
+      type: Date,
+      default: null,
+    },
+
+    startedAt: {
+      type: Date,
+      default: null,
+    },
+
+    firstHalfStartedAt: {
+      type: Date,
+      default: null,
+    },
+
+    halfTimeAt: {
+      type: Date,
+      default: null,
+    },
+
+    secondHalfStartedAt: {
+      type: Date,
+      default: null,
+    },
+
+    finishedAt: {
+      type: Date,
+      default: null,
+    },
+
+    coinAwarded: {
+      type: Boolean,
+      default: false,
     },
 
     timerStatus: {

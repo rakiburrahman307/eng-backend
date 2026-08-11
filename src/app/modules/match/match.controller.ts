@@ -103,8 +103,9 @@ const deleteMatch = catchAsync(async (req: Request, res: Response) => {
 // TOGGLE STATUS
 const toggleMatchStatus = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
+  const userRole = (req.user as any)?.role || "";
 
-  const result = await MatchService.toggleMatchStatusToDB(id);
+  const result = await MatchService.toggleMatchStatusToDB(id, userRole);
 
   sendResponse(res, {
     success: true,
@@ -183,8 +184,8 @@ const modifyMatchScore = catchAsync(async (req: Request, res: Response) => {
 
 const updateMatchStatus = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { status } = req.body;
-  const result = await MatchService.updateMatchStatusInDB(id as string, status);
+  const userRole = (req.user as any)?.role || "";
+  const result = await MatchService.updateMatchStatusInDB(id as string, req.body, userRole);
 
   sendResponse(res, {
     success: true,

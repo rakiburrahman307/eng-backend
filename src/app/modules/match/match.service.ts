@@ -16,6 +16,16 @@ import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { MatchResult } from "../matchResult/matchResult.model";
 import { PlayerStats } from "../playerStats/playerStats.model";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+const getUKNowInUTC = (): Date => {
+  return dayjs().tz("Europe/London").utc().toDate();
+};
 
 const formatMatchVenue = async (matchItem: any) => {
   if (!matchItem) return matchItem;
@@ -180,6 +190,12 @@ const createMatchToDB = async (payload: any) => {
       }
     }
     // create
+    if (!matchData.scheduledAt && matchDate) {
+      matchData.scheduledAt = new Date(matchDate);
+    }
+    if (!matchData.status) {
+      matchData.status = 'upcoming';
+    }
     const match = await Match.create(matchData);
     createdMatches.push(match);
   }
@@ -196,6 +212,9 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     dateStatus,
     venue,
     venueName,
+    venueCategory,
+    venueSubCategory,
+    subVenue,
     homeMatchesOnly,
     unplayedOnly,
     liveOnly,
@@ -344,7 +363,6 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
 
       andConditions.push({
         $or: [
-          { venueName: { $regex: searchVenue, $options: "i" } },
           { venueName: { $in: allVenueIds } },
           { pitch: { $in: allVenueIds } },
           { subVenue: { $in: allVenueIds } },
@@ -352,6 +370,24 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
           { venueSubCategory: { $in: allVenueIds } },
         ],
       });
+    }
+  }
+
+  // Venue Category / Subcategory filter
+  if (venueCategory || venueSubCategory || subVenue) {
+    const venueFilterOr: any[] = [];
+    if (venueCategory) {
+      venueFilterOr.push({ venueCategory });
+    }
+    if (venueSubCategory) {
+      venueFilterOr.push({ venueSubCategory });
+    }
+    if (subVenue) {
+      venueFilterOr.push({ subVenue });
+      venueFilterOr.push({ venueSubCategory: subVenue });
+    }
+    if (venueFilterOr.length > 0) {
+      andConditions.push({ $or: venueFilterOr });
     }
   }
 
@@ -480,10 +516,23 @@ const updateMatchToDB = async (id: string, payload: any) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Same team cannot play match");
   }
 
-  return await Match.findByIdAndUpdate(id, payload, {
+  const dateFields = ['scheduledAt', 'startedAt', 'firstHalfStartedAt', 'halfTimeAt', 'secondHalfStartedAt', 'finishedAt'];
+  dateFields.forEach(field => {
+    if (payload[field] !== undefined) {
+      payload[field] = payload[field] ? new Date(payload[field]) : null;
+    }
+  });
+
+  const updatedMatch = await Match.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
   });
+
+  if (!updatedMatch) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to update match");
+  }
+
+  return await formatMatchVenue(updatedMatch);
 };
 
 // DELETE
@@ -497,72 +546,159 @@ const deleteMatchFromDB = async (id: string) => {
   return await Match.findByIdAndDelete(id);
 };
 
-// TOGGLE STATUS
-const toggleMatchStatusToDB = async (id: string) => {
+// TOGGLE STATUS (Sequence: scheduled -> live (1st half) -> half_time -> live (2nd half) -> finished)
+const toggleMatchStatusToDB = async (id: string, userRole: string = "") => {
   const match = await Match.findById(id);
 
   if (!match) {
     throw new Error("Match not found");
   }
 
-  const oldStatus = match.status;
+  let nextStatus = "live";
+  let nextPeriod = match.period;
 
-  if (match.status === "upcoming") {
+  if (match.status === "scheduled" || match.status === "upcoming") {
+    nextStatus = "live";
+    nextPeriod = "first_half";
+  } else if (match.status === "live" && (match.period === "first_half" || !match.period)) {
+    nextStatus = "half_time";
+    nextPeriod = "first_half";
+  } else if (match.status === "half_time") {
+    nextStatus = "live";
+    nextPeriod = "second_half";
+  } else if (match.status === "live" && match.period === "second_half") {
+    nextStatus = "finished";
+    nextPeriod = "second_half";
+  } else {
+    nextStatus = "finished";
+    nextPeriod = "second_half";
+  }
+
+  return await updateMatchStatusInDB(id, { status: nextStatus, period: nextPeriod }, userRole);
+};
+
+const updateMatchStatusInDB = async (id: string, payload: any, userRole: string = "") => {
+  const match = await Match.findById(id);
+
+  if (!match) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Match not found");
+  }
+
+  const roleUpper = (userRole || "").toString().trim().toUpperCase();
+  const isAdmin = roleUpper === "ADMIN" || roleUpper === "SUPER_ADMIN";
+
+  const targetStatus = typeof payload === "string" ? payload.toLowerCase() : (payload?.status || "").toLowerCase();
+  const targetPeriod = typeof payload === "object" ? payload?.period : undefined;
+
+  const validStatuses = ["scheduled", "upcoming", "live", "half_time", "finished", "cancelled"];
+  if (!validStatuses.includes(targetStatus)) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, `Invalid status. Must be one of: ${validStatuses.join(", ")}`);
+  }
+
+  const oldStatus = match.status;
+  const ukNow = getUKNowInUTC();
+
+  // Referee check for starting match (in non-admin flow)
+  if ((targetStatus === "live" || targetPeriod === "first_half") && !isAdmin) {
     if (!match.referee) {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
-        "A referee must be assigned to the match before starting it live"
+        "A referee must be assigned to the match before making it live"
       );
     }
-    match.status = "live";
+  }
 
-    // LIVE START → GIVE BOTH TEAM 1000 COIN
-    await Team.updateMany(
-      { _id: { $in: [match.homeTeam, match.awayTeam] } },
-      { $inc: { coin: 1000 } },
-    );
-  } else if (match.status === "live") {
+  // 1️⃣ Status & Period Transitioning & Automatic Server Timestamping
+  if (targetStatus === "scheduled" || targetStatus === "upcoming") {
+    match.status = targetStatus as any;
+    match.period = targetPeriod !== undefined ? targetPeriod : null;
+    if (!match.scheduledAt) {
+      match.scheduledAt = match.matchDate || ukNow;
+    }
+  } else if (targetStatus === "live") {
+    match.status = "live";
+    const requestedPeriod = targetPeriod || (oldStatus === "half_time" ? "second_half" : "first_half");
+    match.period = requestedPeriod as any;
+
+    if (requestedPeriod === "first_half") {
+      if (!match.startedAt) match.startedAt = ukNow;
+      if (!match.firstHalfStartedAt || isAdmin) match.firstHalfStartedAt = ukNow;
+    } else if (requestedPeriod === "second_half") {
+      if (!match.secondHalfStartedAt || isAdmin) match.secondHalfStartedAt = ukNow;
+    }
+
+    // 🪙 1000 Coin Awarding Logic (Strictly Once)
+    if (!match.coinAwarded) {
+      await Team.updateMany(
+        { _id: { $in: [match.homeTeam, match.awayTeam] } },
+        { $inc: { coin: 1000 } }
+      );
+      match.coinAwarded = true;
+    }
+  } else if (targetStatus === "half_time") {
     match.status = "half_time";
-  } else if (match.status === "half_time") {
+    match.period = targetPeriod || "first_half";
+    if (!match.halfTimeAt || isAdmin) {
+      match.halfTimeAt = ukNow;
+    }
+  } else if (targetStatus === "finished") {
     match.status = "finished";
-  } else {
-    match.status = "finished";
+    match.period = targetPeriod || "second_half";
+    if (!match.finishedAt || isAdmin) {
+      match.finishedAt = ukNow;
+    }
+  } else if (targetStatus === "cancelled") {
+    match.status = "cancelled";
+  }
+
+  // 2️⃣ Allow Admin to manually overwrite timestamps & state
+  if (isAdmin && typeof payload === "object") {
+    if (payload.scheduledAt !== undefined) match.scheduledAt = payload.scheduledAt ? new Date(payload.scheduledAt) : null;
+    if (payload.startedAt !== undefined) match.startedAt = payload.startedAt ? new Date(payload.startedAt) : null;
+    if (payload.firstHalfStartedAt !== undefined) match.firstHalfStartedAt = payload.firstHalfStartedAt ? new Date(payload.firstHalfStartedAt) : null;
+    if (payload.halfTimeAt !== undefined) match.halfTimeAt = payload.halfTimeAt ? new Date(payload.halfTimeAt) : null;
+    if (payload.secondHalfStartedAt !== undefined) match.secondHalfStartedAt = payload.secondHalfStartedAt ? new Date(payload.secondHalfStartedAt) : null;
+    if (payload.finishedAt !== undefined) match.finishedAt = payload.finishedAt ? new Date(payload.finishedAt) : null;
+    if (payload.period !== undefined) match.period = payload.period;
   }
 
   await match.save();
 
   // Send notifications if status has changed significantly
-  if (match.status === "live" || match.status === "finished") {
-    const homeTeam = await Team.findById(match.homeTeam);
-    const awayTeam = await Team.findById(match.awayTeam);
-    const matchName = `${homeTeam?.teamName || "Home Team"} vs ${awayTeam?.teamName || "Away Team"}`;
-    
-    // Find all users (players, managers, etc.) belonging to both teams
-    const userDetails = await User.find({
-      selectTeam: { $in: [match.homeTeam, match.awayTeam] }
-    });
+  if ((targetStatus === "live" || targetStatus === "finished") && oldStatus !== targetStatus && !isAdmin) {
+    try {
+      const homeTeam = await Team.findById(match.homeTeam);
+      const awayTeam = await Team.findById(match.awayTeam);
+      const matchName = `${homeTeam?.teamName || "Home Team"} vs ${awayTeam?.teamName || "Away Team"}`;
+      
+      const userDetails = await User.find({
+        selectTeam: { $in: [match.homeTeam, match.awayTeam] }
+      });
 
-    if (userDetails.length > 0) {
-      const title = match.status === "live" ? "Match is Live! ⚽" : "Match Finished! 🏁";
-      const message = match.status === "live" 
-        ? `The match ${matchName} has officially started and is now live!` 
-        : `The match ${matchName} has finished. Check the final match results and ratings.`;
+      if (userDetails.length > 0) {
+        const title = targetStatus === "live" ? "Match is Live! ⚽" : "Match Finished! 🏁";
+        const message = targetStatus === "live" 
+          ? `The match ${matchName} has officially started and is now live!` 
+          : `The match ${matchName} has finished. Check the final match results and ratings.`;
 
-      const userIds = userDetails.map((u) => u._id.toString());
+        const userIds = userDetails.map((u) => u._id.toString());
 
-      await NotificationQueueHelper.sendBulkNotifications(
-        userIds,
-        title,
-        message,
-        NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,
-        undefined,
-        match._id.toString(),
-        "Match"
-      );
+        await NotificationQueueHelper.sendBulkNotifications(
+          userIds,
+          title,
+          message,
+          NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,
+          undefined,
+          match._id.toString(),
+          "Match"
+        );
+      }
+    } catch (err) {
+      console.error("Failed to send status update notification", err);
     }
   }
 
-  return match;
+  return await formatMatchVenue(match);
 };
 
 const addMatchReviewToDB = async (
@@ -882,76 +1018,6 @@ const modifyMatchScoreInDB = async (
   match.winnerTeam = newWinnerTeam as any;
 
   await match.save();
-
-  return await formatMatchVenue(match);
-};
-
-const updateMatchStatusInDB = async (id: string, status: string) => {
-  const match = await Match.findById(id);
-
-  if (!match) {
-    throw new ApiError(StatusCodes.NOT_FOUND, "Match not found");
-  }
-
-  const validStatuses = ["upcoming", "live", "half_time", "finished", "cancelled"];
-  const newStatus = status.toLowerCase();
-
-  if (!validStatuses.includes(newStatus)) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, `Invalid status. Must be one of: ${validStatuses.join(", ")}`);
-  }
-
-  const oldStatus = match.status;
-  match.status = newStatus as any;
-
-  // LIVE START → GIVE BOTH TEAMS 1000 COIN IF NEWLY LIVE
-  if (newStatus === "live" && oldStatus !== "live") {
-    if (!match.referee) {
-      throw new ApiError(
-        StatusCodes.BAD_REQUEST,
-        "A referee must be assigned to the match before making it live"
-      );
-    }
-    await Team.updateMany(
-      { _id: { $in: [match.homeTeam, match.awayTeam] } },
-      { $inc: { coin: 1000 } },
-    );
-  }
-
-  await match.save();
-
-  // Send notifications if status has changed significantly
-  if ((newStatus === "live" || newStatus === "finished") && oldStatus !== newStatus) {
-    try {
-      const homeTeam = await Team.findById(match.homeTeam);
-      const awayTeam = await Team.findById(match.awayTeam);
-      const matchName = `${homeTeam?.teamName || "Home Team"} vs ${awayTeam?.teamName || "Away Team"}`;
-      
-      const userDetails = await User.find({
-        selectTeam: { $in: [match.homeTeam, match.awayTeam] }
-      });
-
-      if (userDetails.length > 0) {
-        const title = newStatus === "live" ? "Match is Live! ⚽" : "Match Finished! 🏁";
-        const message = newStatus === "live" 
-          ? `The match ${matchName} has officially started and is now live!` 
-          : `The match ${matchName} has finished. Check the final match results and ratings.`;
-
-        const userIds = userDetails.map((u) => u._id.toString());
-
-        await NotificationQueueHelper.sendBulkNotifications(
-          userIds,
-          title,
-          message,
-          NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,
-          undefined,
-          match._id.toString(),
-          "Match"
-        );
-      }
-    } catch (err) {
-      console.error("Failed to send status update notification", err);
-    }
-  }
 
   return await formatMatchVenue(match);
 };
