@@ -88,7 +88,7 @@ const auth = (...args: any[]) => async (
     req.user = {
       _id: decoded._id || decoded.id,
       email: decoded.email,
-      role: decoded.role || decoded.userRole || decoded.roleName || 'ADMIN',
+      role: decoded.role
     };
 
     // ----------------------------------------
