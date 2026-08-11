@@ -187,53 +187,211 @@ const createMatchToDB = async (payload: any) => {
 };
 
 const getAllMatchesFromDB = async (query: Record<string, any>) => {
-  const { team, teamName, leagueName, startDate, endDate, ...otherQuery } = query;
-  const initialFilter: Record<string, any> = {};
+  const {
+    team,
+    teamName,
+    league,
+    leagueName,
+    status,
+    dateStatus,
+    venue,
+    venueName,
+    homeMatchesOnly,
+    unplayedOnly,
+    liveOnly,
+    hasNotes,
+    startDate,
+    endDate,
+    searchTerm,
+    page,
+    limit,
+    sort,
+    fields,
+    ...otherQuery
+  } = query;
 
-  if (leagueName) {
+  const andConditions: any[] = [];
+
+  // League Filter
+  if (league && league !== "ALL") {
+    if (mongoose.Types.ObjectId.isValid(league)) {
+      andConditions.push({ league });
+    } else {
+      const leagues = await League.find({
+        leagueName: { $regex: league, $options: "i" },
+      }).select("_id");
+      andConditions.push({ league: { $in: leagues.map((l) => l._id) } });
+    }
+  } else if (leagueName && leagueName !== "ALL") {
     const leagues = await League.find({
-      leagueName: {
-        $regex: leagueName,
-        $options: "i",
-      },
+      leagueName: { $regex: leagueName, $options: "i" },
     }).select("_id");
-
-    initialFilter.league = {
-      $in: leagues.map((l) => l._id),
-    };
+    andConditions.push({ league: { $in: leagues.map((l) => l._id) } });
   }
 
-  const searchTeam = teamName || team;
+  // Status Filter
+  if (status && status !== "ALL") {
+    const lowerStatus = status.toLowerCase();
+    if (lowerStatus === "live") {
+      andConditions.push({
+        $or: [
+          { status: { $regex: /^live$/i } },
+          { status: "half_time" },
+          { timerStatus: "running" },
+          { timerStatus: "paused" },
+        ],
+      });
+    } else {
+      andConditions.push({ status: lowerStatus });
+    }
+  }
 
-  if (searchTeam) {
+  // Unplayed matches only
+  if (unplayedOnly === "true" || unplayedOnly === true) {
+    andConditions.push({ status: { $ne: "finished" } });
+  }
+
+  // Live matches only
+  if (liveOnly === "true" || liveOnly === true) {
+    andConditions.push({
+      $or: [
+        { status: { $regex: /^live$/i } },
+        { status: "half_time" },
+        { timerStatus: "running" },
+        { timerStatus: "paused" },
+      ],
+    });
+  }
+
+  // Team Filter
+  const searchTeam = teamName || team;
+  if (searchTeam && searchTeam !== "ALL") {
     if (mongoose.Types.ObjectId.isValid(searchTeam)) {
-      initialFilter.$or = [
-        { homeTeam: searchTeam },
-        { awayTeam: searchTeam },
-      ];
+      if (homeMatchesOnly === "true" || homeMatchesOnly === true) {
+        andConditions.push({ homeTeam: searchTeam });
+      } else {
+        andConditions.push({
+          $or: [{ homeTeam: searchTeam }, { awayTeam: searchTeam }],
+        });
+      }
     } else {
       const teams = await Team.find({
-        teamName: {
-          $regex: searchTeam,
-          $options: "i",
-        },
+        teamName: { $regex: searchTeam, $options: "i" },
       }).select("_id");
-
       const teamIds = teams.map((t) => t._id);
-      initialFilter.$or = [
-        { homeTeam: { $in: teamIds } },
-        { awayTeam: { $in: teamIds } },
-      ];
+      if (homeMatchesOnly === "true" || homeMatchesOnly === true) {
+        andConditions.push({ homeTeam: { $in: teamIds } });
+      } else {
+        andConditions.push({
+          $or: [
+            { homeTeam: { $in: teamIds } },
+            { awayTeam: { $in: teamIds } },
+          ],
+        });
+      }
+    }
+  }
+
+  // Venue Filter
+  const searchVenue = venueName || venue;
+  if (searchVenue && searchVenue !== "ALL") {
+    if (mongoose.Types.ObjectId.isValid(searchVenue)) {
+      const venueDoc = await VenueCategory.findById(searchVenue);
+      const subCats = await VenueCategory.find({
+        $or: [{ parentCategory: searchVenue }, { _id: searchVenue }],
+      });
+
+      const allVenueIds = Array.from(
+        new Set([
+          searchVenue.toString(),
+          ...subCats.map((s) => s._id.toString()),
+        ])
+      );
+      const allVenueNames = Array.from(
+        new Set([
+          venueDoc?.name,
+          ...subCats.map((s) => s.name),
+        ].filter(Boolean))
+      );
+
+      const regexConditions = allVenueNames.map((name) => ({
+        venueName: { $regex: name, $options: "i" },
+      }));
+
+      andConditions.push({
+        $or: [
+          { venueName: { $in: allVenueIds } },
+          { pitch: { $in: allVenueIds } },
+          { subVenue: { $in: allVenueIds } },
+          { venueCategory: { $in: allVenueIds } },
+          { venueSubCategory: { $in: allVenueIds } },
+          ...regexConditions,
+        ],
+      });
+    } else {
+      const venueDocs = await VenueCategory.find({
+        name: { $regex: searchVenue, $options: "i" },
+      });
+      const venueIds = venueDocs.map((v) => v._id.toString());
+      const parentIds = venueDocs.map((v) => v._id);
+
+      const subCats = await VenueCategory.find({
+        parentCategory: { $in: parentIds },
+      });
+      const allVenueIds = Array.from(
+        new Set([...venueIds, ...subCats.map((s) => s._id.toString())])
+      );
+
+      andConditions.push({
+        $or: [
+          { venueName: { $regex: searchVenue, $options: "i" } },
+          { venueName: { $in: allVenueIds } },
+          { pitch: { $in: allVenueIds } },
+          { subVenue: { $in: allVenueIds } },
+          { venueCategory: { $in: allVenueIds } },
+          { venueSubCategory: { $in: allVenueIds } },
+        ],
+      });
+    }
+  }
+
+  // Date Status & Range Filter
+  const now = new Date();
+  if (dateStatus && dateStatus !== "ALL") {
+    if (dateStatus === "today") {
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      andConditions.push({ matchDate: { $gte: startOfDay, $lte: endOfDay } });
+    } else if (dateStatus === "this_week") {
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+      andConditions.push({ matchDate: { $gte: startOfWeek, $lte: endOfWeek } });
+    } else if (dateStatus === "upcoming") {
+      andConditions.push({ matchDate: { $gte: now } });
+    } else if (dateStatus === "past") {
+      andConditions.push({ matchDate: { $lt: now } });
     }
   }
 
   if (startDate || endDate) {
-    initialFilter.matchDate = {};
-    if (startDate) initialFilter.matchDate.$gte = new Date(startDate);
-    if (endDate) initialFilter.matchDate.$lte = new Date(endDate);
+    const dateRangeObj: any = {};
+    if (startDate) dateRangeObj.$gte = new Date(startDate);
+    if (endDate) dateRangeObj.$lte = new Date(endDate);
+    andConditions.push({ matchDate: dateRangeObj });
   }
 
-  const matchQuery = new QueryBuilder(Match.find(initialFilter), otherQuery)
+  const initialFilter = andConditions.length > 0 ? { $and: andConditions } : {};
+
+  const queryParams = { ...otherQuery };
+  if (searchTerm) {
+    queryParams.searchTerm = searchTerm;
+  }
+
+  const matchQuery = new QueryBuilder(Match.find(initialFilter), queryParams)
     .search(["venueName", "status", "notes"])
     .filter()
     .sort()
