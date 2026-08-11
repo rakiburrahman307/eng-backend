@@ -1,3 +1,4 @@
+import { Types } from "mongoose";
 import { USER_ROLES } from "../../../enums/user";
 import { IUser } from "./user.interface";
 import { JwtPayload } from 'jsonwebtoken';
@@ -190,6 +191,19 @@ const updateChieldInfoToDB = async (id: string, payload: any) => {
     throw new ApiError(StatusCodes.NOT_FOUND, "Child user not found");
   }
 
+  // Clean up empty string / invalid ObjectId fields like selectTeam or parentId
+  if ("selectTeam" in payload) {
+    if (!payload.selectTeam || payload.selectTeam === "" || payload.selectTeam === "null" || !Types.ObjectId.isValid(payload.selectTeam)) {
+      payload.selectTeam = null;
+    }
+  }
+
+  if ("parentId" in payload) {
+    if (!payload.parentId || payload.parentId === "" || payload.parentId === "null" || !Types.ObjectId.isValid(payload.parentId)) {
+      delete payload.parentId;
+    }
+  }
+
   // If document files were uploaded in this request and existing documents exist, merge them or update them
   if (Array.isArray(payload.document) && payload.document.length === 0) {
     delete payload.document;
@@ -280,6 +294,12 @@ const updatePlayerByUserId = async (
 
   if (!isExist) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Player not found");
+  }
+
+  if ("selectTeam" in payload) {
+    if (!payload.selectTeam || payload.selectTeam === "" || payload.selectTeam === "null" || !Types.ObjectId.isValid(payload.selectTeam)) {
+      payload.selectTeam = null;
+    }
   }
 
   const result = await User.findByIdAndUpdate(
