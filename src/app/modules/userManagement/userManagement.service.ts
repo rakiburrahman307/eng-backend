@@ -3,8 +3,7 @@ import ApiError from '../../../errors/ApiErrors';
 import { USER_ROLES } from "../../../enums/user";
 import QueryBuilder from "../../../util/queryBuilder";
 import { User } from "../user/user.model";
-
-
+import { Subscription } from "../subscription/subscription.model";
 
 // GET ALL USERS
 const getAllUsersFromDB = async (query: Record<string, any>) => {
@@ -12,6 +11,36 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
   const filterQuery: Record<string, any> = {
     role: { $ne: USER_ROLES.SUPER_ADMIN },
   };
+
+  // Active subscription user IDs for players
+  const activeSubUserIds = await Subscription.find({ status: 'active' }).distinct('user');
+
+  // Base Eligibility Rule: Incomplete Managers, Incomplete Referees, and Unpaid Players are HIDDEN everywhere
+  const baseEligibilityConditions = [
+    // Manager with submitted documents
+    {
+      role: USER_ROLES.MANAGER,
+      dateOfBirth: { $exists: true, $ne: null },
+      document: { $exists: true, $ne: null, $nin: [[], ""] },
+    },
+    // Referee with submitted documents
+    {
+      role: USER_ROLES.REFEREE,
+      dateOfBirth: { $exists: true, $ne: null },
+      document: { $exists: true, $ne: null, $nin: [[], ""] },
+    },
+    // Player with active subscription
+    {
+      role: USER_ROLES.PLAYER,
+      _id: { $in: activeSubUserIds },
+    },
+    // Other roles (Parents, Other Clubs, Admins, Tournament Players)
+    {
+      role: { $nin: [USER_ROLES.MANAGER, USER_ROLES.REFEREE, USER_ROLES.PLAYER] },
+    },
+  ];
+
+  filterQuery.$or = baseEligibilityConditions;
 
   if (queryObj.role === 'PARENT') {
     filterQuery.parentId = null;
@@ -24,6 +53,15 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
     filterQuery.status = 'PENDING';
     delete queryObj.role;
     delete queryObj.status;
+  } else if (queryObj.role === 'MANAGER') {
+    filterQuery.role = USER_ROLES.MANAGER;
+    delete queryObj.role;
+  } else if (queryObj.role === 'REFEREE') {
+    filterQuery.role = USER_ROLES.REFEREE;
+    delete queryObj.role;
+  } else if (queryObj.role === 'PLAYER') {
+    filterQuery.role = USER_ROLES.PLAYER;
+    delete queryObj.role;
   } else if (queryObj.role === 'ALL') {
     delete queryObj.role;
   }
@@ -43,8 +81,37 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
     .paginate()
     .fields();
 
-  const result = await userQuery.modelQuery;
+  const rawResult = await userQuery.modelQuery;
   const meta = await userQuery.getPaginationInfo();
+
+  // Attach subscription info to result
+  const userIds = rawResult.map((u: any) => u._id);
+  const activeSubs = await Subscription.find({ user: { $in: userIds }, status: 'active' }).populate('package');
+
+  const subMap = new Map();
+  activeSubs.forEach((sub: any) => {
+    subMap.set(sub.user.toString(), sub);
+  });
+
+  const result = rawResult.map((u: any) => {
+    const userObj = u.toObject ? u.toObject() : u;
+    const sub = subMap.get(u._id.toString());
+    return {
+      ...userObj,
+      isPaid: Boolean(sub),
+      subscription: sub ? {
+        _id: sub._id,
+        status: sub.status,
+        price: sub.price,
+        trxId: sub.trxId,
+        subscriptionId: sub.subscriptionId,
+        currentPeriodStart: sub.currentPeriodStart,
+        currentPeriodEnd: sub.currentPeriodEnd,
+        packageName: (sub.package as any)?.title || (sub.package as any)?.name || 'Subscription Package',
+        packageDetails: sub.package || null,
+      } : null,
+    };
+  });
 
   return {
     meta,
@@ -114,6 +181,28 @@ const getAllManagersFromDB = async () => {
 
 // GET USER MANAGEMENT ANALYTICS
 const getUserAnalyticsFromDB = async () => {
+  const activeSubUserIds = await Subscription.find({ status: 'active' }).distinct('user');
+
+  const baseEligibilityConditions = [
+    {
+      role: USER_ROLES.MANAGER,
+      dateOfBirth: { $exists: true, $ne: null },
+      document: { $exists: true, $ne: null, $nin: [[], ""] },
+    },
+    {
+      role: USER_ROLES.REFEREE,
+      dateOfBirth: { $exists: true, $ne: null },
+      document: { $exists: true, $ne: null, $nin: [[], ""] },
+    },
+    {
+      role: USER_ROLES.PLAYER,
+      _id: { $in: activeSubUserIds },
+    },
+    {
+      role: { $nin: [USER_ROLES.MANAGER, USER_ROLES.REFEREE, USER_ROLES.PLAYER] },
+    },
+  ];
+
   const [
     totalUsers,
     totalParents,
@@ -128,7 +217,10 @@ const getUserAnalyticsFromDB = async () => {
     totalTrialPlayers,
     totalTournamentPlayers,
   ] = await Promise.all([
-    User.countDocuments({ role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] } }),
+    User.countDocuments({
+      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
+      $or: baseEligibilityConditions,
+    }),
     User.countDocuments({
       parentId: null,
       email: { $ne: null },
@@ -137,30 +229,40 @@ const getUserAnalyticsFromDB = async () => {
       dateOfBirth: { $exists: false },
     }),
     User.countDocuments({
-      $or: [
-        { parentId: { $ne: null } },
-        { password: null },
-        { email: null },
-      ],
-      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
+      role: USER_ROLES.PLAYER,
+      _id: { $in: activeSubUserIds },
     }),
     User.countDocuments({
       status: "PENDING",
       role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
+      $or: baseEligibilityConditions,
     }),
     User.countDocuments({
       status: "APPROVED",
       role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
-      $or: [{ parentId: { $ne: null } }, { password: null }, { email: null }],
+      $or: baseEligibilityConditions,
     }),
     User.countDocuments({
       status: "REJECTED",
       role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
+      $or: baseEligibilityConditions,
     }),
-    User.countDocuments({ role: USER_ROLES.MANAGER }),
+    User.countDocuments({
+      role: USER_ROLES.MANAGER,
+      dateOfBirth: { $exists: true, $ne: null },
+      document: { $exists: true, $ne: null, $nin: [[], ""] },
+    }),
     User.countDocuments({ role: USER_ROLES.OTHER_CLUBS }),
-    User.countDocuments({ role: USER_ROLES.REFEREE }),
-    User.countDocuments({ verified: true, role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] } }),
+    User.countDocuments({
+      role: USER_ROLES.REFEREE,
+      dateOfBirth: { $exists: true, $ne: null },
+      document: { $exists: true, $ne: null, $nin: [[], ""] },
+    }),
+    User.countDocuments({
+      verified: true,
+      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
+      $or: baseEligibilityConditions,
+    }),
     User.countDocuments({ role: USER_ROLES.OTHER_CLUBS }),
     User.countDocuments({ role: USER_ROLES.TOURNAMENT_PLAYER }),
   ]);
