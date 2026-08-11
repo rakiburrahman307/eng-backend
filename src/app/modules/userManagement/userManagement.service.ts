@@ -69,7 +69,7 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
   const userQuery = new QueryBuilder(
     User.find(filterQuery)
       .select(
-        'userName role profile verified status document selectTeam firstName lastName email phone location parentId ageGroup dateOfBirth position strongFoot previousClub rejectionReason emergencyEmail emergencyPhone playForAcademy academyClubName isDevelopmentPlayer mediaConsent createdAt'
+        'userName role profile verified status document selectTeam firstName lastName email phone location parentId ageGroup dateOfBirth position strongFoot previousClub rejectionReason emergencyEmail emergencyPhone playForAcademy academyClubName isDevelopmentPlayer mediaConsent engCoine marketValue createdAt'
       )
       .populate('selectTeam', 'teamName shortName teamLogo')
       .populate('parentId', 'firstName lastName email phone'),
@@ -96,8 +96,13 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
   const result = rawResult.map((u: any) => {
     const userObj = u.toObject ? u.toObject() : u;
     const sub = subMap.get(u._id.toString());
+    const userCoins = Number(userObj.engCoine ?? userObj.coin ?? userObj.coins) || 0;
+    const userMV = Number(userObj.marketValue) || (userCoins * 100);
+
     return {
       ...userObj,
+      engCoine: userCoins,
+      marketValue: userMV,
       isPaid: Boolean(sub),
       subscription: sub ? {
         _id: sub._id,
