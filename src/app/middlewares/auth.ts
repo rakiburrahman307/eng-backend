@@ -97,11 +97,16 @@ const auth = (...args: any[]) => async (
     // 6️⃣ Role check (only if roles given)
     // ----------------------------------------
 
-    if (roles.length && !roles.includes(req.user.role)) {
-      throw new ApiError(
-        StatusCodes.FORBIDDEN,
-        "You don't have permission to access this api"
-      );
+    if (roles.length) {
+      const userRoleUpper = (req.user.role || "").toString().trim().toUpperCase();
+      const allowedRolesUpper = roles.map((r) => String(r).trim().toUpperCase());
+
+      if (!allowedRolesUpper.includes(userRoleUpper)) {
+        throw new ApiError(
+          StatusCodes.FORBIDDEN,
+          "You don't have permission to access this api"
+        );
+      }
     }
 
     next();

@@ -59,7 +59,8 @@ const matchSchema = new Schema(
     referee: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: false,
+      default: null,
     },
 
     status: {

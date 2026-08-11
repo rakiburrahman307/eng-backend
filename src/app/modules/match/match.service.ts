@@ -508,6 +508,12 @@ const toggleMatchStatusToDB = async (id: string) => {
   const oldStatus = match.status;
 
   if (match.status === "upcoming") {
+    if (!match.referee) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "A referee must be assigned to the match before starting it live"
+      );
+    }
     match.status = "live";
 
     // LIVE START → GIVE BOTH TEAM 1000 COIN
@@ -661,6 +667,12 @@ const updateMatchTimerInDB = async (
 
   switch (action) {
     case 'START':
+      if (!match.referee) {
+        throw new ApiError(
+          StatusCodes.BAD_REQUEST,
+          "A referee must be assigned to the match before starting the match timer"
+        );
+      }
       match.timerStatus = 'running';
       match.timerStartedAt = now;
       match.elapsedSeconds = 0;
@@ -893,6 +905,12 @@ const updateMatchStatusInDB = async (id: string, status: string) => {
 
   // LIVE START → GIVE BOTH TEAMS 1000 COIN IF NEWLY LIVE
   if (newStatus === "live" && oldStatus !== "live") {
+    if (!match.referee) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "A referee must be assigned to the match before making it live"
+      );
+    }
     await Team.updateMany(
       { _id: { $in: [match.homeTeam, match.awayTeam] } },
       { $inc: { coin: 1000 } },
