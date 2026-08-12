@@ -82,9 +82,9 @@ const createPackageToDB = async (payload: any): Promise<IPackage | null> => {
     return result;
 };
 
-const updatePackageToDB = async(id: string, payload: IPackage): Promise<IPackage | null>=>{
+const updatePackageToDB = async (id: string, payload: IPackage): Promise<IPackage | null> => {
 
-    if(!mongoose.Types.ObjectId.isValid(id)){
+    if (!mongoose.Types.ObjectId.isValid(id)) {
         throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid ID")
     }
 
@@ -150,12 +150,12 @@ const updatePackageToDB = async(id: string, payload: IPackage): Promise<IPackage
     }
 
     const result = await Package.findByIdAndUpdate(
-        {_id: id},
+        { _id: id },
         payload,
-        { new: true } 
+        { new: true }
     );
 
-    if(!result){
+    if (!result) {
         throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to Update Package")
     }
 
@@ -164,47 +164,47 @@ const updatePackageToDB = async(id: string, payload: IPackage): Promise<IPackage
 
 
 const getPackageFromDB = async (
-  paymentType: string,
-  userType: string
+    paymentType: string,
+    userType: string
 ): Promise<IPackage[]> => {
-  const query: any = {
-    status: "Active",
-  };
+    const query: any = {
+        status: "Active",
+    };
 
-  if (paymentType) {
-    const pt = paymentType.trim().toLowerCase().includes('year') ? 'Yearly' : 'Monthly';
-    query.paymentType = { $in: [pt, paymentType] };
-  }
+    if (paymentType) {
+        const pt = paymentType.trim().toLowerCase().includes('year') ? 'Yearly' : 'Monthly';
+        query.paymentType = { $in: [pt, paymentType] };
+    }
 
-  if (userType) {
-    const normalized = normalizeUserType(userType);
-    query.userType = { $in: [normalized, userType, userType.toUpperCase(), userType.toLowerCase()] };
-  }
+    if (userType) {
+        const normalized = normalizeUserType(userType);
+        query.userType = { $in: [normalized, userType, userType.toUpperCase(), userType.toLowerCase()] };
+    }
 
-  const result = await Package.find(query);
-  return result;
+    const result = await Package.find(query);
+    return result;
 };
 
-const getPackageDetailsFromDB = async(id: string): Promise<IPackage | null>=>{
-    if(!mongoose.Types.ObjectId.isValid(id)){
+const getPackageDetailsFromDB = async (id: string): Promise<IPackage | null> => {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
         throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid ID")
     }
     const result = await Package.findById(id);
     return result;
 }
 
-const deletePackageToDB = async(id: string): Promise<IPackage | null>=>{
-    if(!mongoose.Types.ObjectId.isValid(id)){
+const deletePackageToDB = async (id: string): Promise<IPackage | null> => {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
         throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid ID")
     }
 
     const result = await Package.findByIdAndUpdate(
-        {_id: id},
-        {status: "Delete"},
-        {new: true}
+        { _id: id },
+        { status: "Delete" },
+        { new: true }
     );
 
-    if(!result){
+    if (!result) {
         throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to deleted Package")
     }
 
@@ -238,22 +238,22 @@ const togglePackageStatusToDB = async (id: string): Promise<IPackage | null> => 
 };
 
 const getActivePackagesFromDB = async (
-  filters: { status?: string; userType?: string }
+    filters: { status?: string; userType?: string }
 ): Promise<IPackage[]> => {
-  const query: any = {};
+    const query: any = {};
 
-  if (filters.status) {
-    query.status = filters.status;
-  }
+    if (filters.status) {
+        query.status = filters.status;
+    }
 
-  if (filters.userType) {
-    const normalized = normalizeUserType(filters.userType);
-    query.userType = { $in: [normalized, filters.userType, filters.userType.toUpperCase(), filters.userType.toLowerCase()] };
-  }
+    if (filters.userType) {
+        const normalized = normalizeUserType(filters.userType);
+        query.userType = { $in: [normalized, filters.userType, filters.userType.toUpperCase(), filters.userType.toLowerCase()] };
+    }
 
-  const result = await Package.find(query);
+    const result = await Package.find(query);
 
-  return result;
+    return result;
 };
 const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail: string, playerId?: string): Promise<{ checkoutUrl: string }> => {
     if (!mongoose.Types.ObjectId.isValid(packageId)) {
@@ -298,21 +298,21 @@ const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail
             },
         ],
         mode: 'subscription',
-        success_url: `${process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5005}`}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5005}`}/payment/cancel?reason=Payment+was+cancelled`,
+        success_url: `${config.stripe.backendURL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${config.stripe.backendURL}/payment/cancel?reason=Payment+was+cancelled`,
         customer_email: userEmail,
         client_reference_id: userId,
         subscription_data: {
-          metadata: {
+            metadata: {
+                userId,
+                packageId,
+                targetUserId: playerId || userId,
+            },
+        },
+        metadata: {
             userId,
             packageId,
             targetUserId: playerId || userId,
-          },
-        },
-        metadata: {
-          userId,
-          packageId,
-          targetUserId: playerId || userId,
         },
     });
 

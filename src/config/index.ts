@@ -19,7 +19,7 @@ export default {
   stripe: {
     stripeSecretKey: process.env.STRIPE_API_SECRET,
     webhookSecret: process.env.WEBHOOK_SECRET,
-    paymentSuccess: process.env.STRIPE_PAYMENT_SUCCESS,
+    backendURL: process.env.BACKEND_URL,
   },
   email: {
     apiKey: process.env.API_KEY,
