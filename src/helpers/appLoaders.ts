@@ -67,12 +67,15 @@ export function configureRoutes(app: Express): void {
      // Main API v1 routing under global rate limits
      app.use('/api/v1', globalLimiter, router);
 
-     // ✅ Stripe Payment redirect pages (rendered via EJS)
+     // ✅ Stripe Payment redirect pages (rendered via EJS) - ⚡ Instant synchronous rendering
      app.get('/payment/success', (req: Request, res: Response) => {
           const sessionId = (req.query.session_id as string) || '';
+          const rawPackage = (req.query.package as string) || '';
+          const packageName = rawPackage ? decodeURIComponent(rawPackage) : 'ENG Subscription Plan';
+
           res.render('payment-success', {
                sessionId: sessionId ? `${sessionId.substring(0, 16)}...` : 'N/A',
-               packageName: (req.query.package as string) || 'ENG Subscription Plan',
+               packageName,
                date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
                year: new Date().getFullYear(),
                appUrl: config.frontendUrl || 'engapp://',
@@ -80,12 +83,11 @@ export function configureRoutes(app: Express): void {
      });
 
      app.get('/payment/cancel', (req: Request, res: Response) => {
-          res.render('payment-error', {
-               errorMessage: (req.query.reason as string) || 'Payment was cancelled',
+          res.render('payment-cancel', {
+               errorMessage: (req.query.reason as string) || 'Payment was cancelled by user',
                date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
                year: new Date().getFullYear(),
                appUrl: config.frontendUrl || 'engapp://',
-               supportUrl: 'mailto:support@engsportsevents.co.uk',
           });
      });
 

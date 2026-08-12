@@ -298,7 +298,7 @@ const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail
             },
         ],
         mode: 'subscription',
-        success_url: `${config.stripe.backendURL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${config.stripe.backendURL}/payment/success?session_id={CHECKOUT_SESSION_ID}&package=${encodeURIComponent(pkg.title || (pkg as any).name || 'ENG Subscription Plan')}`,
         cancel_url: `${config.stripe.backendURL}/payment/cancel?reason=Payment+was+cancelled`,
         customer_email: userEmail,
         client_reference_id: userId,

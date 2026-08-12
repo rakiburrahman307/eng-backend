@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -18,45 +19,38 @@
     }
 
     body {
-      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-      background: linear-gradient(
-        135deg,
-        #0f172a 0%,
-        #3b1f1f 50%,
-        #1f0f0f 100%
-      );
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #3b1f1f 50%, #1f0f0f 100%);
+      width: 100%;
       min-height: 100vh;
       min-height: 100dvh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 16px;
+      padding: 10px;
       overflow-x: hidden;
     }
 
     .card {
       width: 100%;
-      max-width: 520px;
-      padding: 40px 32px;
+      max-width: 500px;
+      padding: 32px 20px;
       text-align: center;
-
-      background: rgba(255, 255, 255, 0.05);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 24px;
-
-      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     }
 
     .logo {
-      color: rgba(255, 255, 255, 0.8);
+      color: rgba(255, 255, 255, 0.85);
       font-size: 13px;
       font-weight: 700;
       letter-spacing: 1.5px;
       text-transform: uppercase;
-      margin-bottom: 30px;
+      margin-bottom: 24px;
     }
 
     .logo span {
@@ -64,35 +58,26 @@
     }
 
     .error-icon {
-      width: 80px;
-      height: 80px;
+      width: 72px;
+      height: 72px;
       background: linear-gradient(135deg, #ef4444, #b91c1c);
       border-radius: 50%;
-
       display: flex;
       align-items: center;
       justify-content: center;
-
-      margin: 0 auto 26px;
-
-      box-shadow: 0 0 40px rgba(239, 68, 68, 0.4);
+      margin: 0 auto 20px;
+      box-shadow: 0 0 35px rgba(239, 68, 68, 0.4);
       animation: pulse 2s ease-in-out infinite;
     }
 
     @keyframes pulse {
-      0%,
-      100% {
-        box-shadow: 0 0 40px rgba(239, 68, 68, 0.4);
-      }
-
-      50% {
-        box-shadow: 0 0 60px rgba(239, 68, 68, 0.7);
-      }
+      0%, 100% { box-shadow: 0 0 35px rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 0 55px rgba(239, 68, 68, 0.7); }
     }
 
     .error-icon svg {
-      width: 42px;
-      height: 42px;
+      width: 38px;
+      height: 38px;
       stroke: #ffffff;
       stroke-width: 3;
       fill: none;
@@ -102,46 +87,40 @@
 
     .badge {
       display: inline-block;
-
       background: rgba(239, 68, 68, 0.15);
       border: 1px solid rgba(239, 68, 68, 0.4);
       color: #f87171;
-
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 1.5px;
       text-transform: uppercase;
-
-      padding: 6px 14px;
+      padding: 5px 14px;
       border-radius: 100px;
-
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     }
 
     h1 {
       color: #ffffff;
-      font-size: 27px;
+      font-size: 24px;
       font-weight: 700;
       line-height: 1.3;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     p.subtitle {
-      color: rgba(255, 255, 255, 0.6);
+      color: rgba(255, 255, 255, 0.7);
       font-size: 14px;
-      line-height: 1.7;
-      margin-bottom: 30px;
+      line-height: 1.6;
+      margin-bottom: 24px;
     }
 
     .info-box {
       width: 100%;
       background: rgba(255, 255, 255, 0.07);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 14px;
-
-      padding: 16px 18px;
-      margin-bottom: 24px;
-
+      padding: 14px 16px;
+      margin-bottom: 20px;
       text-align: left;
     }
 
@@ -149,11 +128,9 @@
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 16px;
-
+      gap: 12px;
       padding: 9px 0;
-
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .info-row:last-child {
@@ -162,19 +139,18 @@
 
     .info-label {
       flex: 0 0 auto;
-      color: rgba(255, 255, 255, 0.45);
-      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 13px;
+      font-weight: 500;
     }
 
     .info-value {
       min-width: 0;
-      max-width: 70%;
-
+      max-width: 75%;
       color: #ffffff;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 600;
       text-align: right;
-
       overflow-wrap: anywhere;
       word-break: break-word;
     }
@@ -186,213 +162,63 @@
     .error-detail {
       background: rgba(239, 68, 68, 0.08);
       border: 1px solid rgba(239, 68, 68, 0.2);
-      border-radius: 10px;
-
+      border-radius: 12px;
       padding: 13px 15px;
-      margin-bottom: 24px;
-
-      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 20px;
+      color: rgba(255, 255, 255, 0.7);
       font-size: 12px;
       line-height: 1.6;
-
       text-align: left;
     }
 
     .error-detail strong {
-      color: rgba(255, 255, 255, 0.7);
-    }
-
-    .btn-group {
-      width: 100%;
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-
-      min-height: 48px;
-      padding: 12px 22px;
-
       color: #ffffff;
-      text-decoration: none;
-
-      font-size: 14px;
-      font-weight: 600;
-
-      border-radius: 12px;
-      transition: all 0.2s ease;
-
-      border: none;
-      cursor: pointer;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #ef4444, #b91c1c);
-      box-shadow: 0 4px 20px rgba(239, 68, 68, 0.35);
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 30px rgba(239, 68, 68, 0.5);
-    }
-
-    .btn-secondary {
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-    }
-
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.15);
-      transform: translateY(-2px);
     }
 
     .footer-text {
-      margin-top: 24px;
-      color: rgba(255, 255, 255, 0.3);
+      margin-top: 20px;
+      color: rgba(255, 255, 255, 0.4);
       font-size: 11px;
       line-height: 1.6;
     }
 
-    /* Tablet */
-    @media (min-width: 481px) {
+    /* Media query for medium/larger screens */
+    @media (min-width: 520px) {
       body {
-        padding: 24px;
+        padding: 20px;
       }
 
       .card {
-        padding: 48px 40px;
+        padding: 44px 36px;
       }
 
       .error-icon {
-        width: 86px;
-        height: 86px;
-      }
-
-      h1 {
-        font-size: 28px;
-      }
-
-      p.subtitle {
-        font-size: 15px;
-      }
-
-      .info-box {
-        padding: 18px 20px;
-      }
-
-      .info-label,
-      .info-value {
-        font-size: 13px;
-      }
-
-      .error-detail {
-        font-size: 13px;
-      }
-
-      .btn {
-        font-size: 15px;
-        padding: 13px 26px;
-      }
-    }
-
-    /* Small mobile */
-    @media (max-width: 380px) {
-      body {
-        padding: 10px;
-      }
-
-      .card {
-        padding: 28px 18px;
-        border-radius: 18px;
-      }
-
-      .logo {
-        font-size: 11px;
-        margin-bottom: 24px;
-      }
-
-      .error-icon {
-        width: 68px;
-        height: 68px;
-        margin-bottom: 20px;
+        width: 80px;
+        height: 80px;
       }
 
       .error-icon svg {
-        width: 36px;
-        height: 36px;
-      }
-
-      .badge {
-        font-size: 10px;
-        letter-spacing: 1.2px;
-        padding: 5px 12px;
-        margin-bottom: 14px;
+        width: 42px;
+        height: 42px;
       }
 
       h1 {
-        font-size: 22px;
-        line-height: 1.3;
-        margin-bottom: 10px;
+        font-size: 26px;
       }
 
       p.subtitle {
-        font-size: 13px;
-        line-height: 1.6;
-        margin-bottom: 22px;
+        font-size: 15px;
       }
 
       .info-box {
-        padding: 12px 14px;
-        margin-bottom: 18px;
-      }
-
-      .info-row {
-        gap: 10px;
-        padding: 8px 0;
-      }
-
-      .info-label,
-      .info-value {
-        font-size: 11px;
-      }
-
-      .info-value {
-        max-width: 65%;
-      }
-
-      .error-detail {
-        padding: 11px 12px;
-        margin-bottom: 18px;
-        font-size: 11px;
-      }
-
-      .btn-group {
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      .btn {
-        width: 100%;
-        min-height: 44px;
-        padding: 11px 16px;
-        font-size: 13px;
-      }
-
-      .footer-text {
-        margin-top: 20px;
-        font-size: 10px;
+        padding: 16px 20px;
       }
     }
 
-    /* Very small devices */
-    @media (max-width: 320px) {
+    /* Small phone optimization */
+    @media (max-width: 360px) {
       body {
-        padding: 8px;
+        padding: 6px;
       }
 
       .card {
@@ -400,49 +226,27 @@
         border-radius: 16px;
       }
 
-      .logo {
-        font-size: 10px;
-      }
-
-      .error-icon {
-        width: 62px;
-        height: 62px;
-      }
-
-      .error-icon svg {
-        width: 32px;
-        height: 32px;
-      }
-
       h1 {
-        font-size: 20px;
+        font-size: 21px;
       }
 
       p.subtitle {
-        font-size: 12px;
+        font-size: 13px;
       }
 
       .info-box {
-        padding: 10px 11px;
+        padding: 12px 12px;
       }
 
-      .info-row {
-        gap: 8px;
-      }
-
-      .info-label,
-      .info-value {
-        font-size: 10px;
-      }
-
-      .error-detail {
-        font-size: 10px;
+      .info-label, .info-value {
+        font-size: 12px;
       }
     }
   </style>
 </head>
 
 <body>
+
   <div class="card">
 
     <div class="logo">
@@ -505,5 +309,7 @@
     </p>
 
   </div>
+
 </body>
+
 </html>
