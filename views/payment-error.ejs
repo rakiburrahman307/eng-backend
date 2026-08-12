@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Payment Failed — ENG Sports</title>
+
   <style>
     * {
       margin: 0;
@@ -11,49 +12,87 @@
       box-sizing: border-box;
     }
 
+    html {
+      width: 100%;
+      min-height: 100%;
+    }
+
     body {
       font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-      background: linear-gradient(135deg, #0f172a 0%, #3b1f1f 50%, #1f0f0f 100%);
+      background: linear-gradient(
+        135deg,
+        #0f172a 0%,
+        #3b1f1f 50%,
+        #1f0f0f 100%
+      );
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 16px;
+      overflow-x: hidden;
     }
 
     .card {
+      width: 100%;
+      max-width: 520px;
+      padding: 40px 32px;
+      text-align: center;
+
       background: rgba(255, 255, 255, 0.05);
       backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 24px;
-      padding: 56px 48px;
-      max-width: 520px;
-      width: 100%;
-      text-align: center;
+
       box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
     }
 
+    .logo {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 30px;
+    }
+
+    .logo span {
+      color: #ef4444;
+    }
+
     .error-icon {
-      width: 90px;
-      height: 90px;
+      width: 80px;
+      height: 80px;
       background: linear-gradient(135deg, #ef4444, #b91c1c);
       border-radius: 50%;
+
       display: flex;
       align-items: center;
       justify-content: center;
-      margin: 0 auto 32px;
+
+      margin: 0 auto 26px;
+
       box-shadow: 0 0 40px rgba(239, 68, 68, 0.4);
       animation: pulse 2s ease-in-out infinite;
     }
 
     @keyframes pulse {
-      0%, 100% { box-shadow: 0 0 40px rgba(239, 68, 68, 0.4); }
-      50% { box-shadow: 0 0 60px rgba(239, 68, 68, 0.7); }
+      0%,
+      100% {
+        box-shadow: 0 0 40px rgba(239, 68, 68, 0.4);
+      }
+
+      50% {
+        box-shadow: 0 0 60px rgba(239, 68, 68, 0.7);
+      }
     }
 
     .error-icon svg {
-      width: 48px;
-      height: 48px;
+      width: 42px;
+      height: 42px;
       stroke: #ffffff;
       stroke-width: 3;
       fill: none;
@@ -63,48 +102,58 @@
 
     .badge {
       display: inline-block;
+
       background: rgba(239, 68, 68, 0.15);
       border: 1px solid rgba(239, 68, 68, 0.4);
       color: #f87171;
-      font-size: 12px;
+
+      font-size: 11px;
       font-weight: 700;
-      letter-spacing: 2px;
+      letter-spacing: 1.5px;
       text-transform: uppercase;
-      padding: 6px 16px;
+
+      padding: 6px 14px;
       border-radius: 100px;
-      margin-bottom: 20px;
+
+      margin-bottom: 18px;
     }
 
     h1 {
       color: #ffffff;
-      font-size: 28px;
+      font-size: 27px;
       font-weight: 700;
-      margin-bottom: 14px;
       line-height: 1.3;
+      margin-bottom: 12px;
     }
 
     p.subtitle {
       color: rgba(255, 255, 255, 0.6);
-      font-size: 15px;
+      font-size: 14px;
       line-height: 1.7;
-      margin-bottom: 36px;
+      margin-bottom: 30px;
     }
 
     .info-box {
+      width: 100%;
       background: rgba(255, 255, 255, 0.07);
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 14px;
-      padding: 20px 24px;
-      margin-bottom: 32px;
+
+      padding: 16px 18px;
+      margin-bottom: 24px;
+
       text-align: left;
     }
 
     .info-row {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
+      align-items: flex-start;
+      gap: 16px;
+
+      padding: 9px 0;
+
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
 
     .info-row:last-child {
@@ -112,14 +161,22 @@
     }
 
     .info-label {
+      flex: 0 0 auto;
       color: rgba(255, 255, 255, 0.45);
-      font-size: 13px;
+      font-size: 12px;
     }
 
     .info-value {
+      min-width: 0;
+      max-width: 70%;
+
       color: #ffffff;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
+      text-align: right;
+
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .info-value.red {
@@ -130,30 +187,46 @@
       background: rgba(239, 68, 68, 0.08);
       border: 1px solid rgba(239, 68, 68, 0.2);
       border-radius: 10px;
-      padding: 14px 18px;
-      margin-bottom: 28px;
+
+      padding: 13px 15px;
+      margin-bottom: 24px;
+
       color: rgba(255, 255, 255, 0.6);
-      font-size: 13px;
+      font-size: 12px;
       line-height: 1.6;
+
       text-align: left;
     }
 
+    .error-detail strong {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
     .btn-group {
+      width: 100%;
       display: flex;
-      gap: 12px;
+      gap: 10px;
       justify-content: center;
       flex-wrap: wrap;
     }
 
     .btn {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+
+      min-height: 48px;
+      padding: 12px 22px;
+
       color: #ffffff;
       text-decoration: none;
-      font-size: 15px;
+
+      font-size: 14px;
       font-weight: 600;
-      padding: 14px 28px;
+
       border-radius: 12px;
       transition: all 0.2s ease;
+
       border: none;
       cursor: pointer;
     }
@@ -179,28 +252,202 @@
     }
 
     .footer-text {
-      margin-top: 28px;
+      margin-top: 24px;
       color: rgba(255, 255, 255, 0.3);
-      font-size: 12px;
+      font-size: 11px;
+      line-height: 1.6;
     }
 
-    .logo {
-      color: rgba(255, 255, 255, 0.8);
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      margin-bottom: 36px;
+    /* Tablet */
+    @media (min-width: 481px) {
+      body {
+        padding: 24px;
+      }
+
+      .card {
+        padding: 48px 40px;
+      }
+
+      .error-icon {
+        width: 86px;
+        height: 86px;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
+
+      p.subtitle {
+        font-size: 15px;
+      }
+
+      .info-box {
+        padding: 18px 20px;
+      }
+
+      .info-label,
+      .info-value {
+        font-size: 13px;
+      }
+
+      .error-detail {
+        font-size: 13px;
+      }
+
+      .btn {
+        font-size: 15px;
+        padding: 13px 26px;
+      }
     }
 
-    .logo span {
-      color: #ef4444;
+    /* Small mobile */
+    @media (max-width: 380px) {
+      body {
+        padding: 10px;
+      }
+
+      .card {
+        padding: 28px 18px;
+        border-radius: 18px;
+      }
+
+      .logo {
+        font-size: 11px;
+        margin-bottom: 24px;
+      }
+
+      .error-icon {
+        width: 68px;
+        height: 68px;
+        margin-bottom: 20px;
+      }
+
+      .error-icon svg {
+        width: 36px;
+        height: 36px;
+      }
+
+      .badge {
+        font-size: 10px;
+        letter-spacing: 1.2px;
+        padding: 5px 12px;
+        margin-bottom: 14px;
+      }
+
+      h1 {
+        font-size: 22px;
+        line-height: 1.3;
+        margin-bottom: 10px;
+      }
+
+      p.subtitle {
+        font-size: 13px;
+        line-height: 1.6;
+        margin-bottom: 22px;
+      }
+
+      .info-box {
+        padding: 12px 14px;
+        margin-bottom: 18px;
+      }
+
+      .info-row {
+        gap: 10px;
+        padding: 8px 0;
+      }
+
+      .info-label,
+      .info-value {
+        font-size: 11px;
+      }
+
+      .info-value {
+        max-width: 65%;
+      }
+
+      .error-detail {
+        padding: 11px 12px;
+        margin-bottom: 18px;
+        font-size: 11px;
+      }
+
+      .btn-group {
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .btn {
+        width: 100%;
+        min-height: 44px;
+        padding: 11px 16px;
+        font-size: 13px;
+      }
+
+      .footer-text {
+        margin-top: 20px;
+        font-size: 10px;
+      }
+    }
+
+    /* Very small devices */
+    @media (max-width: 320px) {
+      body {
+        padding: 8px;
+      }
+
+      .card {
+        padding: 24px 14px;
+        border-radius: 16px;
+      }
+
+      .logo {
+        font-size: 10px;
+      }
+
+      .error-icon {
+        width: 62px;
+        height: 62px;
+      }
+
+      .error-icon svg {
+        width: 32px;
+        height: 32px;
+      }
+
+      h1 {
+        font-size: 20px;
+      }
+
+      p.subtitle {
+        font-size: 12px;
+      }
+
+      .info-box {
+        padding: 10px 11px;
+      }
+
+      .info-row {
+        gap: 8px;
+      }
+
+      .info-label,
+      .info-value {
+        font-size: 10px;
+      }
+
+      .error-detail {
+        font-size: 10px;
+      }
     }
   </style>
 </head>
+
 <body>
   <div class="card">
-    <div class="logo">ENG <span>Sports</span> Events</div>
+
+    <div class="logo">
+      ENG <span>Sports</span> Events
+    </div>
 
     <div class="error-icon">
       <svg viewBox="0 0 24 24">
@@ -209,37 +456,54 @@
       </svg>
     </div>
 
-    <div class="badge">Payment Failed</div>
+    <div class="badge">
+      Payment Failed
+    </div>
 
     <h1>Your Payment Was Not Processed</h1>
+
     <p class="subtitle">
-      Unfortunately, your payment could not be completed. This may have happened due to a declined card, insufficient funds, or a network issue. No charges have been made.
+      Unfortunately, your payment could not be completed.
+      This may have happened due to a declined card,
+      insufficient funds, or a network issue.
+      No charges have been made.
     </p>
 
     <div class="info-box">
+
       <div class="info-row">
         <span class="info-label">Status</span>
         <span class="info-value red">✗ Failed</span>
       </div>
+
       <div class="info-row">
         <span class="info-label">Reason</span>
-        <span class="info-value"><%= errorMessage || 'Payment was cancelled or failed' %></span>
+        <span class="info-value">
+          <%= errorMessage || 'Payment was cancelled or failed' %>
+        </span>
       </div>
+
       <div class="info-row">
         <span class="info-label">Date</span>
-        <span class="info-value"><%= date %></span>
+        <span class="info-value">
+          <%= date %>
+        </span>
       </div>
+
     </div>
 
     <div class="error-detail">
-      <strong style="color: rgba(255,255,255,0.7);">What to do next:</strong><br/>
-      Please check your card details and try again. If the problem persists, contact your bank or reach out to our support team for assistance.
+      <strong>What to do next:</strong><br />
+      Please check your card details and try again.
+      If the problem persists, contact your bank or reach out
+      to our support team for assistance.
     </div>
 
     <p class="footer-text">
       No charges were made to your account.<br />
       ENG Sports Events © <%= year %>
     </p>
+
   </div>
 </body>
 </html>

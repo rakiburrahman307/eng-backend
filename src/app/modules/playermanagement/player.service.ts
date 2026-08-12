@@ -279,8 +279,36 @@ const getPendingPlayersForAdminFromDB = async (query: Record<string, any>) => {
     .paginate()
     .fields();
 
-  const result = await queryBuilder.modelQuery;
+  const rawResult = await queryBuilder.modelQuery;
   const meta = await queryBuilder.getPaginationInfo();
+
+  const playerUserIds = rawResult.map((p: any) => p._id);
+  const parentUserIds = rawResult.map((p: any) => p.parentId?._id || p.parentId).filter(Boolean);
+  const allUserIds = [...new Set([...playerUserIds, ...parentUserIds])];
+
+  const activeSubs = await Subscription.find({
+    user: { $in: allUserIds },
+    status: 'active',
+  }).populate('package');
+
+  const subMap = new Map();
+  activeSubs.forEach((sub: any) => subMap.set(sub.user.toString(), sub));
+
+  const result = rawResult.map((p: any) => {
+    const playerObj = p.toObject ? p.toObject() : p;
+    const directSub = subMap.get(playerObj._id?.toString());
+    const parentSub = playerObj.parentId?._id
+      ? subMap.get(playerObj.parentId._id.toString())
+      : (playerObj.parentId ? subMap.get(playerObj.parentId.toString()) : null);
+    const activeSub = directSub || parentSub;
+
+    return {
+      ...playerObj,
+      activeSubscription: activeSub || null,
+      activePackage: activeSub?.package || null,
+      isPaid: Boolean(activeSub),
+    };
+  });
 
   return {
     meta,
@@ -316,7 +344,19 @@ const approvePlayerByAdminToDB = async (playerId: string) => {
     }
   }
 
-  return updatedPlayer;
+  const activeSub = await Subscription.findOne({
+    user: { $in: [player._id, ...(player.parentId ? [player.parentId] : [])] },
+    status: 'active',
+  }).populate('package');
+
+  const playerObj = updatedPlayer?.toObject ? updatedPlayer.toObject() : updatedPlayer;
+
+  return {
+    ...playerObj,
+    activeSubscription: activeSub || null,
+    activePackage: activeSub?.package || null,
+    isPaid: Boolean(activeSub),
+  };
 };
 
 // 8. REJECT PLAYER BY ADMIN
@@ -349,7 +389,19 @@ const rejectPlayerByAdminToDB = async (playerId: string, reason?: string) => {
     }
   }
 
-  return updatedPlayer;
+  const activeSub = await Subscription.findOne({
+    user: { $in: [player._id, ...(player.parentId ? [player.parentId] : [])] },
+    status: 'active',
+  }).populate('package');
+
+  const playerObj = updatedPlayer?.toObject ? updatedPlayer.toObject() : updatedPlayer;
+
+  return {
+    ...playerObj,
+    activeSubscription: activeSub || null,
+    activePackage: activeSub?.package || null,
+    isPaid: Boolean(activeSub),
+  };
 };
 
 // ========================== EXISTING PLAYER QUERIES ==========================

@@ -86,15 +86,36 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
   const rawResult = await userQuery.modelQuery;
   const meta = await userQuery.getPaginationInfo();
 
+  const userIds = rawResult.map((u: any) => u._id);
+  const parentIds = rawResult.map((u: any) => u.parentId?._id || u.parentId).filter(Boolean);
+  const allUserIds = [...new Set([...userIds, ...parentIds])];
+
+  const activeSubs = await Subscription.find({
+    user: { $in: allUserIds },
+    status: 'active',
+  }).populate('package');
+
+  const subMap = new Map();
+  activeSubs.forEach((sub: any) => subMap.set(sub.user.toString(), sub));
+
   const result = rawResult.map((u: any) => {
     const userObj = u.toObject ? u.toObject() : u;
     const userCoins = Number(userObj.engCoine ?? userObj.coin ?? userObj.coins) || 0;
     const userMV = Number(userObj.marketValue) || (userCoins * 100);
 
+    const directSub = subMap.get(userObj._id?.toString());
+    const parentSub = userObj.parentId?._id
+      ? subMap.get(userObj.parentId._id.toString())
+      : (userObj.parentId ? subMap.get(userObj.parentId.toString()) : null);
+    const activeSub = directSub || parentSub;
+
     return {
       ...userObj,
       engCoine: userCoins,
       marketValue: userMV,
+      activeSubscription: activeSub || null,
+      activePackage: activeSub?.package || null,
+      isPaid: Boolean(activeSub),
     };
   });
 

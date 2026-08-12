@@ -583,33 +583,20 @@ const approveOrRejectUser = async (
     );
   }
 
-  // 💸 AUTO STRIPE REFUND IF REJECTED
-  if (status === 'REJECTED') {
-    try {
-      const activeSub = await Subscription.findOne({
-        user: userId,
-        status: 'active',
-      });
+  // Fetch active subscription for user or parent
+  const activeSub = await Subscription.findOne({
+    user: { $in: [user._id, ...(user.parentId ? [user.parentId] : [])] },
+    status: 'active',
+  }).populate('package');
 
-      if (activeSub && activeSub.trxId) {
-        // Issue refund via Stripe
-        await stripe.refunds.create({
-          payment_intent: activeSub.trxId,
-        });
+  const updatedObj = updated?.toObject ? updated.toObject() : updated;
 
-        // Cancel subscription status in DB
-        activeSub.status = 'cancel';
-        await activeSub.save();
-      }
-    } catch (refundErr: any) {
-      console.error(
-        `[Stripe Refund Error] Could not auto-refund user ${userId}:`,
-        refundErr?.message || refundErr
-      );
-    }
-  }
-
-  return updated;
+  return {
+    ...updatedObj,
+    activeSubscription: activeSub || null,
+    activePackage: activeSub?.package || null,
+    isPaid: Boolean(activeSub),
+  };
 };
 
 // TOGGLE BLUE TICK VERIFICATION FOR USER (Admin only)
