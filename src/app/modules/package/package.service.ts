@@ -8,14 +8,47 @@ import stripe from "../../../config/stripe";
 import config from "../../../config";
 import { User } from "../user/user.model";
 
-const createPackageToDB = async (payload: IPackage): Promise<IPackage | null> => {
+const normalizeUserType = (val: any) => {
+    if (!val || typeof val !== 'string') return 'Player';
+    const clean = val.trim().toUpperCase().replace(/[\s_-]+/g, '_');
+    if (clean === 'PLAYER') return 'Player';
+    if (clean === 'MANAGER') return 'Manager';
+    if (clean === 'REFEREE') return 'Referee';
+    if (clean === 'CLUB' || clean === 'OTHER_CLUBS' || clean === 'OTHER_CLUB' || clean === 'OTHERCLUBS') return 'Club';
+    if (clean === 'TOURNAMENT_PLAYER' || clean === 'TOURNAMENTPLAYER') return 'Tournament Player';
+    if (clean === 'TRIAL_PLAYER' || clean === 'TRIALPLAYER') return 'Trial Player';
+    if (clean === 'OTHER') return 'Other';
+    return val.trim();
+};
+
+const normalizeDuration = (val: any) => {
+    if (!val || typeof val !== 'string') return '1 month';
+    const lower = val.trim().toLowerCase();
+    if (lower.includes('year') || lower.includes('12') || lower === 'annual' || lower === 'yearly') return '1 year';
+    if (lower.includes('6')) return '6 months';
+    if (lower.includes('3')) return '3 months';
+    return '1 month';
+};
+
+const createPackageToDB = async (payload: any): Promise<IPackage | null> => {
+    payload.userType = normalizeUserType(payload.userType);
+    payload.duration = normalizeDuration(payload.duration);
+    payload.price = Number(payload.price) || 0;
+    payload.credit = Number(payload.credit) || 0;
+
+    if (!payload.paymentType) {
+        payload.paymentType = payload.duration === '1 year' ? 'Yearly' : 'Monthly';
+    } else {
+        payload.paymentType = payload.paymentType.toString().toLowerCase().includes('year') ? 'Yearly' : 'Monthly';
+    }
+
     // Set default permissions based on packageType if not explicitly passed
     if (payload.packageType === 'Semi Pro') {
         if (payload.canViewOtherPlayers === undefined) payload.canViewOtherPlayers = false;
         if (payload.canRedeemPoints === undefined) payload.canRedeemPoints = false;
         if (payload.canViewOtherPlayerStats === undefined) payload.canViewOtherPlayerStats = false;
         if (payload.canEarnPoints === undefined) payload.canEarnPoints = true;
-    } else if (payload.packageType === 'Professional') {
+    } else {
         if (payload.canViewOtherPlayers === undefined) payload.canViewOtherPlayers = true;
         if (payload.canRedeemPoints === undefined) payload.canRedeemPoints = true;
         if (payload.canViewOtherPlayerStats === undefined) payload.canViewOtherPlayerStats = true;
@@ -134,17 +167,18 @@ const getPackageFromDB = async (
   paymentType: string,
   userType: string
 ): Promise<IPackage[]> => {
-
   const query: any = {
     status: "Active",
   };
 
   if (paymentType) {
-    query.paymentType = paymentType;
+    const pt = paymentType.trim().toLowerCase().includes('year') ? 'Yearly' : 'Monthly';
+    query.paymentType = { $in: [pt, paymentType] };
   }
 
   if (userType) {
-    query.userType = userType;
+    const normalized = normalizeUserType(userType);
+    query.userType = { $in: [normalized, userType, userType.toUpperCase(), userType.toLowerCase()] };
   }
 
   const result = await Package.find(query);
@@ -213,7 +247,8 @@ const getActivePackagesFromDB = async (
   }
 
   if (filters.userType) {
-    query.userType = filters.userType;
+    const normalized = normalizeUserType(filters.userType);
+    query.userType = { $in: [normalized, filters.userType, filters.userType.toUpperCase(), filters.userType.toLowerCase()] };
   }
 
   const result = await Package.find(query);

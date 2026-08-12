@@ -20,13 +20,19 @@ const packageSchema = new Schema<IPackage, PackageModel>({
 
     userType: {
         type: String,
-        enum: ['Player', 'Manager', 'Club', 'Referee', 'Other', 'Tournament Player', 'Trial Player', 'OTHER_CLUBS'],
-        required: true
+        enum: [
+            'Player', 'Manager', 'Club', 'Referee', 'Other', 'Tournament Player', 'Trial Player', 'OTHER_CLUBS',
+            'PLAYER', 'MANAGER', 'CLUB', 'REFEREE', 'TOURNAMENT_PLAYER', 'TRIAL_PLAYER', 'OTHER'
+        ],
+        default: 'Player'
     },
 
     packageType: {
         type: String,
-        enum: ['Semi Pro', 'Professional', 'Other', 'Tournament Player', 'Trial Player'],
+        enum: [
+            'Semi Pro', 'Professional', 'Other', 'Tournament Player', 'Trial Player',
+            'SEMI_PRO', 'PROFESSIONAL', 'TOURNAMENT_PLAYER', 'TRIAL_PLAYER', 'OTHER'
+        ],
         default: 'Professional'
     },
 
@@ -54,14 +60,13 @@ const packageSchema = new Schema<IPackage, PackageModel>({
 
     duration: {
         type: String,
-        enum: ['1 month', '3 months', '6 months', '1 year'],
-        required: true
+        default: '1 month'
     },
 
     paymentType: {
         type: String,
-        enum: ['Monthly', 'Yearly'],
-        required: true
+        enum: ['Monthly', 'Quarterly', 'Yearly', 'One-time', 'One-Time', 'MONTHLY', 'QUARTERLY', 'YEARLY', 'ONE_TIME', 'ONE-TIME'],
+        default: 'Monthly'
     },
 
     stripeProductId: {
@@ -74,7 +79,7 @@ const packageSchema = new Schema<IPackage, PackageModel>({
         required: true
     },
 
-    credit: { type: Number, required: true },
+    credit: { type: Number, default: 0 },
 
     status: {
         type: String,

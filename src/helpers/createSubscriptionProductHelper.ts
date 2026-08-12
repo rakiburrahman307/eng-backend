@@ -2,7 +2,6 @@ import { StatusCodes } from "http-status-codes";
 import { IPackage } from "../app/modules/package/package.interface";
 import stripe from "../config/stripe";
 import ApiError from "../errors/ApiErrors";
-import config from "../config";
 
 export const createSubscriptionProduct = async (
     payload: Partial<IPackage>
@@ -42,16 +41,23 @@ export const createSubscriptionProduct = async (
             intervalCount = 1;
     }
 
-    // Create Price
-    const price = await stripe.prices.create({
+    const isOneTime = payload.paymentType === 'One-time' || payload.paymentType === 'One-Time';
+
+    const priceData: any = {
         product: product.id,
-        unit_amount: Number(payload.price) * 100,
+        unit_amount: Math.round(Number(payload.price) * 100),
         currency: 'gbp',
-        recurring: {
+    };
+
+    if (!isOneTime) {
+        priceData.recurring = {
             interval,
             interval_count: intervalCount,
-        },
-    });
+        };
+    }
+
+    // Create Price
+    const price = await stripe.prices.create(priceData);
 
     if (!price) {
         throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create price in Stripe");

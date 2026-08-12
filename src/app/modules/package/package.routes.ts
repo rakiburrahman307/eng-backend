@@ -7,10 +7,23 @@ import { PackageValidation } from "./package.validation";
 import fileUploadHandler from "../../middlewares/fileUploaderHandler";
 const router = express.Router()
 
+const parseFormDataBody = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (req.body?.data && typeof req.body.data === 'string') {
+    try {
+      const parsed = JSON.parse(req.body.data);
+      req.body = { ...req.body, ...parsed };
+    } catch (e) {
+      // ignore
+    }
+  }
+  next();
+};
+
 router
     .route("/")
     .post(
         fileUploadHandler(), 
+        parseFormDataBody,
         auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN), 
         validateRequest(PackageValidation.createPackageZodSchema), 
         PackageController.createPackage
@@ -19,7 +32,12 @@ router
 
 router
     .route("/:id")
-    .patch(auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN), PackageController.updatePackage)
+    .patch(
+        fileUploadHandler(),
+        parseFormDataBody,
+        auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN), 
+        PackageController.updatePackage
+    )
     .delete(auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN), PackageController.deletePackage)
 
     router.patch(
