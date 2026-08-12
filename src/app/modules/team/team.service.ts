@@ -1,6 +1,7 @@
 import QueryBuilder from "../../../util/queryBuilder";
 import { Team } from "./team.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
+import { LeagueTeam } from "../leagueTeam/leagueTeam.model";
 import { User } from "../user/user.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 
@@ -9,8 +10,8 @@ const createTeamToDB = async (payload: any) => {
   // Always assign starting budget and starting market value from ClubEconomy config in DB
   const clubEconomy = await ClubEconomy.findOne();
   const startingBudget = clubEconomy ? clubEconomy.startingBudget : 100000;
-  payload.coin = startingBudget;
-  payload.marketValue = startingBudget;
+  payload.coin = payload.coin !== undefined ? payload.coin : startingBudget;
+  payload.marketValue = payload.marketValue !== undefined ? payload.marketValue : (payload.coin * 100);
   return await Team.create(payload);
 };
 
@@ -51,13 +52,23 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
   // 🧑‍💼 USER DETAILS (PROFILE FROM USER MODEL)
   const users = await User.find({
     _id: { $in: managerUserIds },
-  }).select("profile firstName lastName");
+  }).select("profile firstName lastName userName email phone");
+
+  // 🏆 LEAGUE LINKS
+  const leagueLinks = await LeagueTeam.find({
+    team: { $in: teamIds },
+  }).populate("league", "leagueName name");
 
   // MAP RESULT
   const result = teams.map((team) => {
     const members = memberCounts.find(
       (m) => m._id.toString() === team._id.toString()
     );
+
+    const teamLeagueObjs = leagueLinks
+      .filter((l) => l.team.toString() === team._id.toString())
+      .map((l) => l.league)
+      .filter(Boolean);
 
     const managers = managerLinks
       .filter((m) => m.team.toString() === team._id.toString())
@@ -70,15 +81,25 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
           _id: m.manager,
           firstName: user?.firstName || null,
           lastName: user?.lastName || null,
+          userName: user?.userName || null,
           profile: user?.profile || null,
+          email: user?.email || null,
+          phone: user?.phone || null,
         };
       });
+
+    const primaryManager = managers[0] || null;
+    const primaryLeague = teamLeagueObjs[0] || null;
 
     return {
       ...team.toObject(),
       totalMembers: members?.totalMembers || 0,
       totalManagers: managers.length,
-      managers: managers[0] || null,
+      managers: managers, // full array of managers!
+      manager: primaryManager,
+      leagues: teamLeagueObjs,
+      league: primaryLeague,
+      leagueName: (primaryLeague as any)?.leagueName || (primaryLeague as any)?.name || null,
     };
   });
 
@@ -97,15 +118,38 @@ const getSingleTeamFromDB = async (id: string) => {
   }
 
   const members = await User.find({ selectTeam: id }).select(
-    "firstName lastName document position",
+    "firstName lastName document position profile engCoine",
   );
 
-  const managers = await ManagerTeam.find({ team: id }).populate("manager");
+  const managerLinks = await ManagerTeam.find({ team: id });
+  const managerUserIds = managerLinks.map((m) => m.manager);
+  const managerUsers = await User.find({ _id: { $in: managerUserIds } }).select(
+    "firstName lastName userName profile email phone"
+  );
+
+  const managers = managerLinks.map((m) => {
+    const user = managerUsers.find((u) => u._id.toString() === m.manager.toString());
+    return {
+      _id: m.manager,
+      firstName: user?.firstName || null,
+      lastName: user?.lastName || null,
+      userName: user?.userName || null,
+      profile: user?.profile || null,
+      email: user?.email || null,
+      phone: user?.phone || null,
+    };
+  });
+
+  const leagueLinks = await LeagueTeam.find({ team: id }).populate("league", "leagueName name");
+  const teamLeagueObjs = leagueLinks.map((l) => l.league).filter(Boolean);
 
   return {
     ...team.toObject(),
     members,
     managers,
+    manager: managers[0] || null,
+    leagues: teamLeagueObjs,
+    league: teamLeagueObjs[0] || null,
     totalMembers: members.length,
     totalManagers: managers.length,
   };
@@ -119,9 +163,9 @@ const updateTeamToDB = async (id: string, payload: any) => {
     throw new Error("Team not found");
   }
 
-  // Auto sync marketValue (1 coin = 100 marketValue) when coin is provided without marketValue
-  if (payload.coin !== undefined && payload.marketValue === undefined) {
-    payload.marketValue = payload.coin * 100;
+  // Auto sync marketValue (1 coin = 100 marketValue) when coin is provided
+  if (payload.coin !== undefined) {
+    payload.marketValue = Number(payload.coin) * 100;
   }
 
   return await Team.findByIdAndUpdate(id, payload, {
@@ -137,9 +181,6 @@ const deleteTeamFromDB = async (id: string) => {
   if (!team) {
     throw new Error("Team not found");
   }
-
-  // optional cleanup
-  // await ManagerTeam.deleteMany({ team: id });
 
   return await Team.findByIdAndDelete(id);
 };
@@ -162,13 +203,9 @@ const updateTeamCoinOrMarketValue = async (
       throw new Error("coin must be a non-negative number");
     }
     updateData.coin = payload.coin;
-    // Auto sync marketValue to coin (1 coin = 100 marketValue) if marketValue is not passed
-    if (payload.marketValue === undefined) {
-      updateData.marketValue = payload.coin * 100;
-    }
-  }
-
-  if (payload.marketValue !== undefined) {
+    // Auto sync marketValue to coin (1 coin = 100 marketValue)
+    updateData.marketValue = payload.marketValue !== undefined ? payload.marketValue : (payload.coin * 100);
+  } else if (payload.marketValue !== undefined) {
     if (typeof payload.marketValue !== 'number' || payload.marketValue < 0) {
       throw new Error("marketValue must be a non-negative number");
     }

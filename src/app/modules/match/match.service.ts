@@ -670,15 +670,15 @@ const updateMatchStatusInDB = async (id: string, payload: any, userRole: string 
       const homeTeam = await Team.findById(match.homeTeam);
       const awayTeam = await Team.findById(match.awayTeam);
       const matchName = `${homeTeam?.teamName || "Home Team"} vs ${awayTeam?.teamName || "Away Team"}`;
-      
+
       const userDetails = await User.find({
         selectTeam: { $in: [match.homeTeam, match.awayTeam] }
       });
 
       if (userDetails.length > 0) {
         const title = targetStatus === "live" ? "Match is Live! ⚽" : "Match Finished! 🏁";
-        const message = targetStatus === "live" 
-          ? `The match ${matchName} has officially started and is now live!` 
+        const message = targetStatus === "live"
+          ? `The match ${matchName} has officially started and is now live!`
           : `The match ${matchName} has finished. Check the final match results and ratings.`;
 
         const userIds = userDetails.map((u) => u._id.toString());
