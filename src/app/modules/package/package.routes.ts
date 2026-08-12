@@ -52,7 +52,7 @@ router
 // Auto-generate checkout URL with client_reference_id from logged-in user's token
 router.get(
     "/:id/checkout",
-    auth(USER_ROLES.PLAYER, USER_ROLES.REFEREE, USER_ROLES.MANAGER),
+    auth(USER_ROLES.PLAYER, USER_ROLES.TOURNAMENT_PLAYER, USER_ROLES.OTHER_CLUBS),
     PackageController.getCheckoutUrl
 );
 
