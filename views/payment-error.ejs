@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment Failed — ENG Sports</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #3b1f1f 50%, #1f0f0f 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 56px 48px;
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+    }
+
+    .error-icon {
+      width: 90px;
+      height: 90px;
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 32px;
+      box-shadow: 0 0 40px rgba(239, 68, 68, 0.4);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 40px rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 0 60px rgba(239, 68, 68, 0.7); }
+    }
+
+    .error-icon svg {
+      width: 48px;
+      height: 48px;
+      stroke: #ffffff;
+      stroke-width: 3;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .badge {
+      display: inline-block;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 6px 16px;
+      border-radius: 100px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      color: #ffffff;
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      line-height: 1.3;
+    }
+
+    p.subtitle {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 15px;
+      line-height: 1.7;
+      margin-bottom: 36px;
+    }
+
+    .info-box {
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-bottom: 32px;
+      text-align: left;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .info-label {
+      color: rgba(255, 255, 255, 0.45);
+      font-size: 13px;
+    }
+
+    .info-value {
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .info-value.red {
+      color: #f87171;
+    }
+
+    .error-detail {
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 28px;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 13px;
+      line-height: 1.6;
+      text-align: left;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-block;
+      color: #ffffff;
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 14px 28px;
+      border-radius: 12px;
+      transition: all 0.2s ease;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      box-shadow: 0 4px 20px rgba(239, 68, 68, 0.35);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(239, 68, 68, 0.5);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: translateY(-2px);
+    }
+
+    .footer-text {
+      margin-top: 28px;
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 12px;
+    }
+
+    .logo {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 36px;
+    }
+
+    .logo span {
+      color: #ef4444;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">ENG <span>Sports</span> Events</div>
+
+    <div class="error-icon">
+      <svg viewBox="0 0 24 24">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </div>
+
+    <div class="badge">Payment Failed</div>
+
+    <h1>Your Payment Was Not Processed</h1>
+    <p class="subtitle">
+      Unfortunately, your payment could not be completed. This may have happened due to a declined card, insufficient funds, or a network issue. No charges have been made.
+    </p>
+
+    <div class="info-box">
+      <div class="info-row">
+        <span class="info-label">Status</span>
+        <span class="info-value red">✗ Failed</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Reason</span>
+        <span class="info-value"><%= errorMessage || 'Payment was cancelled or failed' %></span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Date</span>
+        <span class="info-value"><%= date %></span>
+      </div>
+    </div>
+
+    <div class="error-detail">
+      <strong style="color: rgba(255,255,255,0.7);">What to do next:</strong><br/>
+      Please check your card details and try again. If the problem persists, contact your bank or reach out to our support team for assistance.
+    </div>
+
+    <p class="footer-text">
+      No charges were made to your account.<br />
+      ENG Sports Events © <%= year %>
+    </p>
+  </div>
+</body>
+</html>

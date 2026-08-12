@@ -298,8 +298,8 @@ const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail
             },
         ],
         mode: 'subscription',
-        success_url: `${config.stripe.paymentSuccess || 'http://localhost:3000/success'}?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${config.stripe.paymentSuccess || 'http://localhost:3000/success'}`,
+        success_url: `${process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5005}`}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5005}`}/payment/cancel?reason=Payment+was+cancelled`,
         customer_email: userEmail,
         client_reference_id: userId,
         subscription_data: {
