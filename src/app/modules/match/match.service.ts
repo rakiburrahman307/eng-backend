@@ -131,64 +131,49 @@ const createMatchToDB = async (payload: any) => {
     // time range
     const matchTime = new Date(matchDate).getTime();
     const twoHours = 2 * 60 * 60 * 1000;
-    const startWindow = new Date(matchTime - twoHours);
+    // const startWindow = new Date(matchTime - twoHours);
 
-    const endWindow = new Date(matchTime + twoHours);
+    // const endWindow = new Date(matchTime + twoHours);
 
     // team conflict
 
-    const teamConflict = await Match.findOne({
-      matchDate: {
-        $gte: startWindow,
-        $lte: endWindow,
-      },
+    // const teamConflict = await Match.findOne({
+    //   matchDate: {
+    //     $gte: startWindow,
+    //     $lte: endWindow,
+    //   },
 
-      $or: [
-        {
-          homeTeam,
-        },
-        {
-          awayTeam,
-        },
-      ],
-    });
+    //   $or: [
+    //     {
+    //       homeTeam,
+    //     },
+    //     {
+    //       awayTeam,
+    //     },
+    //   ],
+    // });
 
-    if (teamConflict) {
-      throw new Error("One of the teams already has a match in this time slot");
-    }
+    // if (teamConflict) {
+    //   throw new Error("One of the teams already has a match in this time slot");
+    // }
 
     // referee conflict
 
-    if (referee) {
-      const refereeConflict = await Match.findOne({
-        referee,
+    // if (referee) {
+    //   const refereeConflict = await Match.findOne({
+    //     referee,
 
-        matchDate: {
-          $gte: startWindow,
-          $lte: endWindow,
-        },
-      });
+    //     matchDate: {
+    //       $gte: startWindow,
+    //       $lte: endWindow,
+    //     },
+    //   });
 
-      if (refereeConflict) {
-        throw new Error("Referee already assigned in this time slot");
-      }
-    }
+    //   if (refereeConflict) {
+    //     throw new Error("Referee already assigned in this time slot");
+    //   }
+    // }
 
-    // venue conflict
-
-    if (venueName) {
-      const venueConflict = await Match.findOne({
-        venueName,
-
-        matchDate: {
-          $gte: startWindow,
-          $lte: endWindow,
-        },
-      });
-      if (venueConflict) {
-        throw new Error("Venue already booked in this time slot");
-      }
-    }
     // create
     if (!matchData.scheduledAt && matchDate) {
       matchData.scheduledAt = new Date(matchDate);
