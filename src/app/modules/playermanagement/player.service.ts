@@ -453,9 +453,11 @@ const getAllPlayersFromDB = async (query: Record<string, any>, user?: JwtPayload
     delete queryObj.role;
   }
 
-  if (queryObj.status && queryObj.status !== 'ALL') {
+  if (queryObj.status && queryObj.status !== 'ALL' && queryObj.status !== 'all') {
     andConditions.push({ status: queryObj.status });
     delete queryObj.status;
+  } else if (!queryObj.status) {
+    andConditions.push({ status: { $ne: 'REJECTED' } });
   }
 
   if (!canViewOther && user) {

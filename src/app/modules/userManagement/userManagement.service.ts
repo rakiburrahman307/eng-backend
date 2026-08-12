@@ -51,10 +51,9 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
 
   filterQuery.$or = baseEligibilityConditions;
 
-  if (queryObj.role === 'PENDING_REQUESTS' || queryObj.status === 'PENDING') {
+  if (queryObj.role === 'PENDING_REQUESTS') {
     filterQuery.status = 'PENDING';
     delete queryObj.role;
-    delete queryObj.status;
   } else if (queryObj.role === 'MANAGER') {
     filterQuery.role = USER_ROLES.MANAGER;
     delete queryObj.role;
@@ -66,6 +65,17 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
     delete queryObj.role;
   } else if (queryObj.role === 'ALL') {
     delete queryObj.role;
+  }
+
+  if (queryObj.status) {
+    if (queryObj.status === 'ALL' || queryObj.status === 'all') {
+      delete filterQuery.status;
+    } else {
+      filterQuery.status = queryObj.status;
+    }
+    delete queryObj.status;
+  } else if (!filterQuery.status) {
+    filterQuery.status = { $ne: 'REJECTED' };
   }
 
   const userQuery = new QueryBuilder(
