@@ -35,6 +35,8 @@ const matchResultSchema = new Schema(
         'red_card',
         'foul',
         'substitution',
+        'clean_sheet',
+        'player_of_the_day',
       ],
       required: true,
     },

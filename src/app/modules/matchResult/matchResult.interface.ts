@@ -13,7 +13,9 @@ export interface IMatchResult {
     | 'yellow_card'
     | 'red_card'
     | 'foul'
-    | 'substitution';
+    | 'substitution'
+    | 'clean_sheet'
+    | 'player_of_the_day';
 
   // 🔥 NEW: event details meta
   eventMeta?: {

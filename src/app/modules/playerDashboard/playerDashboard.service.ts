@@ -11,6 +11,7 @@ import ApiError from "../../../errors/ApiErrors";
 
 import { Subscription } from "../subscription/subscription.model";
 import { isPremiumPlayerPackage } from "../../../helpers/packageHelper";
+import { getPlayerStatsSummary } from "../../../helpers/playerStatsHelper";
 
 const getPlayerDashboardFromDB = async (playerId: string) => {
   const playerObjectId = new mongoose.Types.ObjectId(playerId);
@@ -48,33 +49,8 @@ const getPlayerDashboardFromDB = async (playerId: string) => {
   // Optional: mapping _id to userId for consistency
   playerData.userId = playerObjectId;
 
-  // ⚽ MATCH STATS
-  const stats = await MatchResult.aggregate([
-    {
-      $match: {
-        player: playerObjectId,
-      },
-    },
-    {
-      $group: {
-        _id: "$eventType",
-        count: { $sum: 1 },
-      },
-    },
-  ]);
-
-  // 🔥 FORMAT STATS
-  let goals = 0;
-  let assists = 0;
-  let yellowCards = 0;
-  let redCards = 0;
-
-  stats.forEach((item) => {
-    if (item._id === "goal") goals = item.count;
-    if (item._id === "assist") assists = item.count;
-    if (item._id === "yellow_card") yellowCards = item.count;
-    if (item._id === "red_card") redCards = item.count;
-  });
+  // ⚽ MATCH STATS (Goals, Assists, Clean Sheets, Player Of The Day, Yellow Card, Red Card)
+  const stats = await getPlayerStatsSummary(playerObjectId);
 
   // 📊 RECENT MATCHES
   const recentMatches = await MatchResult.find({
@@ -102,12 +78,14 @@ const getPlayerDashboardFromDB = async (playerId: string) => {
     activeSubscription: activeSub || null,
     activePackage: activeSub?.package || null,
     isPremium,
-    stats: isPremium ? {
-      goals,
-      assists,
-      yellowCards,
-      redCards,
-    } : null,
+    stats: {
+      goals: stats.goals,
+      assists: stats.assists,
+      cleanSheets: stats.cleanSheets,
+      playerOfTheDay: stats.playerOfTheDay,
+      yellowCards: stats.yellowCards,
+      redCards: stats.redCards,
+    },
     recentMatches: isPremium ? recentMatches : [],
   };
 };

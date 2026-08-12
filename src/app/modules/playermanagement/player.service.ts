@@ -11,6 +11,7 @@ import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 import { sendNotificationToAdmins } from "../../../helpers/notificationsHelper";
 import { PlayerDashboardService } from "../playerDashboard/playerDashboard.service";
 import { isPremiumPlayerPackage } from "../../../helpers/packageHelper";
+import { getBatchPlayerStatsSummary } from "../../../helpers/playerStatsHelper";
 
 const checkCanViewOtherPlayers = async (user?: JwtPayload | null): Promise<boolean> => {
   if (!user || user.role !== USER_ROLES.PLAYER) return true;
@@ -109,12 +110,15 @@ const getMyPlayersFromDB = async (parentId: string) => {
 
   const playerIds = players.map((player) => player._id);
 
-  const subscriptions = await Subscription.find({
-    user: { $in: playerIds },
-    status: "active",
-  })
-    .populate("package")
-    .lean();
+  const [subscriptions, statsMap] = await Promise.all([
+    Subscription.find({
+      user: { $in: playerIds },
+      status: "active",
+    })
+      .populate("package")
+      .lean(),
+    getBatchPlayerStatsSummary(playerIds),
+  ]);
 
   const subscriptionMap = new Map(
     subscriptions.map((subscription) => [
@@ -125,10 +129,20 @@ const getMyPlayersFromDB = async (parentId: string) => {
 
   return players.map((player) => {
     const activeSubscription = subscriptionMap.get(player._id.toString());
+    const playerStats = statsMap.get(player._id.toString()) || {
+      goals: 0,
+      assists: 0,
+      cleanSheets: 0,
+      playerOfTheDay: 0,
+      yellowCards: 0,
+      redCards: 0,
+    };
+
     return {
       ...player,
       activeSubscription: activeSubscription || null,
       activePackage: activeSubscription?.package || null,
+      stats: playerStats,
     };
   });
 };

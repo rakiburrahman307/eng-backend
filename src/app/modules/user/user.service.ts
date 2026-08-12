@@ -17,6 +17,7 @@ import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
 import stripe from "../../../config/stripe";
+import { getPlayerStatsSummary } from "../../../helpers/playerStatsHelper";
 
 
 
@@ -317,10 +318,19 @@ const updatePlayerByUserId = async (
 
 
 const getPlayerByUserId = async (userId: string) => {
-  const result = await User.findById(userId).populate({
-    path: "selectTeam",
-    select: "teamName", // Team model e jei field e team name ache
-  }).lean();
+  const [result, activeSub, stats] = await Promise.all([
+    User.findById(userId)
+      .populate({
+        path: "selectTeam",
+        select: "teamName shortName teamLogo",
+      })
+      .lean(),
+    Subscription.findOne({
+      user: userId,
+      status: "active",
+    }).populate("package").lean(),
+    getPlayerStatsSummary(userId),
+  ]);
 
   if (!result) {
     throw new ApiError(
@@ -329,11 +339,6 @@ const getPlayerByUserId = async (userId: string) => {
     );
   }
 
-  const activeSub = await Subscription.findOne({
-    user: userId,
-    status: "active",
-  }).populate("package");
-
   const isDetailsSubmitted = checkIsProfileCompleted(result);
 
   return {
@@ -341,6 +346,14 @@ const getPlayerByUserId = async (userId: string) => {
     userId: result._id,
     activeSubscription: activeSub || null,
     activePackage: activeSub?.package || null,
+    stats: {
+      goals: stats.goals,
+      assists: stats.assists,
+      cleanSheets: stats.cleanSheets,
+      playerOfTheDay: stats.playerOfTheDay,
+      yellowCards: stats.yellowCards,
+      redCards: stats.redCards,
+    },
     isDetailsSubmitted,
     isProfileCompleted: isDetailsSubmitted,
     isCompleted: isDetailsSubmitted,
@@ -425,28 +438,47 @@ const getOtherClubByUserId = async (
 
 
 
-const getOtherClubByUserIdUserId = async (userId: string) => {
-  const result = await User.findById(userId)
-    .populate({
-      path: 'selectTeam',
-      select: 'teamName _id',
-    })
-    .lean();
+const getPlayerDetailsByUserId = async (userId: string) => {
+  const [result, activeSub, stats] = await Promise.all([
+    User.findById(userId)
+      .populate({
+        path: 'selectTeam',
+        select: 'teamName shortName teamLogo _id',
+      })
+      .lean(),
+    Subscription.findOne({
+      user: userId,
+      status: 'active',
+    }).populate('package').lean(),
+    getPlayerStatsSummary(userId),
+  ]);
 
   if (!result) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Other club not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, 'Player/User not found');
   }
+
+  const teamData: any = result.selectTeam;
 
   return {
     ...result,
-
-    // team only name
-      selectTeam: (result.selectTeam as any)?.teamName || null,
-      selectTeamId: (result.selectTeam as any)?._id || null,
-
     userId: result._id,
+    selectTeam: teamData?.teamName || null,
+    selectTeamId: teamData?._id || null,
+    teamDetails: teamData || null,
+    activeSubscription: activeSub || null,
+    activePackage: activeSub?.package || null,
+    stats: {
+      goals: stats.goals,
+      assists: stats.assists,
+      cleanSheets: stats.cleanSheets,
+      playerOfTheDay: stats.playerOfTheDay,
+      yellowCards: stats.yellowCards,
+      redCards: stats.redCards,
+    },
   };
 };
+
+const getOtherClubByUserIdUserId = getPlayerDetailsByUserId;
 
 
 // UPDATE USER COIN OR MARKET VALUE (Admin only)
@@ -600,6 +632,7 @@ export const UserService = {
     getRefereeByUserId,
     getOtherClubByUserId,
     getOtherClubByUserIdUserId,
+    getPlayerDetailsByUserId,
     updateUserCoinOrMarketValue,
     approveOrRejectUser,
     toggleBlueTickUser,

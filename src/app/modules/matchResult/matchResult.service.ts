@@ -111,6 +111,12 @@ const createMatchResultToDB = async (payload: any) => {
           title = "Subbed Out 🔄";
           message = `You were substituted out at minute ${minute}.`;
         }
+      } else if (eventType === "clean_sheet") {
+        title = "Clean Sheet Recorded! 🧤⚽";
+        message = `Great job! A clean sheet was recorded for you at minute ${minute}.`;
+      } else if (eventType === "player_of_the_day") {
+        title = "Player of the Day! 🏆⭐";
+        message = `Congratulations! You have been named Player of the Day for this match.`;
       } else if (eventType === "foul") {
         title = "Foul Committed ⚠️";
         message = `A foul was recorded for you at minute ${minute}.`;
@@ -308,6 +314,30 @@ const applyPlayerStats = async (payload: any) => {
     }
   }
 
+  // ================= CLEAN SHEET =================
+  if (eventType === "clean_sheet") {
+    inc.cleanSheets = 1;
+
+    const csCoin = pe?.cleanSheet?.coin ?? 2000;
+    const csMV = pe?.cleanSheet?.marketValue ?? 20000;
+    await User.findOneAndUpdate(
+      { _id: player },
+      { $inc: { engCoine: csCoin, marketValue: csMV } },
+    );
+  }
+
+  // ================= PLAYER OF THE DAY =================
+  if (eventType === "player_of_the_day") {
+    inc.playerOfTheDay = 1;
+
+    const potdCoin = pe?.playerOfTheDay?.coin ?? 5000;
+    const potdMV = pe?.playerOfTheDay?.marketValue ?? 50000;
+    await User.findOneAndUpdate(
+      { _id: player },
+      { $inc: { engCoine: potdCoin, marketValue: potdMV } },
+    );
+  }
+
   if (Object.keys(inc).length > 0) {
     await PlayerStats.findOneAndUpdate(
       { player },
@@ -392,6 +422,40 @@ const rollbackPlayerStats = async (payload: any) => {
       { _id: player },
       { $inc: { engCoine: redCardCoin, marketValue: redCardMV } },
     );
+  }
+
+  // ================= CLEAN SHEET =================
+  if (eventType === "clean_sheet") {
+    inc.cleanSheets = -1;
+
+    const csCoin = pe?.cleanSheet?.coin ?? 2000;
+    const csMV = pe?.cleanSheet?.marketValue ?? 20000;
+    const user = await User.findById(player);
+    if (user) {
+      const newCoins = Math.max(0, (user.engCoine ?? 0) - csCoin);
+      const newMV = Math.max(0, (user.marketValue ?? 0) - csMV);
+      await User.findOneAndUpdate(
+        { _id: player },
+        { $set: { engCoine: newCoins, marketValue: newMV } },
+      );
+    }
+  }
+
+  // ================= PLAYER OF THE DAY =================
+  if (eventType === "player_of_the_day") {
+    inc.playerOfTheDay = -1;
+
+    const potdCoin = pe?.playerOfTheDay?.coin ?? 5000;
+    const potdMV = pe?.playerOfTheDay?.marketValue ?? 50000;
+    const user = await User.findById(player);
+    if (user) {
+      const newCoins = Math.max(0, (user.engCoine ?? 0) - potdCoin);
+      const newMV = Math.max(0, (user.marketValue ?? 0) - potdMV);
+      await User.findOneAndUpdate(
+        { _id: player },
+        { $set: { engCoine: newCoins, marketValue: newMV } },
+      );
+    }
   }
 
   if (Object.keys(inc).length > 0) {

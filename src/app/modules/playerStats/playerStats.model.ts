@@ -30,6 +30,16 @@ const playerStatsSchema = new Schema(
       default: 0,
     },
 
+    cleanSheets: {
+      type: Number,
+      default: 0,
+    },
+
+    playerOfTheDay: {
+      type: Number,
+      default: 0,
+    },
+
     minutesPlayed: {
       type: Number,
       default: 0,

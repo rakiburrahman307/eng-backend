@@ -4,6 +4,7 @@ import { USER_ROLES } from '../../../enums/user';
 import { Subscription } from '../subscription/subscription.model';
 import { PlayerStats } from './playerStats.model';
 import { JwtPayload } from 'jsonwebtoken';
+import { getPlayerStatsSummary } from '../../../helpers/playerStatsHelper';
 
 const checkCanViewOtherPlayerStats = async (user?: JwtPayload | null): Promise<boolean> => {
   if (!user || user.role !== USER_ROLES.PLAYER) return true;
@@ -53,11 +54,32 @@ const getSinglePlayerStatsFromDB = async (playerId: string, user?: JwtPayload | 
     }
   }
 
-  const result = await PlayerStats.findOne({ player: playerId })
-    .populate('player', 'name image email')
-    .populate('team', 'teamName teamLogo');
+  const [result, stats] = await Promise.all([
+    PlayerStats.findOne({ player: playerId })
+      .populate('player', 'name image email firstName lastName profile')
+      .populate('team', 'teamName teamLogo shortName'),
+    getPlayerStatsSummary(playerId),
+  ]);
 
-  return result || "No stats found for this player";
+  return {
+    ...(result ? result.toObject() : {}),
+    player: (result as any)?.player || null,
+    team: (result as any)?.team || null,
+    goals: stats.goals,
+    assists: stats.assists,
+    cleanSheets: stats.cleanSheets,
+    playerOfTheDay: stats.playerOfTheDay,
+    yellowCards: stats.yellowCards,
+    redCards: stats.redCards,
+    stats: {
+      goals: stats.goals,
+      assists: stats.assists,
+      cleanSheets: stats.cleanSheets,
+      playerOfTheDay: stats.playerOfTheDay,
+      yellowCards: stats.yellowCards,
+      redCards: stats.redCards,
+    },
+  };
 };
 
 // ADMIN UPDATE

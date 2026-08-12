@@ -70,6 +70,43 @@ const createEvaluationIntoDB = async (payload: any) => {
     });
   }
 
+  // 🏆 Reward Man of the Match / Player of the Day
+  if (payload.manOfTheMatch) {
+    try {
+      const { PlayerEconomy } = await import("../coinAndBudget/playerEconomySchema.model");
+      const { User } = await import("../user/user.model");
+      const { PlayerStats } = await import("../playerStats/playerStats.model");
+      const { NotificationQueueHelper } = await import("../../../helpers/bullMQ/bullHelper");
+      const { NOTIFICATION_TYPE } = await import("../notification/notification.interface");
+
+      const pe = await PlayerEconomy.findOne();
+      const potdCoin = pe?.playerOfTheDay?.coin ?? 5000;
+      const potdMV = pe?.playerOfTheDay?.marketValue ?? 50000;
+
+      await User.findByIdAndUpdate(payload.manOfTheMatch, {
+        $inc: {
+          engCoine: potdCoin,
+          marketValue: potdMV,
+        },
+      });
+
+      await PlayerStats.findOneAndUpdate(
+        { player: payload.manOfTheMatch },
+        { $inc: { playerOfTheDay: 1 } },
+        { upsert: true, new: true }
+      );
+
+      await NotificationQueueHelper.sendNotification(
+        String(payload.manOfTheMatch),
+        "Congratulations! You were awarded Player of the Day / Man of the Match!",
+        "Player of the Day!",
+        NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED
+      );
+    } catch (motmErr) {
+      console.error("Failed to process Man of the Match reward:", motmErr);
+    }
+  }
+
   return result;
 };
 

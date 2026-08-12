@@ -50,7 +50,7 @@ router
   );
 
 
-router.patch('/update-chield-info/:childId', auth(USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER), fileUploadHandler(), UserController.updateChieldInfo);
+router.patch('/update-child-info/:childId', auth(USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER), fileUploadHandler(), UserController.updateChieldInfo);
 
 // manager 
 router
@@ -113,8 +113,14 @@ router
 router
   .route('/player-details/:userId')
   .get(
-    // auth(USER_ROLES.OTHER_CLUBS),
-    UserController.getOtherClubByUserId
+    UserController.getPlayerDetailsByUserId
+  );
+
+router
+  .route('/player-details')
+  .get(
+    auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.PLAYER, USER_ROLES.MANAGER, USER_ROLES.OTHER_CLUBS),
+    UserController.getPlayer
   );
 
 // UPDATE USER COIN OR MARKET VALUE (Admin / Super Admin only)

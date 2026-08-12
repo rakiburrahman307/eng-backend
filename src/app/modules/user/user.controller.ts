@@ -446,23 +446,25 @@ const getOtherClub = catchAsync(
 
 
 
-const getOtherClubByUserId = catchAsync(
+const getPlayerDetailsByUserId = catchAsync(
   async (req: Request, res: Response) => {
-    const { userId } = req.params;
+    const userId = req.params.userId || req.params.id;
 
     const result =
-      await UserService.getOtherClubByUserIdUserId(
+      await UserService.getPlayerDetailsByUserId(
         userId as string
       );
 
     return sendResponse(res, {
       success: true,
       statusCode: StatusCodes.OK,
-      message: 'Other club retrieved successfully',
+      message: 'Player details retrieved successfully',
       data: result,
     });
   }
 );
+
+const getOtherClubByUserId = getPlayerDetailsByUserId;
 
 
 
@@ -539,6 +541,7 @@ export const UserController = {
     getReferee,
     getOtherClub,
     getOtherClubByUserId,
+    getPlayerDetailsByUserId,
     updateUserCoinOrMarketValue,
     approveOrRejectUser,
     toggleBlueTickUser,
