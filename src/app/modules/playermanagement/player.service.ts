@@ -434,43 +434,77 @@ const getAllPlayersFromDB = async (query: Record<string, any>, user?: JwtPayload
     User.countDocuments(finalFilter),
   ]);
 
-  const players = rawPlayers.map((player: any) => ({
-    _id: player._id,
-    firstName: player.firstName,
-    lastName: player.lastName,
-    userName: player.userName || `${player.firstName || ''} ${player.lastName || ''}`.trim(),
-    name: `${player.firstName || ''} ${player.lastName || ''}`.trim() || player.userName,
-    email: player.email || player.emergencyEmail || null,
-    phone: player.phone || null,
-    role: player.role || "PLAYER",
-    position: player.position || null,
-    strongFoot: player.strongFoot || null,
-    ageGroup: player.ageGroup || null,
-    dateOfBirth: player.dateOfBirth || null,
-    location: player.location || null,
-    previousClub: player.previousClub || null,
-    playForAcademy: player.playForAcademy || null,
-    academyClubName: player.academyClubName || null,
-    isDevelopmentPlayer: player.isDevelopmentPlayer || false,
-    emergencyEmail: player.emergencyEmail || null,
-    emergencyPhone: player.emergencyPhone || null,
-    mediaConsent: player.mediaConsent || false,
-    document: player.document || [],
-    rejectionReason: player.rejectionReason || null,
-    engCoine: player.engCoine || 0,
-    coin: player.engCoine || 0,
-    marketValue: player.marketValue || ((player.engCoine || 0) * 100),
-    profile: player.profile || null,
-    profilePic: player.profile || null,
-    status: player.status || "PENDING",
-    verified: player.verified ?? true,
-    parentId: player.parentId || null,
-    teamName: player.selectTeam?.teamName || null,
-    shortName: player.selectTeam?.shortName || null,
-    teamLogo: player.selectTeam?.teamLogo || null,
-    selectTeam: player.selectTeam || null,
-    createdAt: player.createdAt,
-  }));
+  const playerUserIds = rawPlayers.map((p: any) => p._id);
+  const parentUserIds = rawPlayers.map((p: any) => p.parentId?._id || p.parentId).filter(Boolean);
+  const allRelevantUserIds = [...new Set([...playerUserIds, ...parentUserIds])];
+
+  const activePlayerSubs = await Subscription.find({
+    user: { $in: allRelevantUserIds },
+    status: 'active',
+  }).populate('package');
+
+  const subMap = new Map();
+  activePlayerSubs.forEach((sub: any) => {
+    subMap.set(sub.user.toString(), sub);
+  });
+
+  const players = rawPlayers.map((player: any) => {
+    const directSub = subMap.get(player._id?.toString());
+    const parentSub = player.parentId?._id
+      ? subMap.get(player.parentId._id.toString())
+      : (player.parentId ? subMap.get(player.parentId.toString()) : null);
+    const activeSub = directSub || parentSub;
+
+    return {
+      _id: player._id,
+      firstName: player.firstName,
+      lastName: player.lastName,
+      userName: player.userName || `${player.firstName || ''} ${player.lastName || ''}`.trim(),
+      name: `${player.firstName || ''} ${player.lastName || ''}`.trim() || player.userName,
+      email: player.email || player.emergencyEmail || null,
+      phone: player.phone || null,
+      role: player.role || "PLAYER",
+      position: player.position || null,
+      strongFoot: player.strongFoot || null,
+      ageGroup: player.ageGroup || null,
+      dateOfBirth: player.dateOfBirth || null,
+      location: player.location || null,
+      previousClub: player.previousClub || null,
+      playForAcademy: player.playForAcademy || null,
+      academyClubName: player.academyClubName || null,
+      isDevelopmentPlayer: player.isDevelopmentPlayer || false,
+      emergencyEmail: player.emergencyEmail || null,
+      emergencyPhone: player.emergencyPhone || null,
+      mediaConsent: player.mediaConsent || false,
+      document: player.document || [],
+      rejectionReason: player.rejectionReason || null,
+      engCoine: player.engCoine || 0,
+      coin: player.engCoine || 0,
+      marketValue: player.marketValue || ((player.engCoine || 0) * 100),
+      profile: player.profile || null,
+      profilePic: player.profile || null,
+      status: player.status || "PENDING",
+      verified: player.verified ?? true,
+      parentId: player.parentId || null,
+      teamName: player.selectTeam?.teamName || null,
+      shortName: player.selectTeam?.shortName || null,
+      teamLogo: player.selectTeam?.teamLogo || null,
+      selectTeam: player.selectTeam || null,
+      createdAt: player.createdAt,
+      isPaid: Boolean(activeSub),
+      subscription: activeSub ? {
+        _id: activeSub._id,
+        status: activeSub.status,
+        price: activeSub.price,
+        trxId: activeSub.trxId,
+        subscriptionId: activeSub.subscriptionId,
+        currentPeriodStart: activeSub.currentPeriodStart,
+        currentPeriodEnd: activeSub.currentPeriodEnd,
+        packageName: (activeSub.package as any)?.title || (activeSub.package as any)?.name || 'ENG Subscription',
+        packageDetails: activeSub.package || null,
+      } : null,
+    };
+  });
 
   return {
     players,

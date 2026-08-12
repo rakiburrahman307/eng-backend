@@ -527,7 +527,8 @@ const updateUserCoinOrMarketValue = async (
 const approveOrRejectUser = async (
   adminRole: string,
   userId: string,
-  status: 'APPROVED' | 'REJECTED'
+  status: 'APPROVED' | 'REJECTED',
+  rejectionReason?: string
 ) => {
   // Only ADMIN and SUPER_ADMIN can perform this
   const allowedAdminRoles = ['ADMIN', 'SUPER_ADMIN'];
@@ -549,9 +550,16 @@ const approveOrRejectUser = async (
     );
   }
 
+  const updateFields: Record<string, any> = { status };
+  if (status === 'REJECTED') {
+    updateFields.rejectionReason = rejectionReason || 'Profile did not meet verification criteria.';
+  } else if (status === 'APPROVED') {
+    updateFields.rejectionReason = '';
+  }
+
   const updated = await User.findByIdAndUpdate(
     userId,
-    { $set: { status } },
+    { $set: updateFields },
     { new: true }
   );
 

@@ -488,7 +488,7 @@ const updateUserCoinOrMarketValue = catchAsync(async (req: Request, res: Respons
 const approveOrRejectUser = catchAsync(async (req: Request, res: Response) => {
   const admin = req.user as any;
   const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
-  const { status } = req.body;
+  const { status, rejectionReason } = req.body;
 
   if (!status || !['APPROVED', 'REJECTED'].includes(status)) {
     throw new ApiError(
@@ -497,7 +497,7 @@ const approveOrRejectUser = catchAsync(async (req: Request, res: Response) => {
     );
   }
 
-  const result = await UserService.approveOrRejectUser(admin.role, userId, status);
+  const result = await UserService.approveOrRejectUser(admin.role, userId, status, rejectionReason);
 
   return sendResponse(res, {
     success: true,

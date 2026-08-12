@@ -126,8 +126,38 @@ const updateUserProfileByAdmin = catchAsync(async (req: Request, res: Response) 
   });
 });
 
+// GET ALL PARENTS
+const getAllParents = catchAsync(async (req: Request, res: Response) => {
+  const result = await UserManagementService.getAllParentsFromDB(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Parents retrieved successfully",
+    pagination: result.meta,
+    data: result.result,
+  });
+});
+
+// ASSIGN TEAM TO USER / PLAYER BY ADMIN
+const assignTeamToUser = catchAsync(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const { selectTeam } = req.body;
+
+  const result = await UserManagementService.assignTeamToUserToDB(id, selectTeam);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Team assigned successfully",
+    data: result,
+  });
+});
+
 export const UserManagementController = {
   getAllUsers,
+  getAllParents,
+  assignTeamToUser,
   toggleVerified,
   deleteUser,
   getAllReferees,

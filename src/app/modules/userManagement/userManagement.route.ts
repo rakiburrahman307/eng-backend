@@ -13,6 +13,20 @@ router.get(
   UserManagementController.getAllUsers
 );
 
+// GET ALL PARENTS (DEDICATED)
+router.get(
+  "/parents",
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  UserManagementController.getAllParents
+);
+
+// ASSIGN TEAM TO USER / PLAYER BY ADMIN
+router.patch(
+  "/assign-team/:id",
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  UserManagementController.assignTeamToUser
+);
+
 // GET USER ANALYTICS
 router.get(
   "/analytics",

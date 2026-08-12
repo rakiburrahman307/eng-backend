@@ -15,7 +15,7 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
   // Active subscription user IDs for players
   const activeSubUserIds = await Subscription.find({ status: 'active' }).distinct('user');
 
-  // Base Eligibility Rule: Incomplete Managers, Incomplete Referees, and Unpaid Players are HIDDEN everywhere
+  // Base Eligibility Rule: Incomplete Managers, Incomplete Referees, Unpaid Players, and Pure Parent accounts are HIDDEN from member tables
   const baseEligibilityConditions = [
     // Manager with submitted documents
     {
@@ -29,27 +29,29 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
       dateOfBirth: { $exists: true, $ne: null },
       document: { $exists: true, $ne: null, $nin: [[], ""] },
     },
-    // Player with active subscription
+    // Player with active subscription (excluding pure parent accounts)
     {
       role: USER_ROLES.PLAYER,
       _id: { $in: activeSubUserIds },
+      $or: [
+        { parentId: { $ne: null } },
+        { position: { $exists: true, $ne: null } },
+        { dateOfBirth: { $exists: true, $ne: null } },
+        { ageGroup: { $exists: true, $ne: null } },
+        { selectTeam: { $exists: true, $ne: null } },
+        { email: null },
+        { password: null },
+      ],
     },
-    // Other roles (Parents, Other Clubs, Admins, Tournament Players)
+    // Other valid member roles (Other Clubs / Trial Players, Tournament Players)
     {
-      role: { $nin: [USER_ROLES.MANAGER, USER_ROLES.REFEREE, USER_ROLES.PLAYER] },
+      role: { $in: [USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
     },
   ];
 
   filterQuery.$or = baseEligibilityConditions;
 
-  if (queryObj.role === 'PARENT') {
-    filterQuery.parentId = null;
-    filterQuery.email = { $ne: null };
-    filterQuery.role = { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER, USER_ROLES.REFEREE, USER_ROLES.OTHER_CLUBS] };
-    filterQuery.position = { $exists: false };
-    filterQuery.dateOfBirth = { $exists: false };
-    delete queryObj.role;
-  } else if (queryObj.role === 'PENDING_REQUESTS' || queryObj.status === 'PENDING') {
+  if (queryObj.role === 'PENDING_REQUESTS' || queryObj.status === 'PENDING') {
     filterQuery.status = 'PENDING';
     delete queryObj.role;
     delete queryObj.status;
@@ -84,18 +86,8 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
   const rawResult = await userQuery.modelQuery;
   const meta = await userQuery.getPaginationInfo();
 
-  // Attach subscription info to result
-  const userIds = rawResult.map((u: any) => u._id);
-  const activeSubs = await Subscription.find({ user: { $in: userIds }, status: 'active' }).populate('package');
-
-  const subMap = new Map();
-  activeSubs.forEach((sub: any) => {
-    subMap.set(sub.user.toString(), sub);
-  });
-
   const result = rawResult.map((u: any) => {
     const userObj = u.toObject ? u.toObject() : u;
-    const sub = subMap.get(u._id.toString());
     const userCoins = Number(userObj.engCoine ?? userObj.coin ?? userObj.coins) || 0;
     const userMV = Number(userObj.marketValue) || (userCoins * 100);
 
@@ -103,18 +95,6 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
       ...userObj,
       engCoine: userCoins,
       marketValue: userMV,
-      isPaid: Boolean(sub),
-      subscription: sub ? {
-        _id: sub._id,
-        status: sub.status,
-        price: sub.price,
-        trxId: sub.trxId,
-        subscriptionId: sub.subscriptionId,
-        currentPeriodStart: sub.currentPeriodStart,
-        currentPeriodEnd: sub.currentPeriodEnd,
-        packageName: (sub.package as any)?.title || (sub.package as any)?.name || 'Subscription Package',
-        packageDetails: sub.package || null,
-      } : null,
     };
   });
 
@@ -122,6 +102,163 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
     meta,
     result,
   };
+};
+
+// GET ALL PARENTS (DEDICATED API)
+const getAllParentsFromDB = async (query: Record<string, any>) => {
+  const queryObj = { ...query };
+  const { page = 1, limit = 10, pageNumber, userPage, searchTerm, searchValue, search } = queryObj;
+
+  const pageNum = Number(pageNumber || userPage || page) || 1;
+  const limitNum = Number(limit) || 10;
+  const skip = (pageNum - 1) * limitNum;
+
+  const parentIdsWithChildren = await User.find({
+    parentId: { $exists: true, $ne: null },
+  }).distinct('parentId');
+
+  const andConditions: any[] = [
+    {
+      $or: [
+        { _id: { $in: parentIdsWithChildren } },
+        {
+          parentId: null,
+          email: { $exists: true, $ne: null },
+          role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER, USER_ROLES.REFEREE] },
+          position: { $in: [null, ""] },
+          dateOfBirth: null,
+        },
+      ],
+    },
+  ];
+
+  const rawSearch = (searchTerm || searchValue || search) as string;
+  if (rawSearch && rawSearch.trim()) {
+    const searchRegex = new RegExp(rawSearch.trim(), 'i');
+    andConditions.push({
+      $or: [
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+        { userName: searchRegex },
+        { email: searchRegex },
+        { phone: searchRegex },
+      ],
+    });
+  }
+
+  const finalFilter = { $and: andConditions };
+
+  const [rawParents, total] = await Promise.all([
+    User.find(finalFilter)
+      .select('userName role profile verified status firstName lastName email phone location createdAt')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean(),
+    User.countDocuments(finalFilter),
+  ]);
+
+  const parentIds = rawParents.map((p: any) => p._id);
+
+  // 1. Fetch child players for all parents
+  const childPlayers = await User.find({
+    parentId: { $in: parentIds },
+    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
+  })
+    .populate('selectTeam', 'teamName shortName teamLogo')
+    .select('firstName lastName userName position ageGroup dateOfBirth selectTeam status verified profile engCoine marketValue parentId isSubscribed hasAccess')
+    .lean();
+
+  // 2. Fetch active subscriptions for parents and ALL individual child players
+  const allUserIds = [...parentIds, ...childPlayers.map((c: any) => c._id)];
+  const activeSubs = await Subscription.find({
+    user: { $in: allUserIds },
+    status: 'active',
+  }).populate('package');
+
+  const subMap = new Map();
+  activeSubs.forEach((sub: any) => {
+    subMap.set(sub.user.toString(), sub);
+  });
+
+  const childMap = new Map();
+  childPlayers.forEach((cp: any) => {
+    const pId = cp.parentId?.toString();
+    if (pId) {
+      if (!childMap.has(pId)) {
+        childMap.set(pId, []);
+      }
+      const childSub = subMap.get(cp._id.toString());
+      const childObj = {
+        ...cp,
+        isPaid: Boolean(childSub || cp.isSubscribed || cp.hasAccess),
+        subscription: childSub ? {
+          _id: childSub._id,
+          status: childSub.status,
+          price: childSub.price,
+          trxId: childSub.trxId,
+          subscriptionId: childSub.subscriptionId,
+          currentPeriodStart: childSub.currentPeriodStart,
+          currentPeriodEnd: childSub.currentPeriodEnd,
+          packageName: (childSub.package as any)?.title || (childSub.package as any)?.name || 'ENG Subscription',
+          packageDetails: childSub.package || null,
+        } : null,
+      };
+      childMap.get(pId).push(childObj);
+    }
+  });
+
+  const result = rawParents.map((p: any) => {
+    const pChildren = childMap.get(p._id.toString()) || [];
+    const directSub = subMap.get(p._id.toString());
+    const paidChildrenCount = pChildren.filter((c: any) => c.isPaid).length;
+
+    return {
+      ...p,
+      myPlayers: pChildren,
+      children: pChildren,
+      childrenCount: pChildren.length,
+      paidChildrenCount,
+      isPaid: Boolean(directSub || paidChildrenCount > 0),
+      subscription: directSub ? {
+        _id: directSub._id,
+        status: directSub.status,
+        price: directSub.price,
+        trxId: directSub.trxId,
+        subscriptionId: directSub.subscriptionId,
+        currentPeriodStart: directSub.currentPeriodStart,
+        currentPeriodEnd: directSub.currentPeriodEnd,
+        packageName: (directSub.package as any)?.title || (directSub.package as any)?.name || 'ENG Subscription',
+        packageDetails: directSub.package || null,
+      } : null,
+    };
+  });
+
+  return {
+    meta: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPage: Math.ceil(total / limitNum) || 1,
+    },
+    result,
+  };
+};
+
+// ASSIGN TEAM TO USER / PLAYER BY ADMIN
+const assignTeamToUserToDB = async (userId: string, selectTeam: string | null) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+  }
+
+  const updated = await User.findByIdAndUpdate(
+    userId,
+    { $set: { selectTeam: selectTeam || null } },
+    { new: true }
+  ).populate('selectTeam', 'teamName shortName teamLogo');
+
+  return updated;
 };
 // TOGGLE VERIFIED
 const toggleVerifiedToDB = async (id: string) => {
@@ -202,9 +339,18 @@ const getUserAnalyticsFromDB = async () => {
     {
       role: USER_ROLES.PLAYER,
       _id: { $in: activeSubUserIds },
+      $or: [
+        { parentId: { $ne: null } },
+        { position: { $exists: true, $ne: null } },
+        { dateOfBirth: { $exists: true, $ne: null } },
+        { ageGroup: { $exists: true, $ne: null } },
+        { selectTeam: { $exists: true, $ne: null } },
+        { email: null },
+        { password: null },
+      ],
     },
     {
-      role: { $nin: [USER_ROLES.MANAGER, USER_ROLES.REFEREE, USER_ROLES.PLAYER] },
+      role: { $in: [USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
     },
   ];
 
@@ -334,6 +480,8 @@ const updateUserProfileByAdminToDB = async (userId: string, payload: any) => {
 
 export const UserManagementService = {
   getAllUsersFromDB,
+  getAllParentsFromDB,
+  assignTeamToUserToDB,
   toggleVerifiedToDB,
   deleteUserFromDB,
   getAllRefereesFromDB,
