@@ -100,4 +100,11 @@ router.patch(
   PlayerController.updatePlayerByAdmin
 );
 
+// DELETE PLAYER (ADMIN & SUPER_ADMIN)
+router.delete(
+  "/:id",
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  PlayerController.deletePlayerByAdmin
+);
+
 export default router;

@@ -288,10 +288,8 @@ const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail
         throw new ApiError(StatusCodes.BAD_REQUEST, 'Package does not have a Stripe Price ID');
     }
 
-    const isOneTime = pkg.paymentType === 'One-time' || pkg.paymentType === 'One-Time';
-
     // Generate dynamic checkout session using stripe.checkout.sessions.create
-    const sessionPayload: any = {
+    const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
         line_items: [
             {
@@ -299,29 +297,24 @@ const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail
                 quantity: 1,
             },
         ],
-        mode: isOneTime ? 'payment' : 'subscription',
+        mode: 'subscription',
         success_url: `${config.stripe.paymentSuccess || 'http://localhost:3000/success'}?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${config.stripe.paymentSuccess || 'http://localhost:3000/success'}`,
         customer_email: userEmail,
         client_reference_id: userId,
+        subscription_data: {
+          metadata: {
+            userId,
+            packageId,
+            targetUserId: playerId || userId,
+          },
+        },
         metadata: {
           userId,
           packageId,
           targetUserId: playerId || userId,
         },
-    };
-
-    if (!isOneTime) {
-      sessionPayload.subscription_data = {
-        metadata: {
-          userId,
-          packageId,
-          targetUserId: playerId || userId,
-        },
-      };
-    }
-
-    const session = await stripe.checkout.sessions.create(sessionPayload);
+    });
 
     if (!session.url) {
         throw new ApiError(StatusCodes.BAD_REQUEST, 'Failed to generate checkout session');

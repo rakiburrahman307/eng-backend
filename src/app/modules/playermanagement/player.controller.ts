@@ -223,6 +223,18 @@ const updatePlayerByAdmin = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const deletePlayerByAdmin = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const result = await PlayerService.deletePlayerByAdminToDB(id);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Player deleted successfully",
+    data: result,
+  });
+});
+
 export const PlayerController = {
   createPlayerByParent,
   getMyPlayers,
@@ -235,4 +247,5 @@ export const PlayerController = {
   getAllPlayers,
   getFilteredPlayers,
   updatePlayerByAdmin,
+  deletePlayerByAdmin,
 };

@@ -356,15 +356,39 @@ const rejectPlayerByAdminToDB = async (playerId: string, reason?: string) => {
 
 const getAllPlayersFromDB = async (query: Record<string, any>, user?: JwtPayload | null) => {
   const canViewOther = await checkCanViewOtherPlayers(user);
+  const queryObj = { ...query };
 
+  // 1. Get user IDs with active subscriptions
+  const activeSubUserIds = await Subscription.find({ status: 'active' }).distinct('user');
+
+  // 2. Base Player Filter:
+  // - MUST be a player profile belonging to a parent (parentId is NOT null)
+  // - MUST be a complete profile (firstName, position, and dateOfBirth must be filled)
+  // - MUST be paid (active subscription on player, active subscription on parent, or isSubscribed/hasAccess is true)
   const filter: Record<string, any> = {
-    role: USER_ROLES.PLAYER,
+    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
+    parentId: { $exists: true, $ne: null },
+    firstName: { $exists: true, $nin: [null, ""] },
+    position: { $exists: true, $nin: [null, ""] },
+    dateOfBirth: { $exists: true, $ne: null },
     $or: [
-      { parentId: { $ne: null } },
-      { password: null },
-      { password: { $exists: false } }
-    ]
+      { _id: { $in: activeSubUserIds } },
+      { parentId: { $in: activeSubUserIds } },
+      { isSubscribed: true },
+      { hasAccess: true },
+    ],
   };
+
+  if (queryObj.role && queryObj.role !== 'ALL') {
+    filter.role = queryObj.role;
+    delete queryObj.role;
+  }
+
+  if (queryObj.status && queryObj.status !== 'ALL') {
+    filter.status = queryObj.status;
+    delete queryObj.status;
+  }
+
   if (!canViewOther && user) {
     filter._id = user._id || user.id;
   }
@@ -373,10 +397,14 @@ const getAllPlayersFromDB = async (query: Record<string, any>, user?: JwtPayload
     .populate({
       path: "selectTeam",
       select: "teamName shortName teamLogo",
+    })
+    .populate({
+      path: "parentId",
+      select: "firstName lastName email phone userName profile",
     });
 
-  const queryBuilder = new QueryBuilder(baseQuery, query)
-    .search(["firstName", "lastName", "position"])
+  const queryBuilder = new QueryBuilder(baseQuery, queryObj)
+    .search(["firstName", "lastName", "position", "ageGroup", "email", "userName", "location"])
     .filter()
     .sort()
     .paginate()
@@ -388,15 +416,38 @@ const getAllPlayersFromDB = async (query: Record<string, any>, user?: JwtPayload
     _id: player._id,
     firstName: player.firstName,
     lastName: player.lastName,
-    position: player.position,
+    userName: player.userName || `${player.firstName || ''} ${player.lastName || ''}`.trim(),
+    name: `${player.firstName || ''} ${player.lastName || ''}`.trim() || player.userName,
+    email: player.email || player.emergencyEmail || null,
+    phone: player.phone || null,
+    role: player.role || "PLAYER",
+    position: player.position || null,
+    strongFoot: player.strongFoot || null,
+    ageGroup: player.ageGroup || null,
+    dateOfBirth: player.dateOfBirth || null,
+    location: player.location || null,
+    previousClub: player.previousClub || null,
+    playForAcademy: player.playForAcademy || null,
+    academyClubName: player.academyClubName || null,
+    isDevelopmentPlayer: player.isDevelopmentPlayer || false,
+    emergencyEmail: player.emergencyEmail || null,
+    emergencyPhone: player.emergencyPhone || null,
+    mediaConsent: player.mediaConsent || false,
+    document: player.document || [],
+    rejectionReason: player.rejectionReason || null,
     engCoine: player.engCoine || 0,
-    marketValue: player.marketValue || 0,
+    coin: player.engCoine || 0,
+    marketValue: player.marketValue || ((player.engCoine || 0) * 100),
     profile: player.profile || null,
+    profilePic: player.profile || null,
     status: player.status || "PENDING",
+    verified: player.verified ?? true,
     parentId: player.parentId || null,
     teamName: player.selectTeam?.teamName || null,
     shortName: player.selectTeam?.shortName || null,
     teamLogo: player.selectTeam?.teamLogo || null,
+    selectTeam: player.selectTeam || null,
+    createdAt: player.createdAt,
   }));
 
   return {
@@ -409,13 +460,20 @@ const getFilteredPlayersFromDB = async (query: Record<string, any>, user?: JwtPa
   const canViewOther = await checkCanViewOtherPlayers(user);
   const { team, position, page = 1, limit = 10 } = query;
 
+  const activeSubUserIds = await Subscription.find({ status: 'active' }).distinct('user');
+
   const filter: Record<string, any> = {
-    role: USER_ROLES.PLAYER,
+    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
+    parentId: { $exists: true, $ne: null },
+    firstName: { $exists: true, $nin: [null, ""] },
+    position: { $exists: true, $nin: [null, ""] },
+    dateOfBirth: { $exists: true, $ne: null },
     $or: [
-      { parentId: { $ne: null } },
-      { password: null },
-      { password: { $exists: false } }
-    ]
+      { _id: { $in: activeSubUserIds } },
+      { parentId: { $in: activeSubUserIds } },
+      { isSubscribed: true },
+      { hasAccess: true },
+    ],
   };
 
   if (!canViewOther && user) {
@@ -492,6 +550,22 @@ const updatePlayerByAdminToDB = async (id: string, payload: Partial<any>) => {
   return result;
 };
 
+// DELETE PLAYER BY ADMIN
+const deletePlayerByAdminToDB = async (id: string) => {
+  const player = await User.findById(id);
+
+  if (!player) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Player not found");
+  }
+
+  await Promise.all([
+    User.findByIdAndDelete(id),
+    Subscription.deleteMany({ user: id }),
+  ]);
+
+  return { message: "Player deleted successfully" };
+};
+
 export const PlayerService = {
   createPlayerByParentToDB,
   getMyPlayersFromDB,
@@ -504,4 +578,5 @@ export const PlayerService = {
   getAllPlayersFromDB,
   getFilteredPlayersFromDB,
   updatePlayerByAdminToDB,
+  deletePlayerByAdminToDB,
 };

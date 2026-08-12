@@ -41,23 +41,16 @@ export const createSubscriptionProduct = async (
             intervalCount = 1;
     }
 
-    const isOneTime = payload.paymentType === 'One-time' || payload.paymentType === 'One-Time';
-
-    const priceData: any = {
+    // Create Subscription Recurring Price
+    const price = await stripe.prices.create({
         product: product.id,
         unit_amount: Math.round(Number(payload.price) * 100),
         currency: 'gbp',
-    };
-
-    if (!isOneTime) {
-        priceData.recurring = {
+        recurring: {
             interval,
             interval_count: intervalCount,
-        };
-    }
-
-    // Create Price
-    const price = await stripe.prices.create(priceData);
+        },
+    });
 
     if (!price) {
         throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create price in Stripe");
