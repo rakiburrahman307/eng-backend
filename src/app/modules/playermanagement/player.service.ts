@@ -457,7 +457,7 @@ const getAllPlayersFromDB = async (query: Record<string, any>, user?: JwtPayload
     andConditions.push({ status: queryObj.status });
     delete queryObj.status;
   } else if (!queryObj.status) {
-    andConditions.push({ status: { $ne: 'REJECTED' } });
+    andConditions.push({ status: 'APPROVED' });
   }
 
   if (!canViewOther && user) {
@@ -589,6 +589,12 @@ const getFilteredPlayersFromDB = async (query: Record<string, any>, user?: JwtPa
       ],
     },
   ];
+
+  if (query.status && query.status !== 'ALL' && query.status !== 'all') {
+    andConditions.push({ status: query.status });
+  } else if (!query.status) {
+    andConditions.push({ status: 'APPROVED' });
+  }
 
   if (!canViewOther && user) {
     andConditions.push({ _id: user._id || user.id });

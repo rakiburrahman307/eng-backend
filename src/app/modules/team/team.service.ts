@@ -117,7 +117,7 @@ const getSingleTeamFromDB = async (id: string) => {
     throw new Error("Team not found");
   }
 
-  const members = await User.find({ selectTeam: id }).select(
+  const members = await User.find({ selectTeam: id, status: 'APPROVED' }).select(
     "firstName lastName document position profile engCoine",
   );
 

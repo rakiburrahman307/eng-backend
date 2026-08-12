@@ -75,7 +75,7 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
     }
     delete queryObj.status;
   } else if (!filterQuery.status) {
-    filterQuery.status = { $ne: 'REJECTED' };
+    filterQuery.status = 'APPROVED';
   }
 
   const userQuery = new QueryBuilder(

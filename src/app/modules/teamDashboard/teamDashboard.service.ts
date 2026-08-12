@@ -19,6 +19,7 @@ const getTeamDashboardFromDB = async (teamId: string) => {
       { selectTeam: teamObjectId.toString() },
     ],
     role: { $in: [USER_ROLES.PLAYER, USER_ROLES.TOURNAMENT_PLAYER, USER_ROLES.OTHER_CLUBS] },
+    status: 'APPROVED',
     $nor: [
       {
         parentId: null,
