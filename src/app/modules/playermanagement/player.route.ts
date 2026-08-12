@@ -2,7 +2,7 @@ import express from "express";
 import auth from "../../middlewares/auth";
 import fileUploadHandler from "../../middlewares/fileUploaderHandler";
 import validateRequest from "../../middlewares/validateRequest";
-import { USER_ROLES } from "../../../enums/user";
+import { ROLE_GROUPS, USER_ROLES } from "../../../enums/user";
 import { PlayerController } from "./player.controller";
 import { UserValidation } from "../user/user.validation";
 
@@ -25,7 +25,7 @@ const router = express.Router();
 // 1. ADD PLAYER BY PARENT
 router.post(
   "/",
-  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.PLAYER, USER_ROLES.MANAGER, USER_ROLES.OTHER_CLUBS),
+  auth(...ROLE_GROUPS.All),
   fileUploadHandler(),
   parseFormDataBody,
   validateRequest(UserValidation.createPlayerZodSchema),
@@ -35,21 +35,21 @@ router.post(
 // 2. GET ALL PLAYERS OF AUTHENTICATED PARENT
 router.get(
   "/my-players",
-  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.PLAYER, USER_ROLES.MANAGER, USER_ROLES.OTHER_CLUBS),
+   auth(...ROLE_GROUPS.All),
   PlayerController.getMyPlayers
 );
 
 // 3. GET SINGLE PLAYER BY PARENT
 router.get(
   "/my-players/:id",
-  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.PLAYER, USER_ROLES.MANAGER, USER_ROLES.OTHER_CLUBS),
+  auth(...ROLE_GROUPS.All),
   PlayerController.getPlayerById
 );
 
 // 4. UPDATE PLAYER BY PARENT
 router.patch(
   "/my-players/:id",
-  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.PLAYER, USER_ROLES.MANAGER, USER_ROLES.OTHER_CLUBS),
+  auth(...ROLE_GROUPS.All),
   fileUploadHandler(),
   PlayerController.updatePlayerByParent
 );
@@ -57,7 +57,7 @@ router.patch(
 // 5. DELETE PLAYER BY PARENT
 router.delete(
   "/my-players/:id",
-  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.PLAYER, USER_ROLES.MANAGER, USER_ROLES.OTHER_CLUBS),
+   auth(...ROLE_GROUPS.All),
   PlayerController.deletePlayerByParent
 );
 
@@ -66,21 +66,21 @@ router.delete(
 // 6. GET PENDING PLAYERS FOR ADMIN REVIEW
 router.get(
   "/admin/pending",
-  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  auth(...ROLE_GROUPS.All),
   PlayerController.getPendingPlayersForAdmin
 );
 
 // 7. APPROVE PLAYER BY ADMIN
 router.patch(
   "/admin/:id/approve",
-  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  auth(...ROLE_GROUPS.All),
   PlayerController.approvePlayerByAdmin
 );
 
 // 8. REJECT PLAYER BY ADMIN
 router.patch(
   "/admin/:id/reject",
-  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  auth(...ROLE_GROUPS.All),
   PlayerController.rejectPlayerByAdmin
 );
 
@@ -95,7 +95,7 @@ router.get("/filter", auth(false), PlayerController.getFilteredPlayers);
 // UPDATE PLAYER DATA (ADMIN & SUPER_ADMIN)
 router.patch(
   "/:id",
-  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  auth(...ROLE_GROUPS.All),
   fileUploadHandler(),
   PlayerController.updatePlayerByAdmin
 );
@@ -103,7 +103,7 @@ router.patch(
 // DELETE PLAYER (ADMIN & SUPER_ADMIN)
 router.delete(
   "/:id",
-  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  auth(...ROLE_GROUPS.All),
   PlayerController.deletePlayerByAdmin
 );
 
