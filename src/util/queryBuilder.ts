@@ -31,42 +31,45 @@ class QueryBuilder<T> {
   }
 
   // 🔽 FILTER
-filter() {
-  const queryObj = { ...this.query };
+  filter() {
+    const queryObj = { ...this.query };
 
-  const excludeFields = [
-    'search',
-    'searchTerm',
-    'sort',
-    'page',
-    'limit',
-    'fields',
-    'minPrice',
-    'maxPrice',
-  ];
+    const excludeFields = [
+      'search',
+      'searchTerm',
+      'searchValue',
+      'sort',
+      'page',
+      'pageNumber',
+      'userPage',
+      'limit',
+      'fields',
+      'minPrice',
+      'maxPrice',
+    ];
 
-  excludeFields.forEach((el) => delete queryObj[el]);
+    excludeFields.forEach((el) => delete queryObj[el]);
 
-  const cleanedQuery = cleanObject(queryObj);
+    const cleanedQuery = cleanObject(queryObj);
 
-  this.modelQuery = this.modelQuery.find(cleanedQuery);
+    this.modelQuery = this.modelQuery.find(cleanedQuery);
 
-  // 🔥 PRICE RANGE FILTER
-  const minPrice = Number(this.query.minPrice);
-  const maxPrice = Number(this.query.maxPrice);
+    // 🔥 PRICE RANGE FILTER
+    const minPrice = Number(this.query.minPrice);
+    const maxPrice = Number(this.query.maxPrice);
 
-  if (this.query.minPrice || this.query.maxPrice) {
-    this.modelQuery = this.modelQuery.find({
-      ...cleanedQuery,
-      basePrice: {
-        ...(this.query.minPrice ? { $gte: minPrice } : {}),
-        ...(this.query.maxPrice ? { $lte: maxPrice } : {}),
-      },
-    });
+    if (this.query.minPrice || this.query.maxPrice) {
+      this.modelQuery = this.modelQuery.find({
+        ...cleanedQuery,
+        price: {
+          ...(this.query.minPrice ? { $gte: minPrice } : {}),
+          ...(this.query.maxPrice ? { $lte: maxPrice } : {}),
+        },
+      });
+    }
+
+    return this;
   }
-
-  return this;
-}
 
   // 🔼 SORT
   sort() {
@@ -117,13 +120,11 @@ filter() {
   async getPaginationInfo() {
     const filter = this.modelQuery.getFilter();
 
-    const cleanFilter = JSON.parse(JSON.stringify(filter || {}));
-
-    const total = await this.modelQuery.model.countDocuments(cleanFilter);
+    const total = await this.modelQuery.model.countDocuments(filter);
 
     const limit = Number(this.query?.limit) || 10;
-    const page = Number(this.query?.page) || 1;
-    const totalPage = Math.ceil(total / limit);
+    const page = Number(this.query?.page || this.query?.pageNumber || this.query?.userPage) || 1;
+    const totalPage = Math.ceil(total / limit) || 1;
 
     return {
       total,

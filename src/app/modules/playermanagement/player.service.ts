@@ -363,56 +363,78 @@ const getAllPlayersFromDB = async (query: Record<string, any>, user?: JwtPayload
 
   // 2. Base Player Filter:
   // - MUST be a player profile belonging to a parent (parentId is NOT null)
-  // - MUST be a complete profile (firstName, position, and dateOfBirth must be filled)
   // - MUST be paid (active subscription on player, active subscription on parent, or isSubscribed/hasAccess is true)
-  const filter: Record<string, any> = {
-    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
-    parentId: { $exists: true, $ne: null },
-    firstName: { $exists: true, $nin: [null, ""] },
-    position: { $exists: true, $nin: [null, ""] },
-    dateOfBirth: { $exists: true, $ne: null },
-    $or: [
-      { _id: { $in: activeSubUserIds } },
-      { parentId: { $in: activeSubUserIds } },
-      { isSubscribed: true },
-      { hasAccess: true },
-    ],
-  };
+  const andConditions: any[] = [
+    { role: { $in: [USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] } },
+    { parentId: { $exists: true, $ne: null } },
+    {
+      $or: [
+        { _id: { $in: activeSubUserIds } },
+        { parentId: { $in: activeSubUserIds } },
+        { isSubscribed: true },
+        { hasAccess: true },
+      ],
+    },
+  ];
+
+  const rawSearch = (queryObj.searchTerm || queryObj.searchValue || queryObj.search) as string;
+  if (rawSearch && rawSearch.trim()) {
+    const searchRegex = new RegExp(rawSearch.trim(), 'i');
+    andConditions.push({
+      $or: [
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+        { userName: searchRegex },
+        { email: searchRegex },
+        { position: searchRegex },
+        { ageGroup: searchRegex },
+        { location: searchRegex },
+      ],
+    });
+    delete queryObj.searchTerm;
+    delete queryObj.searchValue;
+    delete queryObj.search;
+  }
 
   if (queryObj.role && queryObj.role !== 'ALL') {
-    filter.role = queryObj.role;
+    andConditions.push({ role: queryObj.role });
     delete queryObj.role;
   }
 
   if (queryObj.status && queryObj.status !== 'ALL') {
-    filter.status = queryObj.status;
+    andConditions.push({ status: queryObj.status });
     delete queryObj.status;
   }
 
   if (!canViewOther && user) {
-    filter._id = user._id || user.id;
+    andConditions.push({ _id: user._id || user.id });
   }
 
-  const baseQuery = User.find(filter)
-    .populate({
-      path: "selectTeam",
-      select: "teamName shortName teamLogo",
-    })
-    .populate({
-      path: "parentId",
-      select: "firstName lastName email phone userName profile",
-    });
+  const { page = 1, limit = 10, pageNumber, userPage } = queryObj;
+  const pageNum = Number(pageNumber || userPage || page) || 1;
+  const limitNum = Number(limit) || 10;
+  const skip = (pageNum - 1) * limitNum;
 
-  const queryBuilder = new QueryBuilder(baseQuery, queryObj)
-    .search(["firstName", "lastName", "position", "ageGroup", "email", "userName", "location"])
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
+  const finalFilter = { $and: andConditions };
 
-  const result = await queryBuilder.modelQuery;
+  const [rawPlayers, total] = await Promise.all([
+    User.find(finalFilter)
+      .populate({
+        path: "selectTeam",
+        select: "teamName shortName teamLogo",
+      })
+      .populate({
+        path: "parentId",
+        select: "firstName lastName email phone userName profile",
+      })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean(),
+    User.countDocuments(finalFilter),
+  ]);
 
-  const players = result.map((player: any) => ({
+  const players = rawPlayers.map((player: any) => ({
     _id: player._id,
     firstName: player.firstName,
     lastName: player.lastName,
@@ -452,47 +474,68 @@ const getAllPlayersFromDB = async (query: Record<string, any>, user?: JwtPayload
 
   return {
     players,
-    pagination: await queryBuilder.getPaginationInfo(),
+    pagination: {
+      total,
+      limit: limitNum,
+      page: pageNum,
+      totalPage: Math.ceil(total / limitNum) || 1,
+    },
   };
 };
 
 const getFilteredPlayersFromDB = async (query: Record<string, any>, user?: JwtPayload | null) => {
   const canViewOther = await checkCanViewOtherPlayers(user);
-  const { team, position, page = 1, limit = 10 } = query;
+  const { team, position, page = 1, limit = 10, search, searchTerm, searchValue } = query;
 
   const activeSubUserIds = await Subscription.find({ status: 'active' }).distinct('user');
 
-  const filter: Record<string, any> = {
-    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
-    parentId: { $exists: true, $ne: null },
-    firstName: { $exists: true, $nin: [null, ""] },
-    position: { $exists: true, $nin: [null, ""] },
-    dateOfBirth: { $exists: true, $ne: null },
-    $or: [
-      { _id: { $in: activeSubUserIds } },
-      { parentId: { $in: activeSubUserIds } },
-      { isSubscribed: true },
-      { hasAccess: true },
-    ],
-  };
+  const andConditions: any[] = [
+    { role: { $in: [USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] } },
+    { parentId: { $exists: true, $ne: null } },
+    {
+      $or: [
+        { _id: { $in: activeSubUserIds } },
+        { parentId: { $in: activeSubUserIds } },
+        { isSubscribed: true },
+        { hasAccess: true },
+      ],
+    },
+  ];
 
   if (!canViewOther && user) {
-    filter._id = user._id || user.id;
+    andConditions.push({ _id: user._id || user.id });
   }
 
   if (team) {
-    filter.selectTeam = team;
+    andConditions.push({ selectTeam: team });
   }
   if (position) {
-    filter.position = {
-      $regex: position,
-      $options: "i",
-    };
+    andConditions.push({
+      position: {
+        $regex: position,
+        $options: "i",
+      },
+    });
   }
+
+  const rawSearch = (searchTerm || searchValue || search) as string;
+  if (rawSearch && rawSearch.trim()) {
+    const searchRegex = new RegExp(rawSearch.trim(), 'i');
+    andConditions.push({
+      $or: [
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+        { userName: searchRegex },
+        { email: searchRegex },
+        { position: searchRegex },
+      ],
+    });
+  }
+
   const pageNum = Number(page);
   const limitNum = Number(limit);
   const skip = (pageNum - 1) * limitNum;
-  const result = await User.find(filter)
+  const result = await User.find({ $and: andConditions })
     .populate({
       path: "selectTeam",
       select: "teamName shortName teamLogo",
@@ -501,7 +544,7 @@ const getFilteredPlayersFromDB = async (query: Record<string, any>, user?: JwtPa
     .skip(skip)
     .limit(limitNum);
 
-  const total = await User.countDocuments(filter);
+  const total = await User.countDocuments({ $and: andConditions });
   const players = result.map((player: any) => ({
     _id: player._id,
     firstName: player.firstName,
