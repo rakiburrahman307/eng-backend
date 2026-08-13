@@ -411,13 +411,22 @@ const getUserAnalyticsFromDB = async () => {
     User.countDocuments({
       parentId: null,
       email: { $ne: null },
-      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER, USER_ROLES.REFEREE, USER_ROLES.OTHER_CLUBS] },
+      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER, USER_ROLES.REFEREE] },
       position: { $exists: false },
       dateOfBirth: { $exists: false },
     }),
     User.countDocuments({
-      role: USER_ROLES.PLAYER,
+      role: { $in: [USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
       _id: { $in: activeSubUserIds },
+      $or: [
+        { parentId: { $ne: null } },
+        { position: { $exists: true, $ne: null } },
+        { dateOfBirth: { $exists: true, $ne: null } },
+        { ageGroup: { $exists: true, $ne: null } },
+        { selectTeam: { $exists: true, $ne: null } },
+        { email: null },
+        { password: null },
+      ],
     }),
     User.countDocuments({
       status: "PENDING",
@@ -439,7 +448,7 @@ const getUserAnalyticsFromDB = async () => {
       dateOfBirth: { $exists: true, $ne: null },
       document: { $exists: true, $ne: null, $nin: [[], ""] },
     }),
-    User.countDocuments({ role: USER_ROLES.OTHER_CLUBS }),
+    User.countDocuments({ status: "APPROVED", role: USER_ROLES.OTHER_CLUBS }),
     User.countDocuments({
       role: USER_ROLES.REFEREE,
       dateOfBirth: { $exists: true, $ne: null },
@@ -450,8 +459,8 @@ const getUserAnalyticsFromDB = async () => {
       role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
       $or: baseEligibilityConditions,
     }),
-    User.countDocuments({ role: USER_ROLES.OTHER_CLUBS }),
-    User.countDocuments({ role: USER_ROLES.TOURNAMENT_PLAYER }),
+    User.countDocuments({ status: "APPROVED", role: USER_ROLES.OTHER_CLUBS }),
+    User.countDocuments({ status: "APPROVED", role: USER_ROLES.TOURNAMENT_PLAYER }),
   ]);
 
   return {

@@ -5,8 +5,39 @@ import { Subscription } from "../subscription/subscription.model";
 import { USER_ROLES } from "../../../enums/user";
 
 const getOverviewFromDB = async () => {
-  // ✅ Child players  = PLAYER role with parentId set (created by a parent account)
-  // ✅ Parent accounts = PLAYER/OTHER_CLUBS role with NO parentId themselves
+  // Active subscription user IDs for players
+  const activeSubUserIds = await Subscription.find({ status: 'active' }).distinct('user');
+  const baseEligibilityConditions = [
+    {
+      role: USER_ROLES.MANAGER,
+      dateOfBirth: { $exists: true, $ne: null },
+      document: { $exists: true, $ne: null, $nin: [[], ""] },
+    },
+    {
+      role: USER_ROLES.REFEREE,
+      dateOfBirth: { $exists: true, $ne: null },
+      document: { $exists: true, $ne: null, $nin: [[], ""] },
+    },
+    {
+      role: {
+        $in: [
+          USER_ROLES.PLAYER,
+          USER_ROLES.OTHER_CLUBS,
+          USER_ROLES.TOURNAMENT_PLAYER,
+        ],
+      },
+      _id: { $in: activeSubUserIds },
+      $or: [
+        { parentId: { $ne: null } },
+        { position: { $exists: true, $ne: null } },
+        { dateOfBirth: { $exists: true, $ne: null } },
+        { ageGroup: { $exists: true, $ne: null } },
+        { selectTeam: { $exists: true, $ne: null } },
+        { email: null },
+        { password: null },
+      ],
+    }
+  ];
 
   const [
     totalPlayers,
@@ -22,14 +53,44 @@ const getOverviewFromDB = async () => {
   ] = await Promise.all([
     // ✅ Real players = PLAYER role AND has parentId (child accounts)
     User.countDocuments({
-      role: USER_ROLES.PLAYER,
-      parentId: { $exists: true, $ne: null },
+      role: {
+        $in: [
+          USER_ROLES.PLAYER,
+          USER_ROLES.OTHER_CLUBS,
+          USER_ROLES.TOURNAMENT_PLAYER,
+        ],
+      },
+      _id: { $in: activeSubUserIds },
+      $or: [
+        { parentId: { $ne: null } },
+        { position: { $exists: true, $ne: null } },
+        { dateOfBirth: { $exists: true, $ne: null } },
+        { ageGroup: { $exists: true, $ne: null } },
+        { selectTeam: { $exists: true, $ne: null } },
+        { email: null },
+        { password: null },
+      ],
     }),
 
     // Pending approval players
     User.countDocuments({
-      role: USER_ROLES.PLAYER,
-      parentId: { $exists: true, $ne: null },
+      role: {
+        $in: [
+          USER_ROLES.PLAYER,
+          USER_ROLES.OTHER_CLUBS,
+          USER_ROLES.TOURNAMENT_PLAYER,
+        ],
+      },
+      _id: { $in: activeSubUserIds },
+      $or: [
+        { parentId: { $ne: null } },
+        { position: { $exists: true, $ne: null } },
+        { dateOfBirth: { $exists: true, $ne: null } },
+        { ageGroup: { $exists: true, $ne: null } },
+        { selectTeam: { $exists: true, $ne: null } },
+        { email: null },
+        { password: null },
+      ],
       status: 'PENDING',
     }),
 
@@ -40,17 +101,35 @@ const getOverviewFromDB = async () => {
     // Trial / Other club child players (under a parent)
     User.countDocuments({
       role: USER_ROLES.OTHER_CLUBS,
-      parentId: { $exists: true, $ne: null },
+      _id: { $in: activeSubUserIds },
+      $or: [
+        { parentId: { $ne: null } },
+        { position: { $exists: true, $ne: null } },
+        { dateOfBirth: { $exists: true, $ne: null } },
+        { ageGroup: { $exists: true, $ne: null } },
+        { selectTeam: { $exists: true, $ne: null } },
+        { email: null },
+        { password: null },
+      ],
     }),
 
-    // Parent accounts: PLAYER/OTHER_CLUBS role with NO parentId and have an email (real accounts)
     User.countDocuments({
-      role: { $in: [USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
-      $or: [
-        { parentId: null },
-        { parentId: { $exists: false } },
-      ],
-      email: { $exists: true, $ne: null },
+      role: {
+        $in: [
+          USER_ROLES.PLAYER,
+          USER_ROLES.OTHER_CLUBS,
+          USER_ROLES.TOURNAMENT_PLAYER,
+        ],
+      },
+      parentId: null,
+      email: {
+        $exists: true,
+        $ne: null,
+      },
+      password: {
+        $exists: true,
+        $ne: null,
+      },
     }),
 
     Team.countDocuments(),
