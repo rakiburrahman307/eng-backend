@@ -31,7 +31,13 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
     },
     // Player with active subscription (excluding pure parent accounts)
     {
-      role: USER_ROLES.PLAYER,
+      role: {
+        $in: [
+          USER_ROLES.PLAYER,
+          USER_ROLES.OTHER_CLUBS,
+          USER_ROLES.TOURNAMENT_PLAYER,
+        ],
+      },
       _id: { $in: activeSubUserIds },
       $or: [
         { parentId: { $ne: null } },
@@ -42,21 +48,7 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
         { email: null },
         { password: null },
       ],
-    },
-    // Other valid member roles (Other Clubs / Trial Players, Tournament Players) with active subscription
-    {
-      role: { $in: [USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
-      _id: { $in: activeSubUserIds },
-      $or: [
-        { parentId: { $ne: null } },
-        { position: { $exists: true, $ne: null } },
-        { dateOfBirth: { $exists: true, $ne: null } },
-        { ageGroup: { $exists: true, $ne: null } },
-        { selectTeam: { $exists: true, $ne: null } },
-        { email: null },
-        { password: null },
-      ],
-    },
+    }
   ];
 
   filterQuery.$or = baseEligibilityConditions;
@@ -378,7 +370,13 @@ const getUserAnalyticsFromDB = async () => {
       document: { $exists: true, $ne: null, $nin: [[], ""] },
     },
     {
-      role: USER_ROLES.PLAYER,
+      role: {
+        $in: [
+          USER_ROLES.PLAYER,
+          USER_ROLES.OTHER_CLUBS,
+          USER_ROLES.TOURNAMENT_PLAYER,
+        ],
+      },
       _id: { $in: activeSubUserIds },
       $or: [
         { parentId: { $ne: null } },
@@ -389,20 +387,7 @@ const getUserAnalyticsFromDB = async () => {
         { email: null },
         { password: null },
       ],
-    },
-    {
-      role: { $in: [USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
-      _id: { $in: activeSubUserIds },
-      $or: [
-        { parentId: { $ne: null } },
-        { position: { $exists: true, $ne: null } },
-        { dateOfBirth: { $exists: true, $ne: null } },
-        { ageGroup: { $exists: true, $ne: null } },
-        { selectTeam: { $exists: true, $ne: null } },
-        { email: null },
-        { password: null },
-      ],
-    },
+    }
   ];
 
   const [
