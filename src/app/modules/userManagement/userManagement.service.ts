@@ -378,7 +378,7 @@ const getUserAnalyticsFromDB = async () => {
       document: { $exists: true, $ne: null, $nin: [[], ""] },
     },
     {
-      role: { $in: [USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
+      role: USER_ROLES.PLAYER,
       _id: { $in: activeSubUserIds },
       $or: [
         { parentId: { $ne: null } },
@@ -389,7 +389,20 @@ const getUserAnalyticsFromDB = async () => {
         { email: null },
         { password: null },
       ],
-    }
+    },
+    {
+      role: { $in: [USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
+      _id: { $in: activeSubUserIds },
+      $or: [
+        { parentId: { $ne: null } },
+        { position: { $exists: true, $ne: null } },
+        { dateOfBirth: { $exists: true, $ne: null } },
+        { ageGroup: { $exists: true, $ne: null } },
+        { selectTeam: { $exists: true, $ne: null } },
+        { email: null },
+        { password: null },
+      ],
+    },
   ];
 
   const [
