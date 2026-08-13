@@ -5,8 +5,30 @@ import { Subscription } from "../subscription/subscription.model";
 import { USER_ROLES } from "../../../enums/user";
 
 const getOverviewFromDB = async () => {
-  // Active subscription user IDs for players
-  const activeSubUserIds = await Subscription.find({ status: 'active' }).distinct('user');
+  const activeSubUserIds = await Subscription.distinct('user', {
+    status: 'active',
+  });
+
+  const playerRoles = [
+    USER_ROLES.PLAYER,
+    USER_ROLES.OTHER_CLUBS,
+    USER_ROLES.TOURNAMENT_PLAYER,
+  ];
+
+  const playerEligibility = {
+    role: { $in: playerRoles },
+    _id: { $in: activeSubUserIds },
+    $or: [
+      { parentId: { $ne: null } },
+      { position: { $exists: true, $ne: null } },
+      { dateOfBirth: { $exists: true, $ne: null } },
+      { ageGroup: { $exists: true, $ne: null } },
+      { selectTeam: { $exists: true, $ne: null } },
+      { email: null },
+      { password: null },
+    ],
+  };
+
   const [
     totalPlayers,
     totalPendingPlayers,
@@ -19,76 +41,28 @@ const getOverviewFromDB = async () => {
     pendingMatches,
     activeSubscriptions,
   ] = await Promise.all([
-    // ✅ Real players = PLAYER role AND has parentId (child accounts)
-    User.countDocuments({
-      role: {
-        $in: [
-          USER_ROLES.PLAYER,
-          USER_ROLES.OTHER_CLUBS,
-          USER_ROLES.TOURNAMENT_PLAYER,
-        ],
-      },
-      _id: { $in: activeSubUserIds },
-      $or: [
-        { parentId: { $ne: null } },
-        { position: { $exists: true, $ne: null } },
-        { dateOfBirth: { $exists: true, $ne: null } },
-        { ageGroup: { $exists: true, $ne: null } },
-        { selectTeam: { $exists: true, $ne: null } },
-        { email: null },
-        { password: null },
-      ],
-    }),
+    User.countDocuments(playerEligibility),
 
-    // Pending approval players
     User.countDocuments({
-      role: {
-        $in: [
-          USER_ROLES.PLAYER,
-          USER_ROLES.OTHER_CLUBS,
-          USER_ROLES.TOURNAMENT_PLAYER,
-        ],
-      },
-      _id: { $in: activeSubUserIds },
-      $or: [
-        { parentId: { $ne: null } },
-        { position: { $exists: true, $ne: null } },
-        { dateOfBirth: { $exists: true, $ne: null } },
-        { ageGroup: { $exists: true, $ne: null } },
-        { selectTeam: { $exists: true, $ne: null } },
-        { email: null },
-        { password: null },
-      ],
+      ...playerEligibility,
       status: 'PENDING',
     }),
 
-    User.countDocuments({ role: USER_ROLES.MANAGER }),
-
-    User.countDocuments({ role: USER_ROLES.REFEREE }),
-
-    // Trial / Other club child players (under a parent)
     User.countDocuments({
-      role: USER_ROLES.OTHER_CLUBS,
-      _id: { $in: activeSubUserIds },
-      $or: [
-        { parentId: { $ne: null } },
-        { position: { $exists: true, $ne: null } },
-        { dateOfBirth: { $exists: true, $ne: null } },
-        { ageGroup: { $exists: true, $ne: null } },
-        { selectTeam: { $exists: true, $ne: null } },
-        { email: null },
-        { password: null },
-      ],
+      role: USER_ROLES.MANAGER,
     }),
 
     User.countDocuments({
-      role: {
-        $in: [
-          USER_ROLES.PLAYER,
-          USER_ROLES.OTHER_CLUBS,
-          USER_ROLES.TOURNAMENT_PLAYER,
-        ],
-      },
+      role: USER_ROLES.REFEREE,
+    }),
+
+    User.countDocuments({
+      ...playerEligibility,
+      role: USER_ROLES.OTHER_CLUBS,
+    }),
+
+    User.countDocuments({
+      role: { $in: playerRoles },
       parentId: null,
       email: {
         $exists: true,
@@ -104,10 +78,13 @@ const getOverviewFromDB = async () => {
 
     Match.countDocuments(),
 
-    Match.countDocuments({ status: "upcoming" }),
+    Match.countDocuments({
+      status: 'upcoming',
+    }),
 
-    // Active subscriptions across all users
-    Subscription.countDocuments({ status: 'active' }),
+    Subscription.countDocuments({
+      status: 'active',
+    }),
   ]);
 
   return {
