@@ -7,38 +7,6 @@ import { USER_ROLES } from "../../../enums/user";
 const getOverviewFromDB = async () => {
   // Active subscription user IDs for players
   const activeSubUserIds = await Subscription.find({ status: 'active' }).distinct('user');
-  const baseEligibilityConditions = [
-    {
-      role: USER_ROLES.MANAGER,
-      dateOfBirth: { $exists: true, $ne: null },
-      document: { $exists: true, $ne: null, $nin: [[], ""] },
-    },
-    {
-      role: USER_ROLES.REFEREE,
-      dateOfBirth: { $exists: true, $ne: null },
-      document: { $exists: true, $ne: null, $nin: [[], ""] },
-    },
-    {
-      role: {
-        $in: [
-          USER_ROLES.PLAYER,
-          USER_ROLES.OTHER_CLUBS,
-          USER_ROLES.TOURNAMENT_PLAYER,
-        ],
-      },
-      _id: { $in: activeSubUserIds },
-      $or: [
-        { parentId: { $ne: null } },
-        { position: { $exists: true, $ne: null } },
-        { dateOfBirth: { $exists: true, $ne: null } },
-        { ageGroup: { $exists: true, $ne: null } },
-        { selectTeam: { $exists: true, $ne: null } },
-        { email: null },
-        { password: null },
-      ],
-    }
-  ];
-
   const [
     totalPlayers,
     totalPendingPlayers,
