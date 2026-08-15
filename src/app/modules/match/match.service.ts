@@ -220,14 +220,26 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
   // League Filter (supports leagueId, league, leagueName)
   const targetLeague = leagueId || league;
   if (targetLeague && targetLeague !== "ALL") {
-    if (mongoose.Types.ObjectId.isValid(targetLeague)) {
-      andConditions.push({ league: new mongoose.Types.ObjectId(targetLeague) });
-    } else {
-      const leagues = await League.find({
-        leagueName: { $regex: targetLeague, $options: "i" },
-      }).select("_id");
-      andConditions.push({ league: { $in: leagues.map((l) => l._id) } });
+    const isObjId = mongoose.Types.ObjectId.isValid(targetLeague);
+    const leagueIds: any[] = [];
+    if (isObjId) {
+      leagueIds.push(new mongoose.Types.ObjectId(targetLeague));
+      leagueIds.push(targetLeague.toString());
     }
+
+    const matchingLeagues = await League.find({
+      $or: [
+        ...(isObjId ? [{ _id: targetLeague }] : []),
+        { leagueName: { $regex: targetLeague, $options: "i" } },
+      ],
+    }).select("_id");
+
+    matchingLeagues.forEach((l) => {
+      leagueIds.push(l._id);
+      leagueIds.push(l._id.toString());
+    });
+
+    andConditions.push({ league: { $in: leagueIds } });
   } else if (leagueName && leagueName !== "ALL") {
     const leagues = await League.find({
       leagueName: { $regex: leagueName, $options: "i" },
@@ -235,33 +247,37 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     andConditions.push({ league: { $in: leagues.map((l) => l._id) } });
   }
 
-  // Team Filter (supports teamId, team, teamName)
-  const targetTeam = teamId || teamName || team;
+  // Team Filter (supports teamId, team, teamName, homeTeam, awayTeam)
+  const targetTeam = teamId || teamName || team || query.homeTeam || query.awayTeam;
   if (targetTeam && targetTeam !== "ALL") {
-    if (mongoose.Types.ObjectId.isValid(targetTeam)) {
-      const teamObjId = new mongoose.Types.ObjectId(targetTeam);
-      if (homeMatchesOnly === "true" || homeMatchesOnly === true) {
-        andConditions.push({ homeTeam: teamObjId });
-      } else {
-        andConditions.push({
-          $or: [{ homeTeam: teamObjId }, { awayTeam: teamObjId }],
-        });
-      }
+    const isObjId = mongoose.Types.ObjectId.isValid(targetTeam);
+    const teamIds: any[] = [];
+    if (isObjId) {
+      teamIds.push(new mongoose.Types.ObjectId(targetTeam));
+      teamIds.push(targetTeam.toString());
+    }
+
+    const matchingTeams = await Team.find({
+      $or: [
+        ...(isObjId ? [{ _id: targetTeam }] : []),
+        { teamName: { $regex: targetTeam, $options: "i" } },
+      ],
+    }).select("_id");
+
+    matchingTeams.forEach((t) => {
+      teamIds.push(t._id);
+      teamIds.push(t._id.toString());
+    });
+
+    if (homeMatchesOnly === "true" || homeMatchesOnly === true) {
+      andConditions.push({ homeTeam: { $in: teamIds } });
     } else {
-      const teams = await Team.find({
-        teamName: { $regex: targetTeam, $options: "i" },
-      }).select("_id");
-      const teamIds = teams.map((t) => t._id);
-      if (homeMatchesOnly === "true" || homeMatchesOnly === true) {
-        andConditions.push({ homeTeam: { $in: teamIds } });
-      } else {
-        andConditions.push({
-          $or: [
-            { homeTeam: { $in: teamIds } },
-            { awayTeam: { $in: teamIds } },
-          ],
-        });
-      }
+      andConditions.push({
+        $or: [
+          { homeTeam: { $in: teamIds } },
+          { awayTeam: { $in: teamIds } },
+        ],
+      });
     }
   }
 
@@ -420,20 +436,23 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     }
   }
 
-  // Date Range Filter (startDate & endDate)
-  if (startDate || endDate) {
+  // Date Range Filter (supports startDate, endDate, from, to, start, end)
+  const effectiveStartDate = startDate || query.from || query.start;
+  const effectiveEndDate = endDate || query.to || query.end;
+
+  if (effectiveStartDate || effectiveEndDate) {
     const dateRangeObj: any = {};
-    if (startDate) {
-      const sStr = typeof startDate === "string" ? startDate.split("T")[0] : "";
+    if (effectiveStartDate) {
+      const sStr = typeof effectiveStartDate === "string" ? effectiveStartDate.split("T")[0] : "";
       dateRangeObj.$gte = sStr && /^\d{4}-\d{2}-\d{2}$/.test(sStr)
         ? new Date(`${sStr}T00:00:00.000Z`)
-        : new Date(startDate as string);
+        : new Date(effectiveStartDate as string);
     }
-    if (endDate) {
-      const eStr = typeof endDate === "string" ? endDate.split("T")[0] : "";
+    if (effectiveEndDate) {
+      const eStr = typeof effectiveEndDate === "string" ? effectiveEndDate.split("T")[0] : "";
       dateRangeObj.$lte = eStr && /^\d{4}-\d{2}-\d{2}$/.test(eStr)
         ? new Date(`${eStr}T23:59:59.999Z`)
-        : new Date(endDate as string);
+        : new Date(effectiveEndDate as string);
     }
     andConditions.push({ matchDate: dateRangeObj });
   }
