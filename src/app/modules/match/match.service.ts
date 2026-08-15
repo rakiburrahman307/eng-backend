@@ -189,12 +189,17 @@ const createMatchToDB = async (payload: any) => {
 
 const getAllMatchesFromDB = async (query: Record<string, any>) => {
   const {
+    teamId,
     team,
     teamName,
+    leagueId,
     league,
     leagueName,
     status,
     dateStatus,
+    matchDate,
+    startDate,
+    endDate,
     venue,
     venueName,
     venueCategory,
@@ -204,25 +209,22 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     unplayedOnly,
     liveOnly,
     hasNotes,
-    startDate,
-    endDate,
     searchTerm,
     page,
     limit,
     sort,
-    fields,
-    ...otherQuery
   } = query;
 
   const andConditions: any[] = [];
 
-  // League Filter
-  if (league && league !== "ALL") {
-    if (mongoose.Types.ObjectId.isValid(league)) {
-      andConditions.push({ league });
+  // League Filter (supports leagueId, league, leagueName)
+  const targetLeague = leagueId || league;
+  if (targetLeague && targetLeague !== "ALL") {
+    if (mongoose.Types.ObjectId.isValid(targetLeague)) {
+      andConditions.push({ league: new mongoose.Types.ObjectId(targetLeague) });
     } else {
       const leagues = await League.find({
-        leagueName: { $regex: league, $options: "i" },
+        leagueName: { $regex: targetLeague, $options: "i" },
       }).select("_id");
       andConditions.push({ league: { $in: leagues.map((l) => l._id) } });
     }
@@ -233,9 +235,39 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     andConditions.push({ league: { $in: leagues.map((l) => l._id) } });
   }
 
-  // Status Filter
+  // Team Filter (supports teamId, team, teamName)
+  const targetTeam = teamId || teamName || team;
+  if (targetTeam && targetTeam !== "ALL") {
+    if (mongoose.Types.ObjectId.isValid(targetTeam)) {
+      const teamObjId = new mongoose.Types.ObjectId(targetTeam);
+      if (homeMatchesOnly === "true" || homeMatchesOnly === true) {
+        andConditions.push({ homeTeam: teamObjId });
+      } else {
+        andConditions.push({
+          $or: [{ homeTeam: teamObjId }, { awayTeam: teamObjId }],
+        });
+      }
+    } else {
+      const teams = await Team.find({
+        teamName: { $regex: targetTeam, $options: "i" },
+      }).select("_id");
+      const teamIds = teams.map((t) => t._id);
+      if (homeMatchesOnly === "true" || homeMatchesOnly === true) {
+        andConditions.push({ homeTeam: { $in: teamIds } });
+      } else {
+        andConditions.push({
+          $or: [
+            { homeTeam: { $in: teamIds } },
+            { awayTeam: { $in: teamIds } },
+          ],
+        });
+      }
+    }
+  }
+
+  // Status Filter (case-insensitive)
   if (status && status !== "ALL") {
-    const lowerStatus = status.toLowerCase();
+    const lowerStatus = (status as string).toLowerCase();
     if (lowerStatus === "live") {
       andConditions.push({
         $or: [
@@ -246,7 +278,7 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
         ],
       });
     } else {
-      andConditions.push({ status: lowerStatus });
+      andConditions.push({ status: { $regex: new RegExp(`^${lowerStatus}$`, "i") } });
     }
   }
 
@@ -265,35 +297,6 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
         { timerStatus: "paused" },
       ],
     });
-  }
-
-  // Team Filter
-  const searchTeam = teamName || team;
-  if (searchTeam && searchTeam !== "ALL") {
-    if (mongoose.Types.ObjectId.isValid(searchTeam)) {
-      if (homeMatchesOnly === "true" || homeMatchesOnly === true) {
-        andConditions.push({ homeTeam: searchTeam });
-      } else {
-        andConditions.push({
-          $or: [{ homeTeam: searchTeam }, { awayTeam: searchTeam }],
-        });
-      }
-    } else {
-      const teams = await Team.find({
-        teamName: { $regex: searchTeam, $options: "i" },
-      }).select("_id");
-      const teamIds = teams.map((t) => t._id);
-      if (homeMatchesOnly === "true" || homeMatchesOnly === true) {
-        andConditions.push({ homeTeam: { $in: teamIds } });
-      } else {
-        andConditions.push({
-          $or: [
-            { homeTeam: { $in: teamIds } },
-            { awayTeam: { $in: teamIds } },
-          ],
-        });
-      }
-    }
   }
 
   // Venue Filter
@@ -376,7 +379,7 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     }
   }
 
-  // Date Status & Range Filter
+  // Date Status Filter
   const now = new Date();
   if (dateStatus && dateStatus !== "ALL") {
     if (dateStatus === "today") {
@@ -398,30 +401,85 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     }
   }
 
+  // Specific Day Filter (matchDate) -> Full 24-hour range
+  if (matchDate) {
+    const dateStr = typeof matchDate === "string" ? matchDate.split("T")[0] : "";
+    if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const startOfDay = new Date(`${dateStr}T00:00:00.000Z`);
+      const endOfDay = new Date(`${dateStr}T23:59:59.999Z`);
+      andConditions.push({ matchDate: { $gte: startOfDay, $lte: endOfDay } });
+    } else {
+      const d = new Date(matchDate as string);
+      if (!isNaN(d.getTime())) {
+        const startOfDay = new Date(d);
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        const endOfDay = new Date(d);
+        endOfDay.setUTCHours(23, 59, 59, 999);
+        andConditions.push({ matchDate: { $gte: startOfDay, $lte: endOfDay } });
+      }
+    }
+  }
+
+  // Date Range Filter (startDate & endDate)
   if (startDate || endDate) {
     const dateRangeObj: any = {};
-    if (startDate) dateRangeObj.$gte = new Date(startDate);
-    if (endDate) dateRangeObj.$lte = new Date(endDate);
+    if (startDate) {
+      const sStr = typeof startDate === "string" ? startDate.split("T")[0] : "";
+      dateRangeObj.$gte = sStr && /^\d{4}-\d{2}-\d{2}$/.test(sStr)
+        ? new Date(`${sStr}T00:00:00.000Z`)
+        : new Date(startDate as string);
+    }
+    if (endDate) {
+      const eStr = typeof endDate === "string" ? endDate.split("T")[0] : "";
+      dateRangeObj.$lte = eStr && /^\d{4}-\d{2}-\d{2}$/.test(eStr)
+        ? new Date(`${eStr}T23:59:59.999Z`)
+        : new Date(endDate as string);
+    }
     andConditions.push({ matchDate: dateRangeObj });
+  }
+
+  // SearchTerm Filter (Regex on teamName, leagueName, venueName, notes, status)
+  if (searchTerm && typeof searchTerm === "string" && searchTerm.trim() !== "") {
+    const searchRegex = { $regex: searchTerm.trim(), $options: "i" };
+
+    const [matchingTeams, matchingLeagues] = await Promise.all([
+      Team.find({ teamName: searchRegex }).select("_id"),
+      League.find({ leagueName: searchRegex }).select("_id"),
+    ]);
+
+    const teamIds = matchingTeams.map((t) => t._id);
+    const leagueIds = matchingLeagues.map((l) => l._id);
+
+    andConditions.push({
+      $or: [
+        { homeTeam: { $in: teamIds } },
+        { awayTeam: { $in: teamIds } },
+        { league: { $in: leagueIds } },
+        { venueName: searchRegex },
+        { status: searchRegex },
+        { notes: searchRegex },
+      ],
+    });
   }
 
   const initialFilter = andConditions.length > 0 ? { $and: andConditions } : {};
 
-  const queryParams = { ...otherQuery };
-  queryParams.sort = sort || "matchDate";
+  // Pagination calculation
+  const pageNumber = Math.max(1, parseInt(page as string, 10) || 1);
+  const limitNumber = Math.max(1, parseInt(limit as string, 10) || 10);
+  const skip = (pageNumber - 1) * limitNumber;
 
-  if (searchTerm) {
-    queryParams.searchTerm = searchTerm;
-  }
+  // Count matching documents for pagination
+  const total = await Match.countDocuments(initialFilter);
+  const totalPage = Math.ceil(total / limitNumber) || 1;
 
-  const matchQuery = new QueryBuilder(Match.find(initialFilter), queryParams)
-    .search(["venueName", "status", "notes"])
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
+  // Sorting
+  const sortField = (sort as string) || "matchDate";
 
-  const matches = await matchQuery.modelQuery
+  const matches = await Match.find(initialFilter)
+    .sort(sortField)
+    .skip(skip)
+    .limit(limitNumber)
     .populate("league")
     .populate("homeTeam")
     .populate("awayTeam")
@@ -430,11 +488,17 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     .populate("venueCategory", "name")
     .populate("venueSubCategory", "name");
 
-  const meta = await matchQuery.getPaginationInfo();
-  const formattedResult = await Promise.all(matches.map((m: any) => formatMatchVenue(m)));
+  const formattedResult = await Promise.all(
+    matches.map((m: any) => formatMatchVenue(m))
+  );
 
   return {
-    meta,
+    meta: {
+      total,
+      limit: limitNumber,
+      page: pageNumber,
+      totalPage,
+    },
     result: formattedResult,
   };
 };
@@ -443,13 +507,18 @@ const getMatchesByRefereeFromDB = async (
   refereeId: string,
   query: Record<string, any>,
 ) => {
-  const matchQuery = new QueryBuilder(Match.find({ referee: refereeId }), query)
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
+  const pageNumber = Math.max(1, parseInt(query.page as string, 10) || 1);
+  const limitNumber = Math.max(1, parseInt(query.limit as string, 10) || 10);
+  const skip = (pageNumber - 1) * limitNumber;
 
-  const matches = await matchQuery.modelQuery
+  const filter = { referee: refereeId };
+  const total = await Match.countDocuments(filter);
+  const totalPage = Math.ceil(total / limitNumber) || 1;
+
+  const matches = await Match.find(filter)
+    .sort(query.sort || "matchDate")
+    .skip(skip)
+    .limit(limitNumber)
     .populate("league")
     .populate("homeTeam")
     .populate("awayTeam")
@@ -458,11 +527,17 @@ const getMatchesByRefereeFromDB = async (
     .populate("venueCategory", "name")
     .populate("venueSubCategory", "name");
 
-  const meta = await matchQuery.getPaginationInfo();
-  const formattedResult = await Promise.all(matches.map((m: any) => formatMatchVenue(m)));
+  const formattedResult = await Promise.all(
+    matches.map((m: any) => formatMatchVenue(m))
+  );
 
   return {
-    meta,
+    meta: {
+      total,
+      limit: limitNumber,
+      page: pageNumber,
+      totalPage,
+    },
     result: formattedResult,
   };
 };
