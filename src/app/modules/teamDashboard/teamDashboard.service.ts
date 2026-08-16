@@ -36,7 +36,7 @@ const getTeamDashboardFromDB = async (teamId: string) => {
     ],
   })
     .select(
-      "_id firstName lastName userName profile position ageGroup dateOfBirth selectTeam status emergencyEmail emergencyPhone role",
+      "_id firstName lastName userName profile position ageGroup dateOfBirth selectTeam status emergencyEmail emergencyPhone role jerseyNumber",
     )
     .lean();
 
@@ -81,7 +81,7 @@ const getTeamDashboardFromDB = async (teamId: string) => {
   const matchResults = await MatchResult.find({
     match: { $in: matchIds },
     team: teamObjectId,
-  }).populate("player", "firstName lastName ");
+  }).populate("player", "firstName lastName jerseyNumber");
 
   // 🏟 TEAM INFO
   const team = await Team.findById(teamObjectId).select(
