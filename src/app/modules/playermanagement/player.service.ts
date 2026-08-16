@@ -739,6 +739,23 @@ const deletePlayerByAdminToDB = async (id: string) => {
   return { message: "Player deleted successfully" };
 };
 
+// ASSIGN PLAYER JERSEY NUMBER (ADMIN, MANAGER, REFEREE)
+const assignJerseyNumberToDB = async (playerId: string, jerseyNumber: string | null) => {
+  const player = await User.findById(playerId);
+
+  if (!player) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Player profile not found");
+  }
+
+  const updatedPlayer = await User.findByIdAndUpdate(
+    playerId,
+    { $set: { jerseyNumber: jerseyNumber ? jerseyNumber.toString().trim() : null } },
+    { new: true }
+  ).populate("selectTeam", "teamName shortName teamLogo");
+
+  return updatedPlayer;
+};
+
 export const PlayerService = {
   createPlayerByParentToDB,
   getMyPlayersFromDB,
@@ -752,4 +769,5 @@ export const PlayerService = {
   getFilteredPlayersFromDB,
   updatePlayerByAdminToDB,
   deletePlayerByAdminToDB,
+  assignJerseyNumberToDB,
 };

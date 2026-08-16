@@ -100,6 +100,13 @@ router.patch(
   PlayerController.updatePlayerByAdmin
 );
 
+// ASSIGN / UPDATE PLAYER JERSEY NUMBER (ADMIN, MANAGER, REFEREE, SUPER_ADMIN)
+router.patch(
+  "/:id/jersey-number",
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER, USER_ROLES.REFEREE),
+  PlayerController.assignJerseyNumber
+);
+
 // DELETE PLAYER (ADMIN & SUPER_ADMIN)
 router.delete(
   "/:id",

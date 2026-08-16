@@ -634,11 +634,28 @@ const getIncompleteUsersFromDB = async (query: Record<string, any>) => {
   };
 };
 
+// UPDATE PLAYER JERSEY NUMBER BY ADMIN
+const updateJerseyNumberToDB = async (userId: string, jerseyNumber: string | null) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+  }
+
+  const updated = await User.findByIdAndUpdate(
+    userId,
+    { $set: { jerseyNumber: jerseyNumber ? jerseyNumber.toString().trim() : null } },
+    { new: true }
+  );
+
+  return updated;
+};
+
 export const UserManagementService = {
   getAllUsersFromDB,
   getAllParentsFromDB,
   getIncompleteUsersFromDB,
   assignTeamToUserToDB,
+  updateJerseyNumberToDB,
   toggleVerifiedToDB,
   deleteUserFromDB,
   getAllRefereesFromDB,

@@ -167,11 +167,27 @@ const getIncompleteUsers = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// UPDATE PLAYER JERSEY NUMBER BY ADMIN
+const updateJerseyNumber = catchAsync(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const { jerseyNumber } = req.body;
+
+  const result = await UserManagementService.updateJerseyNumberToDB(id, jerseyNumber);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Jersey number updated successfully",
+    data: result,
+  });
+});
+
 export const UserManagementController = {
   getAllUsers,
   getAllParents,
   getIncompleteUsers,
   assignTeamToUser,
+  updateJerseyNumber,
   toggleVerified,
   deleteUser,
   getAllReferees,

@@ -235,6 +235,19 @@ const deletePlayerByAdmin = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const assignJerseyNumber = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const { jerseyNumber } = req.body;
+  const result = await PlayerService.assignJerseyNumberToDB(id, jerseyNumber);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Player jersey number assigned successfully",
+    data: result,
+  });
+});
+
 export const PlayerController = {
   createPlayerByParent,
   getMyPlayers,
@@ -248,4 +261,5 @@ export const PlayerController = {
   getFilteredPlayers,
   updatePlayerByAdmin,
   deletePlayerByAdmin,
+  assignJerseyNumber,
 };

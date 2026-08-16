@@ -111,6 +111,10 @@ const userSchema = new Schema<IUser, UserModal>(
       type: String,
       default: null,
     },
+    jerseyNumber: {
+      type: String,
+      default: null,
+    },
     document: {
       type: [String],
       default: []

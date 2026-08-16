@@ -65,6 +65,7 @@ export type IUser = {
     rejectionReason?: string;
     emergencyEmail?: string;
     emergencyPhone?: string;
+    jerseyNumber?: string;
 }
 
 export type UserModal = {

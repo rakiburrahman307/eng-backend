@@ -193,7 +193,7 @@ const getSingleTeamFromDB = async (id: string) => {
   }
 
   const members = await User.find({ selectTeam: id }).select(
-    "firstName lastName userName email phone profile position status engCoine role"
+    "firstName lastName userName email phone profile position status engCoine role jerseyNumber"
   );
 
   const managerLinks = await ManagerTeam.find({ team: id });
