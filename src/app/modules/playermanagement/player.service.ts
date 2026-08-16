@@ -93,12 +93,13 @@ const createPlayerByParentToDB = async (parentId: string, payload: any) => {
 };
 
 const getMyPlayersFromDB = async (parentId: string) => {
-  const parentObjectId = Types.ObjectId.isValid(parentId) ? new Types.ObjectId(parentId) : parentId;
+  const parentStrId = parentId.toString();
+  const parentObjId = Types.ObjectId.isValid(parentStrId) ? new Types.ObjectId(parentStrId) : null;
 
   const players = await User.find({
     $or: [
-      { parentId: parentObjectId },
-      { parentId: parentId },
+      { parentId: parentStrId },
+      ...(parentObjId ? [{ parentId: parentObjId }] : []),
     ],
   })
     .populate("selectTeam", "teamName shortName teamLogo")
@@ -151,13 +152,24 @@ const getPlayerByIdFromDB = async (
   parentId: string,
   playerId: string
 ) => {
-  const parentObjectId = Types.ObjectId.isValid(parentId) ? new Types.ObjectId(parentId) : parentId;
+  const parentStrId = parentId.toString();
+  const parentObjId = Types.ObjectId.isValid(parentStrId) ? new Types.ObjectId(parentStrId) : null;
+  const playerObjId = Types.ObjectId.isValid(playerId) ? new Types.ObjectId(playerId) : playerId;
 
   const player = await User.findOne({
-    _id: playerId,
-    $or: [
-      { parentId: parentObjectId },
-      { parentId: parentId },
+    $and: [
+      {
+        $or: [
+          { _id: playerObjId },
+          { _id: playerId },
+        ],
+      },
+      {
+        $or: [
+          { parentId: parentStrId },
+          ...(parentObjId ? [{ parentId: parentObjId }] : []),
+        ],
+      },
     ],
   })
     .populate("selectTeam", "teamName shortName teamLogo")
