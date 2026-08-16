@@ -427,6 +427,7 @@ const getAllPlayersFromDB = async (query: Record<string, any>, user?: JwtPayload
         { hasAccess: true },
       ],
     },
+    { status: 'APPROVED' },
   ];
 
   const rawSearch = (queryObj.searchTerm || queryObj.searchValue || queryObj.search) as string;
@@ -441,6 +442,8 @@ const getAllPlayersFromDB = async (query: Record<string, any>, user?: JwtPayload
         { position: searchRegex },
         { ageGroup: searchRegex },
         { location: searchRegex },
+        { emergencyEmail: searchRegex },
+        { phone: searchRegex },
       ],
     });
     delete queryObj.searchTerm;
@@ -453,15 +456,48 @@ const getAllPlayersFromDB = async (query: Record<string, any>, user?: JwtPayload
     delete queryObj.role;
   }
 
-  if (queryObj.status && queryObj.status !== 'ALL' && queryObj.status !== 'all') {
-    andConditions.push({ status: queryObj.status });
-    delete queryObj.status;
-  } else if (!queryObj.status) {
-    andConditions.push({ status: 'APPROVED' });
+  if (queryObj.ageGroup && queryObj.ageGroup !== 'ALL') {
+    const cleanedAge = queryObj.ageGroup.replace(/^U-/i, '').replace(/^U/i, '').trim();
+    andConditions.push({
+      $or: [
+        { ageGroup: { $regex: new RegExp(queryObj.ageGroup, 'i') } },
+        { ageGroup: { $regex: new RegExp(`Under ${cleanedAge}`, 'i') } },
+      ],
+    });
+    delete queryObj.ageGroup;
+  }
+
+  if (queryObj.position && queryObj.position !== 'ALL') {
+    andConditions.push({ position: { $regex: new RegExp(queryObj.position, 'i') } });
+    delete queryObj.position;
+  }
+
+  if ((queryObj.selectTeam || queryObj.teamId) && queryObj.selectTeam !== 'ALL' && queryObj.teamId !== 'ALL') {
+    const tId = queryObj.selectTeam || queryObj.teamId;
+    if (Types.ObjectId.isValid(tId)) {
+      andConditions.push({ selectTeam: new Types.ObjectId(tId) });
+    }
   }
 
   if (!canViewOther && user) {
     andConditions.push({ _id: user._id || user.id });
+  }
+
+  // Dynamic Sorting
+  let sortOption: any = { createdAt: -1 };
+  const sortParam = queryObj.sort || queryObj.sortBy || queryObj.sortOrder;
+  if (sortParam === 'name_asc' || sortParam === 'name-asc' || sortParam === 'a-z') {
+    sortOption = { firstName: 1, lastName: 1 };
+  } else if (sortParam === 'name_desc' || sortParam === 'name-desc' || sortParam === 'z-a') {
+    sortOption = { firstName: -1, lastName: -1 };
+  } else if (sortParam === 'oldest' || sortParam === 'createdAt_asc') {
+    sortOption = { createdAt: 1 };
+  } else if (sortParam === 'newest' || sortParam === 'createdAt_desc') {
+    sortOption = { createdAt: -1 };
+  } else if (sortParam === 'coins_desc' || sortParam === 'coins-desc') {
+    sortOption = { engCoine: -1 };
+  } else if (sortParam === 'coins_asc' || sortParam === 'coins-asc') {
+    sortOption = { engCoine: 1 };
   }
 
   const { page = 1, limit = 10, pageNumber, userPage } = queryObj;
@@ -481,7 +517,7 @@ const getAllPlayersFromDB = async (query: Record<string, any>, user?: JwtPayload
         path: "parentId",
         select: "firstName lastName email phone userName profile",
       })
-      .sort({ createdAt: -1 })
+      .sort(sortOption)
       .skip(skip)
       .limit(limitNum)
       .lean(),

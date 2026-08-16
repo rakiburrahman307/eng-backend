@@ -20,6 +20,13 @@ router.get(
   UserManagementController.getAllParents
 );
 
+// GET INCOMPLETE USERS (FOR ADMIN REMOVAL)
+router.get(
+  "/incomplete",
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  UserManagementController.getIncompleteUsers
+);
+
 // ASSIGN TEAM TO USER / PLAYER BY ADMIN
 router.patch(
   "/assign-team/:id",

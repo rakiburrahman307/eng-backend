@@ -154,9 +154,23 @@ const assignTeamToUser = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// GET INCOMPLETE USERS
+const getIncompleteUsers = catchAsync(async (req: Request, res: Response) => {
+  const result = await UserManagementService.getIncompleteUsersFromDB(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Incomplete users retrieved successfully",
+    pagination: result.meta,
+    data: result.result,
+  });
+});
+
 export const UserManagementController = {
   getAllUsers,
   getAllParents,
+  getIncompleteUsers,
   assignTeamToUser,
   toggleVerified,
   deleteUser,

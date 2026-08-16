@@ -523,9 +523,121 @@ const updateUserProfileByAdminToDB = async (userId: string, payload: any) => {
   return updated;
 };
 
+// GET INCOMPLETE / UNVERIFIED / ABANDONED USERS (FOR ADMIN REMOVAL)
+const getIncompleteUsersFromDB = async (query: Record<string, any>) => {
+  const queryObj = { ...query };
+  const { page = 1, limit = 10, pageNumber, userPage, searchTerm, searchValue, search } = queryObj;
+
+  const pageNum = Number(pageNumber || userPage || page) || 1;
+  const limitNum = Number(limit) || 10;
+  const skip = (pageNum - 1) * limitNum;
+
+  // Active subscription user IDs
+  const activeSubUserIds = await Subscription.find({ status: 'active' }).distinct('user');
+
+  // Parents who have at least one child player
+  const parentIdsWithChildren = await User.find({
+    parentId: { $exists: true, $ne: null },
+  }).distinct('parentId');
+
+  // Incomplete / Broken / Abandoned user conditions:
+  // 1) verified: false (Email OTP unverified)
+  // 2) Parent/User with email, no parentId, not in parentIdsWithChildren, no active sub, no child players
+  // 3) Manager or Referee with missing DOB or missing documents
+  const incompleteConditions = [
+    { verified: false },
+    {
+      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER, USER_ROLES.REFEREE] },
+      parentId: null,
+      email: { $exists: true, $ne: null },
+      _id: { $nin: [...activeSubUserIds, ...parentIdsWithChildren] },
+      isSubscribed: { $ne: true },
+      hasAccess: { $ne: true },
+      dateOfBirth: null,
+      position: null,
+    },
+    {
+      role: USER_ROLES.MANAGER,
+      $or: [
+        { dateOfBirth: null },
+        { document: { $in: [null, [], ""] } },
+      ],
+    },
+    {
+      role: USER_ROLES.REFEREE,
+      $or: [
+        { dateOfBirth: null },
+        { document: { $in: [null, [], ""] } },
+      ],
+    },
+  ];
+
+  const andConditions: any[] = [
+    {
+      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
+      $or: incompleteConditions,
+    },
+  ];
+
+  const rawSearch = (searchTerm || searchValue || search) as string;
+  if (rawSearch && rawSearch.trim()) {
+    const searchRegex = new RegExp(rawSearch.trim(), 'i');
+    andConditions.push({
+      $or: [
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+        { userName: searchRegex },
+        { email: searchRegex },
+        { phone: searchRegex },
+      ],
+    });
+  }
+
+  const finalFilter = { $and: andConditions };
+
+  const [rawUsers, total] = await Promise.all([
+    User.find(finalFilter)
+      .select('userName role profile verified status document firstName lastName email phone location createdAt')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean(),
+    User.countDocuments(finalFilter),
+  ]);
+
+  const result = rawUsers.map((u: any) => {
+    let reason = "Incomplete Registration Setup";
+    if (u.verified === false) {
+      reason = "Unverified Email / Abandoned Signup";
+    } else if (u.role === USER_ROLES.MANAGER) {
+      reason = "Manager Missing Verification Documents";
+    } else if (u.role === USER_ROLES.REFEREE) {
+      reason = "Referee Missing Verification Documents";
+    } else if (!u.parentId) {
+      reason = "Parent Profile - No Child Linked";
+    }
+
+    return {
+      ...u,
+      incompleteReason: reason,
+    };
+  });
+
+  return {
+    meta: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPage: Math.ceil(total / limitNum) || 1,
+    },
+    result,
+  };
+};
+
 export const UserManagementService = {
   getAllUsersFromDB,
   getAllParentsFromDB,
+  getIncompleteUsersFromDB,
   assignTeamToUserToDB,
   toggleVerifiedToDB,
   deleteUserFromDB,

@@ -17,15 +17,90 @@ const createTeamToDB = async (payload: any) => {
 
 // GET ALL TEAMS
 const getAllTeamsFromDB = async (query: Record<string, any>) => {
-  const teamQuery = new QueryBuilder(Team.find(), query)
-    .search(["teamName", "shortName", "city", "country"])
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
+  const {
+    leagueId,
+    league,
+    managerId,
+    manager,
+    teamType,
+    searchTerm,
+    page,
+    limit,
+    sort,
+  } = query;
 
-  const teams = await teamQuery.modelQuery;
-  const meta = await teamQuery.getPaginationInfo();
+  const andConditions: any[] = [];
+
+  // 1. League Filter
+  const targetLeague = leagueId || league;
+  if (targetLeague && targetLeague !== "ALL") {
+    const matchingLeagueTeams = await LeagueTeam.find({ league: targetLeague }).select("team");
+    const teamIdsInLeague = matchingLeagueTeams.map((lt) => lt.team);
+    andConditions.push({
+      $or: [
+        { league: targetLeague },
+        { _id: { $in: teamIdsInLeague } },
+      ],
+    });
+  }
+
+  // 2. Manager Filter
+  const targetManager = managerId || manager;
+  if (targetManager && targetManager !== "ALL") {
+    if (targetManager === "UNASSIGNED") {
+      const assignedManagerLinks = await ManagerTeam.find().select("team");
+      const assignedTeamIds = assignedManagerLinks.map((mt) => mt.team);
+      andConditions.push({ _id: { $nin: assignedTeamIds } });
+    } else {
+      const managerLinks = await ManagerTeam.find({ manager: targetManager }).select("team");
+      const managerTeamIds = managerLinks.map((mt) => mt.team);
+      andConditions.push({ _id: { $in: managerTeamIds } });
+    }
+  }
+
+  // 3. Team Type Filter
+  if (teamType && teamType !== "ALL") {
+    andConditions.push({ teamType: { $regex: new RegExp(`^${teamType}$`, "i") } });
+  }
+
+  // 4. SearchTerm Filter
+  if (searchTerm && typeof searchTerm === "string" && searchTerm.trim() !== "") {
+    const searchRegex = { $regex: searchTerm.trim(), $options: "i" };
+    andConditions.push({
+      $or: [
+        { teamName: searchRegex },
+        { shortName: searchRegex },
+        { city: searchRegex },
+        { country: searchRegex },
+        { stadiumName: searchRegex },
+        { teamType: searchRegex },
+      ],
+    });
+  }
+
+  const initialFilter = andConditions.length > 0 ? { $and: andConditions } : {};
+
+  // Pagination calculation
+  const pageNumber = Math.max(1, parseInt(page as string, 10) || 1);
+  const limitNumber = Math.max(1, parseInt(limit as string, 10) || 10);
+  const skip = (pageNumber - 1) * limitNumber;
+
+  const total = await Team.countDocuments(initialFilter);
+  const totalPage = Math.ceil(total / limitNumber) || 1;
+
+  const sortField = (sort as string) || "-createdAt";
+
+  const teams = await Team.find(initialFilter)
+    .sort(sortField)
+    .skip(skip)
+    .limit(limitNumber);
+
+  const meta = {
+    total,
+    limit: limitNumber,
+    page: pageNumber,
+    totalPage,
+  };
 
   const teamIds = teams.map((t) => t._id);
 
@@ -95,7 +170,7 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
       ...team.toObject(),
       totalMembers: members?.totalMembers || 0,
       totalManagers: managers.length,
-      managers: managers, // full array of managers!
+      managers: managers,
       manager: primaryManager,
       leagues: teamLeagueObjs,
       league: primaryLeague,
@@ -117,8 +192,8 @@ const getSingleTeamFromDB = async (id: string) => {
     throw new Error("Team not found");
   }
 
-  const members = await User.find({ selectTeam: id, status: 'APPROVED' }).select(
-    "firstName lastName document position profile engCoine",
+  const members = await User.find({ selectTeam: id }).select(
+    "firstName lastName userName email phone profile position status engCoine role"
   );
 
   const managerLinks = await ManagerTeam.find({ team: id });
