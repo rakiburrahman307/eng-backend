@@ -218,64 +218,57 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
   const andConditions: any[] = [];
 
   // League Filter (supports leagueId, league, leagueName)
-  const targetLeague = leagueId || league;
-  if (targetLeague && targetLeague !== "ALL") {
-    const isObjId = mongoose.Types.ObjectId.isValid(targetLeague);
-    const leagueIds: any[] = [];
-    if (isObjId) {
-      leagueIds.push(new mongoose.Types.ObjectId(targetLeague));
-      leagueIds.push(targetLeague.toString());
+  const targetLeague = leagueId || league || leagueName;
+  if (targetLeague && targetLeague !== "ALL" && targetLeague !== "null" && targetLeague !== "undefined") {
+    if (mongoose.Types.ObjectId.isValid(targetLeague)) {
+      const objId = new mongoose.Types.ObjectId(targetLeague);
+      andConditions.push({
+        $or: [
+          { league: objId },
+          { league: targetLeague.toString() },
+        ],
+      });
+    } else {
+      const matchingLeagues = await League.find({
+        leagueName: { $regex: targetLeague.trim(), $options: "i" },
+      }).select("_id");
+      const leagueObjIds = matchingLeagues.map((l) => l._id);
+      const leagueStrIds = matchingLeagues.map((l) => l._id.toString());
+      andConditions.push({
+        $or: [
+          { league: { $in: leagueObjIds } },
+          { league: { $in: leagueStrIds } },
+        ],
+      });
     }
-
-    const matchingLeagues = await League.find({
-      $or: [
-        ...(isObjId ? [{ _id: targetLeague }] : []),
-        { leagueName: { $regex: targetLeague, $options: "i" } },
-      ],
-    }).select("_id");
-
-    matchingLeagues.forEach((l) => {
-      leagueIds.push(l._id);
-      leagueIds.push(l._id.toString());
-    });
-
-    andConditions.push({ league: { $in: leagueIds } });
-  } else if (leagueName && leagueName !== "ALL") {
-    const leagues = await League.find({
-      leagueName: { $regex: leagueName, $options: "i" },
-    }).select("_id");
-    andConditions.push({ league: { $in: leagues.map((l) => l._id) } });
   }
 
   // Team Filter (supports teamId, team, teamName, homeTeam, awayTeam)
   const targetTeam = teamId || teamName || team || query.homeTeam || query.awayTeam;
-  if (targetTeam && targetTeam !== "ALL") {
-    const isObjId = mongoose.Types.ObjectId.isValid(targetTeam);
-    const teamIds: any[] = [];
-    if (isObjId) {
-      teamIds.push(new mongoose.Types.ObjectId(targetTeam));
-      teamIds.push(targetTeam.toString());
+  if (targetTeam && targetTeam !== "ALL" && targetTeam !== "null" && targetTeam !== "undefined") {
+    let teamObjIds: any[] = [];
+    let teamStrIds: string[] = [];
+
+    if (mongoose.Types.ObjectId.isValid(targetTeam)) {
+      teamObjIds = [new mongoose.Types.ObjectId(targetTeam)];
+      teamStrIds = [targetTeam.toString()];
+    } else {
+      const matchingTeams = await Team.find({
+        teamName: { $regex: targetTeam.trim(), $options: "i" },
+      }).select("_id");
+      teamObjIds = matchingTeams.map((t) => t._id);
+      teamStrIds = matchingTeams.map((t) => t._id.toString());
     }
 
-    const matchingTeams = await Team.find({
-      $or: [
-        ...(isObjId ? [{ _id: targetTeam }] : []),
-        { teamName: { $regex: targetTeam, $options: "i" } },
-      ],
-    }).select("_id");
-
-    matchingTeams.forEach((t) => {
-      teamIds.push(t._id);
-      teamIds.push(t._id.toString());
-    });
+    const allTeamIds = [...teamObjIds, ...teamStrIds];
 
     if (homeMatchesOnly === "true" || homeMatchesOnly === true) {
-      andConditions.push({ homeTeam: { $in: teamIds } });
+      andConditions.push({ homeTeam: { $in: allTeamIds } });
     } else {
       andConditions.push({
         $or: [
-          { homeTeam: { $in: teamIds } },
-          { awayTeam: { $in: teamIds } },
+          { homeTeam: { $in: allTeamIds } },
+          { awayTeam: { $in: allTeamIds } },
         ],
       });
     }
