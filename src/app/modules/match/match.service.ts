@@ -220,27 +220,51 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
   // League Filter (supports leagueId, league, leagueName)
   const targetLeague = leagueId || league || leagueName;
   if (targetLeague && targetLeague !== "ALL" && targetLeague !== "null" && targetLeague !== "undefined") {
+    let targetLeagueIds: any[] = [];
+
     if (mongoose.Types.ObjectId.isValid(targetLeague)) {
       const objId = new mongoose.Types.ObjectId(targetLeague);
-      andConditions.push({
-        $or: [
-          { league: objId },
-          { league: targetLeague.toString() },
-        ],
-      });
+
+      // Find all LeagueTeams linked to this league
+      const matchingLeagueTeams = await LeagueTeam.find({
+        $or: [{ league: objId }, { _id: objId }],
+      }).select("_id league");
+
+      const leagueTeamIds = matchingLeagueTeams.map((lt) => lt._id);
+      const directLeagueIds = matchingLeagueTeams.map((lt) => lt.league);
+
+      const idStrings = Array.from(
+        new Set([
+          objId.toString(),
+          ...leagueTeamIds.map((id) => id.toString()),
+          ...directLeagueIds.map((id) => id?.toString()),
+        ].filter(Boolean))
+      );
+
+      targetLeagueIds = idStrings.map((idStr) => new mongoose.Types.ObjectId(idStr as string));
+      targetLeagueIds.push(...idStrings);
     } else {
       const matchingLeagues = await League.find({
         leagueName: { $regex: targetLeague.trim(), $options: "i" },
       }).select("_id");
-      const leagueObjIds = matchingLeagues.map((l) => l._id);
-      const leagueStrIds = matchingLeagues.map((l) => l._id.toString());
-      andConditions.push({
-        $or: [
-          { league: { $in: leagueObjIds } },
-          { league: { $in: leagueStrIds } },
-        ],
-      });
+      const foundLeagueIds = matchingLeagues.map((l) => l._id);
+      const matchingLeagueTeams = await LeagueTeam.find({
+        league: { $in: foundLeagueIds },
+      }).select("_id");
+      const leagueTeamIds = matchingLeagueTeams.map((lt) => lt._id);
+
+      const idStrings = Array.from(
+        new Set([
+          ...foundLeagueIds.map((id) => id.toString()),
+          ...leagueTeamIds.map((id) => id.toString()),
+        ].filter(Boolean))
+      );
+
+      targetLeagueIds = idStrings.map((idStr) => new mongoose.Types.ObjectId(idStr as string));
+      targetLeagueIds.push(...idStrings);
     }
+
+    andConditions.push({ league: { $in: targetLeagueIds } });
   }
 
   // Team Filter (supports teamId, team, teamName, homeTeam, awayTeam)
