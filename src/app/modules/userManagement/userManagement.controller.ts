@@ -167,17 +167,28 @@ const getIncompleteUsers = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-// UPDATE PLAYER JERSEY NUMBER BY ADMIN
+// UPDATE PLAYER JERSEY NUMBER & PROFILE PICTURE
 const updateJerseyNumber = catchAsync(async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  const { jerseyNumber } = req.body;
+  let { jerseyNumber, profile, image } = req.body;
 
-  const result = await UserManagementService.updateJerseyNumberToDB(id, jerseyNumber);
+  const files = req.files as any;
+  if (files) {
+    const profileFile = files.profile?.[0] || files.image?.[0] || files.profilePic?.[0];
+    if (profileFile) {
+      profile = `/images/${profileFile.filename}`;
+    }
+  }
+
+  const result = await UserManagementService.updateJerseyNumberToDB(id, {
+    jerseyNumber: jerseyNumber !== undefined ? (jerseyNumber ? jerseyNumber.toString().trim() : null) : undefined,
+    profile: profile || image,
+  });
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: "Jersey number updated successfully",
+    message: "Player details updated successfully",
     data: result,
   });
 });

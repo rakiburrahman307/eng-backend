@@ -34,10 +34,11 @@ router.patch(
   UserManagementController.assignTeamToUser
 );
 
-// UPDATE PLAYER JERSEY NUMBER BY ADMIN, MANAGER & REFEREE
+// UPDATE PLAYER JERSEY NUMBER & PROFILE PICTURE BY ADMIN, MANAGER & REFEREE
 router.patch(
   "/jersey-number/:id",
   auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER, USER_ROLES.REFEREE),
+  fileUploadHandler(),
   UserManagementController.updateJerseyNumber
 );
 
