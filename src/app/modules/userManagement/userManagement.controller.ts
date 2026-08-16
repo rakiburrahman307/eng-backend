@@ -170,7 +170,32 @@ const getIncompleteUsers = catchAsync(async (req: Request, res: Response) => {
 // UPDATE PLAYER JERSEY NUMBER & PROFILE PICTURE
 const updateJerseyNumber = catchAsync(async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  let { jerseyNumber, profile, image } = req.body;
+
+  // Safely extract body even if req.body is undefined or stringified
+  let bodyData: Record<string, any> = {};
+  if (req.body) {
+    if (typeof req.body === 'string') {
+      try {
+        bodyData = JSON.parse(req.body);
+      } catch {
+        bodyData = {};
+      }
+    } else if (typeof req.body === 'object') {
+      bodyData = req.body;
+      if (typeof bodyData.data === 'string') {
+        try {
+          bodyData = { ...bodyData, ...JSON.parse(bodyData.data) };
+        } catch {
+          // ignore
+        }
+      } else if (typeof bodyData.data === 'object' && bodyData.data !== null) {
+        bodyData = { ...bodyData, ...bodyData.data };
+      }
+    }
+  }
+
+  let jerseyNumber = bodyData.jerseyNumber ?? bodyData.jerseyNo ?? bodyData.jersey_number ?? bodyData.number;
+  let profile = bodyData.profile || bodyData.image;
 
   const files = req.files as any;
   if (files) {
@@ -181,8 +206,8 @@ const updateJerseyNumber = catchAsync(async (req: Request, res: Response) => {
   }
 
   const result = await UserManagementService.updateJerseyNumberToDB(id, {
-    jerseyNumber: jerseyNumber !== undefined ? (jerseyNumber ? jerseyNumber.toString().trim() : null) : undefined,
-    profile: profile || image,
+    jerseyNumber: jerseyNumber !== undefined && jerseyNumber !== null ? jerseyNumber.toString().trim() : undefined,
+    profile: profile || undefined,
   });
 
   sendResponse(res, {
