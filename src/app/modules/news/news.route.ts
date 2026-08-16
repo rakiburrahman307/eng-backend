@@ -12,6 +12,8 @@ router
   .post(auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),fileUploadHandler(), NewsController.createNews)
   .get(auth(), NewsController.getAllNews);
 router.get('/public-news', NewsController.getPublicNews);
+router.patch('/reorder', auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN), NewsController.rearrangeNews);
+
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')

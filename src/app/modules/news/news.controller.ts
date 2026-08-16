@@ -193,6 +193,19 @@ const toggleNewsStatus = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// REARRANGE NEWS
+const rearrangeNews = catchAsync(async (req: Request, res: Response) => {
+  const { news } = req.body as { news: { id: string; order: number }[] };
+  const result = await NewsService.rearrangeNewsInDB(news);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'News articles reordered successfully',
+    data: result,
+  });
+});
+
 export const NewsController = {
   createNews,
   getAllNews,
@@ -201,5 +214,6 @@ export const NewsController = {
   updateNews,
   deleteNews,
   toggleNewsStatus,
-  getPublicNews
+  getPublicNews,
+  rearrangeNews,
 };

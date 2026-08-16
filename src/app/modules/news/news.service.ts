@@ -1,4 +1,5 @@
 import { StatusCodes } from 'http-status-codes';
+import { Types } from 'mongoose';
 import ApiError from '../../../errors/ApiErrors';
 import { INews } from './news.interface';
 import { News } from './news.model';
@@ -39,9 +40,12 @@ const getAllNewsFromDB = async (
     };
   }
 
+  const queryParams = { ...query };
+  queryParams.sort = queryParams.sort || 'order -createdAt';
+
   const newsQuery = new QueryBuilder(
     News.find(baseQuery),
-    query
+    queryParams
   )
     .search(['title', 'description'])
     .filter()
@@ -63,9 +67,12 @@ const getAllNewsFromDB = async (
 const getPublicNewsFromDB = async (
   query: Record<string, any>
 ) => {
+  const queryParams = { ...query };
+  queryParams.sort = queryParams.sort || 'order -createdAt';
+
   const newsQuery = new QueryBuilder(
     News.find({ status: 'publish' }),
-    query
+    queryParams
   )
     .search(['title', 'description'])
     .filter()
@@ -84,7 +91,7 @@ const getPublicNewsFromDB = async (
 
 // GET SINGLE (NO PARAM ID VERSION -> optional, token based user flow if needed)
 const getMyNewsFromDB = async (userId: string) => {
-  return await News.find({ createdBy: userId }).sort({ createdAt: -1 });
+  return await News.find({ createdBy: userId }).sort({ order: 1, createdAt: -1 });
 };
 
 
@@ -105,26 +112,19 @@ const updateNewsToDB = async (
 ) => {
   const news = await News.findById(newsId);
 
-
-
   if (!news) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'News not found');
   }
 
   const createdBy = news.createdBy ? news.createdBy.toString() : null;
 
-
-
   if (!createdBy || createdBy !== userId.toString()) {
-  
     throw new ApiError(StatusCodes.FORBIDDEN, 'Not allowed');
   }
 
   const result = await News.findByIdAndUpdate(newsId, payload, {
     new: true,
   });
-
-
 
   return result;
 };
@@ -165,6 +165,30 @@ const toggleNewsStatusToDB = async (newsId: string, user: any) => {
   return await news.save();
 };
 
+// REARRANGE NEWS ORDER
+const rearrangeNewsInDB = async (
+  payload: { id: string; order: number }[]
+) => {
+  if (!Array.isArray(payload) || payload.length === 0) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid payload: news array is required');
+  }
+
+  const invalidIds = payload.filter((item) => !Types.ObjectId.isValid(item.id));
+  if (invalidIds.length > 0) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, `Invalid news IDs: ${invalidIds.map((i) => i.id).join(', ')}`);
+  }
+
+  const bulkOps = payload.map((item) => ({
+    updateOne: {
+      filter: { _id: new Types.ObjectId(item.id) },
+      update: { $set: { order: item.order } },
+    },
+  }));
+
+  const result = await News.bulkWrite(bulkOps);
+  return { modifiedCount: result.modifiedCount };
+};
+
 export const NewsService = {
   createNewsToDB,
   getAllNewsFromDB,
@@ -173,5 +197,6 @@ export const NewsService = {
   updateNewsToDB,
   deleteNewsFromDB,
   toggleNewsStatusToDB,
-  getPublicNewsFromDB
+  getPublicNewsFromDB,
+  rearrangeNewsInDB,
 };

@@ -36,6 +36,10 @@ const newsSchema = new Schema<INews, NewsModel>(
       type: Date,
       default: null,
     },
+    order: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );

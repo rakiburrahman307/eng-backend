@@ -8,6 +8,7 @@ export type INews = {
   image: string;
   status: 'draft' | 'publish' | 'schedule';
   publishDateTime?: Date | null;
+  order?: number;
   updatedAt?: Date;
 };
 
