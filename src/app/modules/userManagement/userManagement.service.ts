@@ -1,5 +1,5 @@
-import { StatusCodes } from 'http-status-codes';
-import ApiError from '../../../errors/ApiErrors';
+import { StatusCodes } from "http-status-codes";
+import ApiError from "../../../errors/ApiErrors";
 import { USER_ROLES } from "../../../enums/user";
 import QueryBuilder from "../../../util/queryBuilder";
 import { User } from "../user/user.model";
@@ -13,7 +13,9 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
   };
 
   // Active subscription user IDs for players
-  const activeSubUserIds = await Subscription.find({ status: 'active' }).distinct('user');
+  const activeSubUserIds = await Subscription.find({
+    status: "active",
+  }).distinct("user");
 
   // Base Eligibility Rule: Incomplete Managers, Incomplete Referees, Unpaid Players, and Pure Parent accounts are HIDDEN from member tables
   const baseEligibilityConditions = [
@@ -48,48 +50,48 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
         { email: null },
         { password: null },
       ],
-    }
+    },
   ];
 
   filterQuery.$or = baseEligibilityConditions;
 
-  if (queryObj.role === 'PENDING_REQUESTS') {
-    filterQuery.status = 'PENDING';
+  if (queryObj.role === "PENDING_REQUESTS") {
+    filterQuery.status = "PENDING";
     delete queryObj.role;
-  } else if (queryObj.role === 'MANAGER') {
+  } else if (queryObj.role === "MANAGER") {
     filterQuery.role = USER_ROLES.MANAGER;
     delete queryObj.role;
-  } else if (queryObj.role === 'REFEREE') {
+  } else if (queryObj.role === "REFEREE") {
     filterQuery.role = USER_ROLES.REFEREE;
     delete queryObj.role;
-  } else if (queryObj.role === 'PLAYER') {
+  } else if (queryObj.role === "PLAYER") {
     filterQuery.role = USER_ROLES.PLAYER;
     delete queryObj.role;
-  } else if (queryObj.role === 'ALL') {
+  } else if (queryObj.role === "ALL") {
     delete queryObj.role;
   }
 
   if (queryObj.status) {
-    if (queryObj.status === 'ALL' || queryObj.status === 'all') {
+    if (queryObj.status === "ALL" || queryObj.status === "all") {
       delete filterQuery.status;
     } else {
       filterQuery.status = queryObj.status;
     }
     delete queryObj.status;
   } else if (!filterQuery.status) {
-    filterQuery.status = 'APPROVED';
+    filterQuery.status = "APPROVED";
   }
 
   const userQuery = new QueryBuilder(
     User.find(filterQuery)
       .select(
-        'userName role profile verified status document selectTeam firstName lastName email phone location parentId ageGroup dateOfBirth position strongFoot previousClub rejectionReason emergencyEmail emergencyPhone playForAcademy academyClubName isDevelopmentPlayer mediaConsent engCoine marketValue createdAt'
+        "userName role profile verified status document selectTeam firstName lastName email phone location parentId ageGroup dateOfBirth position strongFoot previousClub rejectionReason emergencyEmail emergencyPhone playForAcademy academyClubName isDevelopmentPlayer mediaConsent engCoine marketValue createdAt",
       )
-      .populate('selectTeam', 'teamName shortName teamLogo')
-      .populate('parentId', 'firstName lastName email phone'),
-    queryObj
+      .populate("selectTeam", "teamName shortName teamLogo")
+      .populate("parentId", "firstName lastName email phone"),
+    queryObj,
   )
-    .search(['userName', 'email', 'firstName', 'lastName', 'phone', 'location'])
+    .search(["userName", "email", "firstName", "lastName", "phone", "location"])
     .filter()
     .sort()
     .paginate()
@@ -99,26 +101,31 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
   const meta = await userQuery.getPaginationInfo();
 
   const userIds = rawResult.map((u: any) => u._id);
-  const parentIds = rawResult.map((u: any) => u.parentId?._id || u.parentId).filter(Boolean);
+  const parentIds = rawResult
+    .map((u: any) => u.parentId?._id || u.parentId)
+    .filter(Boolean);
   const allUserIds = [...new Set([...userIds, ...parentIds])];
 
   const activeSubs = await Subscription.find({
     user: { $in: allUserIds },
-    status: 'active',
-  }).populate('package');
+    status: "active",
+  }).populate("package");
 
   const subMap = new Map();
   activeSubs.forEach((sub: any) => subMap.set(sub.user.toString(), sub));
 
   const result = rawResult.map((u: any) => {
     const userObj = u.toObject ? u.toObject() : u;
-    const userCoins = Number(userObj.engCoine ?? userObj.coin ?? userObj.coins) || 0;
-    const userMV = Number(userObj.marketValue) || (userCoins * 100);
+    const userCoins =
+      Number(userObj.engCoine ?? userObj.coin ?? userObj.coins) || 0;
+    const userMV = Number(userObj.marketValue) || userCoins * 100;
 
     const directSub = subMap.get(userObj._id?.toString());
     const parentSub = userObj.parentId?._id
       ? subMap.get(userObj.parentId._id.toString())
-      : (userObj.parentId ? subMap.get(userObj.parentId.toString()) : null);
+      : userObj.parentId
+        ? subMap.get(userObj.parentId.toString())
+        : null;
     const activeSub = directSub || parentSub;
 
     return {
@@ -140,7 +147,15 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
 // GET ALL PARENTS (DEDICATED API)
 const getAllParentsFromDB = async (query: Record<string, any>) => {
   const queryObj = { ...query };
-  const { page = 1, limit = 10, pageNumber, userPage, searchTerm, searchValue, search } = queryObj;
+  const {
+    page = 1,
+    limit = 10,
+    pageNumber,
+    userPage,
+    searchTerm,
+    searchValue,
+    search,
+  } = queryObj;
 
   const pageNum = Number(pageNumber || userPage || page) || 1;
   const limitNum = Number(limit) || 10;
@@ -148,7 +163,7 @@ const getAllParentsFromDB = async (query: Record<string, any>) => {
 
   const parentIdsWithChildren = await User.find({
     parentId: { $exists: true, $ne: null },
-  }).distinct('parentId');
+  }).distinct("parentId");
 
   const andConditions: any[] = [
     {
@@ -157,7 +172,14 @@ const getAllParentsFromDB = async (query: Record<string, any>) => {
         {
           parentId: null,
           email: { $exists: true, $ne: null },
-          role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER, USER_ROLES.REFEREE] },
+          role: {
+            $nin: [
+              USER_ROLES.ADMIN,
+              USER_ROLES.SUPER_ADMIN,
+              USER_ROLES.MANAGER,
+              USER_ROLES.REFEREE,
+            ],
+          },
           position: { $in: [null, ""] },
           dateOfBirth: null,
         },
@@ -167,7 +189,7 @@ const getAllParentsFromDB = async (query: Record<string, any>) => {
 
   const rawSearch = (searchTerm || searchValue || search) as string;
   if (rawSearch && rawSearch.trim()) {
-    const searchRegex = new RegExp(rawSearch.trim(), 'i');
+    const searchRegex = new RegExp(rawSearch.trim(), "i");
     andConditions.push({
       $or: [
         { firstName: searchRegex },
@@ -183,7 +205,9 @@ const getAllParentsFromDB = async (query: Record<string, any>) => {
 
   const [rawParents, total] = await Promise.all([
     User.find(finalFilter)
-      .select('userName role profile verified status firstName lastName email phone location createdAt')
+      .select(
+        "userName role profile verified status firstName lastName email phone location createdAt",
+      )
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum)
@@ -196,18 +220,26 @@ const getAllParentsFromDB = async (query: Record<string, any>) => {
   // 1. Fetch child players for all parents
   const childPlayers = await User.find({
     parentId: { $in: parentIds },
-    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
+    role: {
+      $in: [
+        USER_ROLES.PLAYER,
+        USER_ROLES.OTHER_CLUBS,
+        USER_ROLES.TOURNAMENT_PLAYER,
+      ],
+    },
   })
-    .populate('selectTeam', 'teamName shortName teamLogo')
-    .select('firstName lastName userName position ageGroup dateOfBirth selectTeam status verified profile engCoine marketValue parentId isSubscribed hasAccess')
+    .populate("selectTeam", "teamName shortName teamLogo")
+    .select(
+      "firstName lastName userName position ageGroup dateOfBirth selectTeam status verified profile engCoine marketValue parentId isSubscribed hasAccess",
+    )
     .lean();
 
   // 2. Fetch active subscriptions for parents and ALL individual child players
   const allUserIds = [...parentIds, ...childPlayers.map((c: any) => c._id)];
   const activeSubs = await Subscription.find({
     user: { $in: allUserIds },
-    status: 'active',
-  }).populate('package');
+    status: "active",
+  }).populate("package");
 
   const subMap = new Map();
   activeSubs.forEach((sub: any) => {
@@ -225,17 +257,22 @@ const getAllParentsFromDB = async (query: Record<string, any>) => {
       const childObj = {
         ...cp,
         isPaid: Boolean(childSub || cp.isSubscribed || cp.hasAccess),
-        subscription: childSub ? {
-          _id: childSub._id,
-          status: childSub.status,
-          price: childSub.price,
-          trxId: childSub.trxId,
-          subscriptionId: childSub.subscriptionId,
-          currentPeriodStart: childSub.currentPeriodStart,
-          currentPeriodEnd: childSub.currentPeriodEnd,
-          packageName: (childSub.package as any)?.title || (childSub.package as any)?.name || 'ENG Subscription',
-          packageDetails: childSub.package || null,
-        } : null,
+        subscription: childSub
+          ? {
+              _id: childSub._id,
+              status: childSub.status,
+              price: childSub.price,
+              trxId: childSub.trxId,
+              subscriptionId: childSub.subscriptionId,
+              currentPeriodStart: childSub.currentPeriodStart,
+              currentPeriodEnd: childSub.currentPeriodEnd,
+              packageName:
+                (childSub.package as any)?.title ||
+                (childSub.package as any)?.name ||
+                "ENG Subscription",
+              packageDetails: childSub.package || null,
+            }
+          : null,
       };
       childMap.get(pId).push(childObj);
     }
@@ -253,17 +290,22 @@ const getAllParentsFromDB = async (query: Record<string, any>) => {
       childrenCount: pChildren.length,
       paidChildrenCount,
       isPaid: Boolean(directSub || paidChildrenCount > 0),
-      subscription: directSub ? {
-        _id: directSub._id,
-        status: directSub.status,
-        price: directSub.price,
-        trxId: directSub.trxId,
-        subscriptionId: directSub.subscriptionId,
-        currentPeriodStart: directSub.currentPeriodStart,
-        currentPeriodEnd: directSub.currentPeriodEnd,
-        packageName: (directSub.package as any)?.title || (directSub.package as any)?.name || 'ENG Subscription',
-        packageDetails: directSub.package || null,
-      } : null,
+      subscription: directSub
+        ? {
+            _id: directSub._id,
+            status: directSub.status,
+            price: directSub.price,
+            trxId: directSub.trxId,
+            subscriptionId: directSub.subscriptionId,
+            currentPeriodStart: directSub.currentPeriodStart,
+            currentPeriodEnd: directSub.currentPeriodEnd,
+            packageName:
+              (directSub.package as any)?.title ||
+              (directSub.package as any)?.name ||
+              "ENG Subscription",
+            packageDetails: directSub.package || null,
+          }
+        : null,
     };
   });
 
@@ -279,17 +321,20 @@ const getAllParentsFromDB = async (query: Record<string, any>) => {
 };
 
 // ASSIGN TEAM TO USER / PLAYER BY ADMIN
-const assignTeamToUserToDB = async (userId: string, selectTeam: string | null) => {
+const assignTeamToUserToDB = async (
+  userId: string,
+  selectTeam: string | null,
+) => {
   const user = await User.findById(userId);
   if (!user) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
   }
 
   const updated = await User.findByIdAndUpdate(
     userId,
     { $set: { selectTeam: selectTeam || null } },
-    { new: true }
-  ).populate('selectTeam', 'teamName shortName teamLogo');
+    { new: true },
+  ).populate("selectTeam", "teamName shortName teamLogo");
 
   return updated;
 };
@@ -298,7 +343,7 @@ const toggleVerifiedToDB = async (id: string) => {
   const user = await User.findById(id);
 
   if (!user) {
-    throw new Error('User not found');
+    throw new Error("User not found");
   }
 
   const result = await User.findByIdAndUpdate(
@@ -309,7 +354,7 @@ const toggleVerifiedToDB = async (id: string) => {
     {
       new: true,
       runValidators: true,
-    }
+    },
   );
 
   return result;
@@ -320,23 +365,29 @@ const deleteUserFromDB = async (id: string) => {
   const user = await User.findById(id);
 
   if (!user) {
-    throw new Error('User not found');
+    throw new Error("User not found");
   }
 
   return await User.findByIdAndDelete(id);
 };
 
-
 const getAllRefereesFromDB = async () => {
   const result = await User.find({
     role: { $in: [USER_ROLES.REFEREE] },
   })
-    .select('_id userName firstName lastName email phone profile status')
+    .select("_id userName firstName lastName email phone profile status")
     .lean();
 
   return result.map((r: any) => {
-    const fullName = r.firstName ? `${r.firstName} ${r.lastName || ''}`.trim() : '';
-    const displayName = fullName || r.userName || r.name || r.email || `Referee (${r._id.toString().slice(-4)})`;
+    const fullName = r.firstName
+      ? `${r.firstName} ${r.lastName || ""}`.trim()
+      : "";
+    const displayName =
+      fullName ||
+      r.userName ||
+      r.name ||
+      r.email ||
+      `Referee (${r._id.toString().slice(-4)})`;
     return {
       ...r,
       userName: displayName,
@@ -348,15 +399,17 @@ const getAllRefereesFromDB = async () => {
 
 const getAllManagersFromDB = async () => {
   const result = await User.find({ role: USER_ROLES.MANAGER })
-    .select('_id userName firstName lastName selectTeam')
-    .populate('selectTeam', 'teamName shortName teamLogo');
+    .select("_id userName firstName lastName selectTeam")
+    .populate("selectTeam", "teamName shortName teamLogo");
 
   return result;
 };
 
 // GET USER MANAGEMENT ANALYTICS
 const getUserAnalyticsFromDB = async () => {
-  const activeSubUserIds = await Subscription.find({ status: 'active' }).distinct('user');
+  const activeSubUserIds = await Subscription.find({
+    status: "active",
+  }).distinct("user");
 
   const baseEligibilityConditions = [
     {
@@ -387,7 +440,7 @@ const getUserAnalyticsFromDB = async () => {
         { email: null },
         { password: null },
       ],
-    }
+    },
   ];
 
   const [
@@ -411,12 +464,25 @@ const getUserAnalyticsFromDB = async () => {
     User.countDocuments({
       parentId: null,
       email: { $ne: null },
-      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER, USER_ROLES.REFEREE] },
+      role: {
+        $nin: [
+          USER_ROLES.ADMIN,
+          USER_ROLES.SUPER_ADMIN,
+          USER_ROLES.MANAGER,
+          USER_ROLES.REFEREE,
+        ],
+      },
       position: { $exists: false },
       dateOfBirth: { $exists: false },
     }),
     User.countDocuments({
-      role: { $in: [USER_ROLES.PLAYER, USER_ROLES.OTHER_CLUBS, USER_ROLES.TOURNAMENT_PLAYER] },
+      role: {
+        $in: [
+          USER_ROLES.PLAYER,
+          USER_ROLES.OTHER_CLUBS,
+          USER_ROLES.TOURNAMENT_PLAYER,
+        ],
+      },
       _id: { $in: activeSubUserIds },
       $or: [
         { parentId: { $ne: null } },
@@ -460,7 +526,10 @@ const getUserAnalyticsFromDB = async () => {
       $or: baseEligibilityConditions,
     }),
     User.countDocuments({ status: "APPROVED", role: USER_ROLES.OTHER_CLUBS }),
-    User.countDocuments({ status: "APPROVED", role: USER_ROLES.TOURNAMENT_PLAYER }),
+    User.countDocuments({
+      status: "APPROVED",
+      role: USER_ROLES.TOURNAMENT_PLAYER,
+    }),
   ]);
 
   return {
@@ -483,7 +552,7 @@ const getUserAnalyticsFromDB = async () => {
 const updateUserRoleToDB = async (userId: string, role: string) => {
   const user = await User.findById(userId);
   if (!user) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
   }
 
   const validRoles = [
@@ -495,13 +564,13 @@ const updateUserRoleToDB = async (userId: string, role: string) => {
   ];
 
   if (!validRoles.includes(role as any)) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid role type');
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid role type");
   }
 
   const updated = await User.findByIdAndUpdate(
     userId,
     { $set: { role } },
-    { new: true, runValidators: true }
+    { new: true, runValidators: true },
   );
 
   return updated;
@@ -511,13 +580,13 @@ const updateUserRoleToDB = async (userId: string, role: string) => {
 const updateUserProfileByAdminToDB = async (userId: string, payload: any) => {
   const user = await User.findById(userId);
   if (!user) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
   }
 
   const updated = await User.findByIdAndUpdate(
     userId,
     { $set: payload },
-    { new: true, runValidators: true }
+    { new: true, runValidators: true },
   );
 
   return updated;
@@ -526,19 +595,29 @@ const updateUserProfileByAdminToDB = async (userId: string, payload: any) => {
 // GET INCOMPLETE / UNVERIFIED / ABANDONED USERS (FOR ADMIN REMOVAL)
 const getIncompleteUsersFromDB = async (query: Record<string, any>) => {
   const queryObj = { ...query };
-  const { page = 1, limit = 10, pageNumber, userPage, searchTerm, searchValue, search } = queryObj;
+  const {
+    page = 1,
+    limit = 10,
+    pageNumber,
+    userPage,
+    searchTerm,
+    searchValue,
+    search,
+  } = queryObj;
 
   const pageNum = Number(pageNumber || userPage || page) || 1;
   const limitNum = Number(limit) || 10;
   const skip = (pageNum - 1) * limitNum;
 
   // Active subscription user IDs
-  const activeSubUserIds = await Subscription.find({ status: 'active' }).distinct('user');
+  const activeSubUserIds = await Subscription.find({
+    status: "active",
+  }).distinct("user");
 
   // Parents who have at least one child player
   const parentIdsWithChildren = await User.find({
     parentId: { $exists: true, $ne: null },
-  }).distinct('parentId');
+  }).distinct("parentId");
 
   // Incomplete / Broken / Abandoned user conditions:
   // 1) verified: false (Email OTP unverified)
@@ -547,7 +626,14 @@ const getIncompleteUsersFromDB = async (query: Record<string, any>) => {
   const incompleteConditions = [
     { verified: false },
     {
-      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER, USER_ROLES.REFEREE] },
+      role: {
+        $nin: [
+          USER_ROLES.ADMIN,
+          USER_ROLES.SUPER_ADMIN,
+          USER_ROLES.MANAGER,
+          USER_ROLES.REFEREE,
+        ],
+      },
       parentId: null,
       email: { $exists: true, $ne: null },
       _id: { $nin: [...activeSubUserIds, ...parentIdsWithChildren] },
@@ -558,17 +644,11 @@ const getIncompleteUsersFromDB = async (query: Record<string, any>) => {
     },
     {
       role: USER_ROLES.MANAGER,
-      $or: [
-        { dateOfBirth: null },
-        { document: { $in: [null, [], ""] } },
-      ],
+      $or: [{ dateOfBirth: null }, { document: { $in: [null, [], ""] } }],
     },
     {
       role: USER_ROLES.REFEREE,
-      $or: [
-        { dateOfBirth: null },
-        { document: { $in: [null, [], ""] } },
-      ],
+      $or: [{ dateOfBirth: null }, { document: { $in: [null, [], ""] } }],
     },
   ];
 
@@ -581,7 +661,7 @@ const getIncompleteUsersFromDB = async (query: Record<string, any>) => {
 
   const rawSearch = (searchTerm || searchValue || search) as string;
   if (rawSearch && rawSearch.trim()) {
-    const searchRegex = new RegExp(rawSearch.trim(), 'i');
+    const searchRegex = new RegExp(rawSearch.trim(), "i");
     andConditions.push({
       $or: [
         { firstName: searchRegex },
@@ -597,7 +677,9 @@ const getIncompleteUsersFromDB = async (query: Record<string, any>) => {
 
   const [rawUsers, total] = await Promise.all([
     User.find(finalFilter)
-      .select('userName role profile verified status document firstName lastName email phone location createdAt')
+      .select(
+        "userName role profile verified status document firstName lastName email phone location createdAt",
+      )
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum)
@@ -637,16 +719,18 @@ const getIncompleteUsersFromDB = async (query: Record<string, any>) => {
 // UPDATE PLAYER JERSEY NUMBER & PROFILE PICTURE BY ADMIN, MANAGER & REFEREE
 const updateJerseyNumberToDB = async (
   userId: string,
-  payload: { jerseyNumber?: string | null; profile?: string }
+  payload: { jerseyNumber?: string | null; profile?: string },
 ) => {
   const user = await User.findById(userId);
   if (!user) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
   }
 
   const updateData: Record<string, any> = {};
   if (payload.jerseyNumber !== undefined) {
-    updateData.jerseyNumber = payload.jerseyNumber ? payload.jerseyNumber.toString().trim() : null;
+    updateData.jerseyNumber = payload.jerseyNumber
+      ? payload.jerseyNumber.toString().trim()
+      : null;
   }
   if (payload.profile) {
     updateData.profile = payload.profile;
@@ -655,7 +739,7 @@ const updateJerseyNumberToDB = async (
   const updated = await User.findByIdAndUpdate(
     userId,
     { $set: updateData },
-    { new: true }
+    { new: true },
   );
 
   return updated;

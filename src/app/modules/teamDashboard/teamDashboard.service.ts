@@ -5,31 +5,39 @@ import { MatchResult } from "../matchResult/matchResult.model";
 import { User } from "../user/user.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
 
-
 import { USER_ROLES } from "../../../enums/user";
+import { Subscription } from "../subscription/subscription.model";
 
 const getTeamDashboardFromDB = async (teamId: string) => {
   const teamObjectId = new mongoose.Types.ObjectId(teamId);
-
+  // Active subscription user IDs for players
+  const activeSubUserIds = await Subscription.find({
+    status: "active",
+  }).distinct("user");
   // 👥 PLAYERS (Only genuine Player profiles, exclude Parent accounts)
   const rawPlayers = await User.find({
+    status: "APPROVED",
+    role: {
+      $in: [
+        USER_ROLES.PLAYER,
+        USER_ROLES.OTHER_CLUBS,
+        USER_ROLES.TOURNAMENT_PLAYER,
+      ],
+    },
+    _id: { $in: activeSubUserIds },
     $or: [
-      { selectTeam: teamObjectId },
-      { selectTeam: teamId },
-      { selectTeam: teamObjectId.toString() },
+      { parentId: { $ne: null } },
+      { position: { $exists: true, $ne: null } },
+      { dateOfBirth: { $exists: true, $ne: null } },
+      { ageGroup: { $exists: true, $ne: null } },
+      { selectTeam: { $exists: true, $ne: null } },
+      { email: null },
+      { password: null },
     ],
-    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.TOURNAMENT_PLAYER, USER_ROLES.OTHER_CLUBS] },
-    status: 'APPROVED',
-    $nor: [
-      {
-        parentId: null,
-        email: { $ne: null },
-        position: null,
-        dateOfBirth: null,
-      }
-    ]
   })
-    .select("_id firstName lastName userName profile position ageGroup dateOfBirth selectTeam status emergencyEmail emergencyPhone role")
+    .select(
+      "_id firstName lastName userName profile position ageGroup dateOfBirth selectTeam status emergencyEmail emergencyPhone role",
+    )
     .lean();
 
   const players = rawPlayers.map((p: any) => ({
@@ -37,12 +45,14 @@ const getTeamDashboardFromDB = async (teamId: string) => {
     userId: p._id,
     firstName: p.firstName || null,
     lastName: p.lastName || null,
-    userName: p.userName || (p.firstName ? `${p.firstName} ${p.lastName || ''}`.trim() : 'Player'),
+    userName:
+      p.userName ||
+      (p.firstName ? `${p.firstName} ${p.lastName || ""}`.trim() : "Player"),
     profile: p.profile || null,
-    position: p.position || 'BENCH',
+    position: p.position || "BENCH",
     ageGroup: p.ageGroup || null,
     dateOfBirth: p.dateOfBirth || null,
-    status: p.status || 'APPROVED',
+    status: p.status || "APPROVED",
   }));
 
   const totalPlayers = players.length;
@@ -75,7 +85,7 @@ const getTeamDashboardFromDB = async (teamId: string) => {
 
   // 🏟 TEAM INFO
   const team = await Team.findById(teamObjectId).select(
-    "teamName shortName teamLogo city country stadiumName"
+    "teamName shortName teamLogo city country stadiumName",
   );
 
   return {
@@ -87,8 +97,6 @@ const getTeamDashboardFromDB = async (teamId: string) => {
     matchResults,
   };
 };
-
-
 
 const getClubOverviewFromDB = async (teamId: string) => {
   const teamObjectId = new mongoose.Types.ObjectId(teamId);
@@ -104,10 +112,7 @@ const getClubOverviewFromDB = async (teamId: string) => {
 
   // Current League
   const latestMatch = await Match.findOne({
-    $or: [
-      { homeTeam: teamObjectId },
-      { awayTeam: teamObjectId },
-    ],
+    $or: [{ homeTeam: teamObjectId }, { awayTeam: teamObjectId }],
   }).sort({ createdAt: -1 });
 
   if (!latestMatch) {
@@ -155,11 +160,9 @@ const getClubOverviewFromDB = async (teamId: string) => {
     standings[homeId].played++;
     standings[awayId].played++;
 
-    standings[homeId].goalDifference +=
-      match.homeScore - match.awayScore;
+    standings[homeId].goalDifference += match.homeScore - match.awayScore;
 
-    standings[awayId].goalDifference +=
-      match.awayScore - match.homeScore;
+    standings[awayId].goalDifference += match.awayScore - match.homeScore;
 
     if (match.homeScore > match.awayScore) {
       standings[homeId].wins++;
@@ -183,50 +186,33 @@ const getClubOverviewFromDB = async (teamId: string) => {
   // Sort Table
   const table = Object.values(standings).sort(
     (a: any, b: any) =>
-      b.points - a.points ||
-      b.goalDifference - a.goalDifference
+      b.points - a.points || b.goalDifference - a.goalDifference,
   );
 
   const position =
-    table.findIndex(
-      (item: any) =>
-        item.teamId === teamObjectId.toString()
-    ) + 1;
+    table.findIndex((item: any) => item.teamId === teamObjectId.toString()) + 1;
 
   const currentTeam = table.find(
-    (item: any) =>
-      item.teamId === teamObjectId.toString()
+    (item: any) => item.teamId === teamObjectId.toString(),
   );
 
   // Last 2 Results
   const recentResults = await Match.find({
-    $or: [
-      { homeTeam: teamObjectId },
-      { awayTeam: teamObjectId },
-    ],
+    $or: [{ homeTeam: teamObjectId }, { awayTeam: teamObjectId }],
     status: "finished",
   })
     .sort({ matchDate: -1 })
     .limit(2)
-    .populate(
-      "homeTeam awayTeam",
-      "teamName shortName teamLogo"
-    );
+    .populate("homeTeam awayTeam", "teamName shortName teamLogo");
 
   // Next 2 Matches
   const upcomingMatches = await Match.find({
-    $or: [
-      { homeTeam: teamObjectId },
-      { awayTeam: teamObjectId },
-    ],
+    $or: [{ homeTeam: teamObjectId }, { awayTeam: teamObjectId }],
     status: "upcoming",
   })
     .sort({ matchDate: 1 })
     .limit(2)
-    .populate(
-      "homeTeam awayTeam",
-      "teamName shortName teamLogo"
-    );
+    .populate("homeTeam awayTeam", "teamName shortName teamLogo");
 
   return {
     position,
@@ -237,6 +223,6 @@ const getClubOverviewFromDB = async (teamId: string) => {
 };
 
 export const TeamDashboardService = {
-    getTeamDashboardFromDB,
-    getClubOverviewFromDB,
+  getTeamDashboardFromDB,
+  getClubOverviewFromDB,
 };
