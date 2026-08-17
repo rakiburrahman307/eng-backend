@@ -70,7 +70,11 @@ const getSingleTournamentFromDB = async (
   const result = await Tournament.findById(id).populate({
     path: "redeemedPlayers.player",
     select:
-      "userName firstName lastName fullName email emergencyEmail profile jerseyNumber role selectTeam",
+      "userName firstName lastName fullName email emergencyEmail phone emergencyPhone profile jerseyNumber role selectTeam parentId",
+    populate: {
+      path: "parentId",
+      select: "email emergencyEmail phone emergencyPhone",
+    },
   });
   if (!result) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Tournament not found");
@@ -122,7 +126,11 @@ const getTournamentQrCodeFromDB = async (tournamentId: string) => {
   const tournament = await Tournament.findById(tournamentId).populate({
     path: "redeemedPlayers.player",
     select:
-      "userName firstName lastName fullName email emergencyEmail profile jerseyNumber role selectTeam",
+      "userName firstName lastName fullName email emergencyEmail phone emergencyPhone profile jerseyNumber role selectTeam parentId",
+    populate: {
+      path: "parentId",
+      select: "email emergencyEmail phone emergencyPhone",
+    },
   });
   if (!tournament) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Tournament not found");
@@ -355,6 +363,22 @@ const redeemTournamentRewardInDB = async (
 
   await tournament.save();
 
+  const getValidEmail = (val?: string | null) =>
+    val && typeof val === "string" && val.includes("@") ? val : "";
+
+  let userEmail =
+    getValidEmail(user.email) ||
+    getValidEmail(user.emergencyEmail);
+
+  if (!userEmail && user.parentId) {
+    const parentUser = await User.findById(user.parentId).select("email emergencyEmail");
+    if (parentUser) {
+      userEmail =
+        getValidEmail(parentUser.email) ||
+        getValidEmail(parentUser.emergencyEmail);
+    }
+  }
+
   const computedName =
     (user as any).fullName ||
     [user.firstName, user.lastName].filter(Boolean).join(" ").trim() ||
@@ -366,7 +390,7 @@ const redeemTournamentRewardInDB = async (
     tournamentTitle: tournament.title,
     playerId: user._id,
     playerName: computedName,
-    email: user.emergencyEmail || user.email,
+    email: userEmail,
     position: matchedPosition.position,
     positionName: matchedPosition.positionName,
     redeemedCoins: prizeCoins,
