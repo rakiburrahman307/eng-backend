@@ -1,10 +1,10 @@
 // user.controller.ts
 
-import { Request, Response } from 'express';
-import { StatusCodes } from 'http-status-codes';
-import catchAsync from '../../../shared/catchAsync';
-import sendResponse from '../../../shared/sendResponse';
-import { UserManagementService } from './userManagement.service';
+import { Request, Response } from "express";
+import { StatusCodes } from "http-status-codes";
+import catchAsync from "../../../shared/catchAsync";
+import sendResponse from "../../../shared/sendResponse";
+import { UserManagementService } from "./userManagement.service";
 
 // GET ALL USERS
 const getAllUsers = catchAsync(async (req: Request, res: Response) => {
@@ -13,7 +13,7 @@ const getAllUsers = catchAsync(async (req: Request, res: Response) => {
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: 'Users retrieved successfully',
+    message: "Users retrieved successfully",
     pagination: result.meta,
     data: result.result,
   });
@@ -22,13 +22,13 @@ const getAllUsers = catchAsync(async (req: Request, res: Response) => {
 // TOGGLE VERIFIED
 const toggleVerified = catchAsync(async (req: Request, res: Response) => {
   const result = await UserManagementService.toggleVerifiedToDB(
-    req.params.id as string
+    req.params.id as string,
   );
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: 'User verification status updated successfully',
+    message: "User verification status updated successfully",
     data: result,
   });
 });
@@ -36,17 +36,16 @@ const toggleVerified = catchAsync(async (req: Request, res: Response) => {
 // DELETE USER
 const deleteUser = catchAsync(async (req: Request, res: Response) => {
   const result = await UserManagementService.deleteUserFromDB(
-    req.params.id as string
+    req.params.id as string,
   );
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: 'User deleted successfully',
+    message: "User deleted successfully",
     data: result,
   });
 });
-
 
 const getAllReferees = catchAsync(async (req: Request, res: Response) => {
   const result = await UserManagementService.getAllRefereesFromDB();
@@ -70,7 +69,6 @@ const getAllManagers = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-
 const getUserAnalytics = catchAsync(async (req: Request, res: Response) => {
   const result = await UserManagementService.getUserAnalyticsFromDB();
 
@@ -85,7 +83,7 @@ const getUserAnalytics = catchAsync(async (req: Request, res: Response) => {
 const updateUserRole = catchAsync(async (req: Request, res: Response) => {
   const result = await UserManagementService.updateUserRoleToDB(
     req.params.id as string,
-    req.body.role as string
+    req.body.role as string,
   );
 
   sendResponse(res, {
@@ -96,35 +94,38 @@ const updateUserRole = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-const updateUserProfileByAdmin = catchAsync(async (req: Request, res: Response) => {
-  let profile = req.body.profile;
-  const files = req.files as any;
-  if (files) {
-    const profileFile = files.profile?.[0] || files.image?.[0] || files.profilePic?.[0];
-    if (profileFile) {
-      profile = `/images/${profileFile.filename}`;
+const updateUserProfileByAdmin = catchAsync(
+  async (req: Request, res: Response) => {
+    let profile = req.body.profile;
+    const files = req.files as any;
+    if (files) {
+      const profileFile =
+        files.profile?.[0] || files.image?.[0] || files.profilePic?.[0];
+      if (profileFile) {
+        profile = `/images/${profileFile.filename}`;
+      }
     }
-  }
 
-  const payload: Record<string, any> = {
-    ...req.body,
-  };
-  if (profile) {
-    payload.profile = profile;
-  }
+    const payload: Record<string, any> = {
+      ...req.body,
+    };
+    if (profile) {
+      payload.profile = profile;
+    }
 
-  const result = await UserManagementService.updateUserProfileByAdminToDB(
-    req.params.id as string,
-    payload
-  );
+    const result = await UserManagementService.updateUserProfileByAdminToDB(
+      req.params.id as string,
+      payload,
+    );
 
-  sendResponse(res, {
-    success: true,
-    statusCode: StatusCodes.OK,
-    message: "User profile updated successfully by Admin",
-    data: result,
-  });
-});
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "User profile updated successfully by Admin",
+      data: result,
+    });
+  },
+);
 
 // GET ALL PARENTS
 const getAllParents = catchAsync(async (req: Request, res: Response) => {
@@ -144,7 +145,10 @@ const assignTeamToUser = catchAsync(async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const { selectTeam } = req.body;
 
-  const result = await UserManagementService.assignTeamToUserToDB(id, selectTeam);
+  const result = await UserManagementService.assignTeamToUserToDB(
+    id,
+    selectTeam,
+  );
 
   sendResponse(res, {
     success: true,
@@ -156,7 +160,9 @@ const assignTeamToUser = catchAsync(async (req: Request, res: Response) => {
 
 // GET INCOMPLETE USERS
 const getIncompleteUsers = catchAsync(async (req: Request, res: Response) => {
-  const result = await UserManagementService.getIncompleteUsersFromDB(req.query);
+  const result = await UserManagementService.getIncompleteUsersFromDB(
+    req.query,
+  );
 
   sendResponse(res, {
     success: true,
@@ -168,16 +174,19 @@ const getIncompleteUsers = catchAsync(async (req: Request, res: Response) => {
 });
 
 // GET INCOMPLETE USERS ANALYTICS / STATS
-const getIncompleteUsersAnalytics = catchAsync(async (req: Request, res: Response) => {
-  const result = await UserManagementService.getIncompleteUsersAnalyticsFromDB();
+const getIncompleteUsersAnalytics = catchAsync(
+  async (req: Request, res: Response) => {
+    const result =
+      await UserManagementService.getIncompleteUsersAnalyticsFromDB();
 
-  sendResponse(res, {
-    success: true,
-    statusCode: StatusCodes.OK,
-    message: "Incomplete users analytics retrieved successfully",
-    data: result,
-  });
-});
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "Incomplete users analytics retrieved successfully",
+      data: result,
+    });
+  },
+);
 
 // UPDATE PLAYER JERSEY NUMBER & PROFILE PICTURE
 const updateJerseyNumber = catchAsync(async (req: Request, res: Response) => {
@@ -186,39 +195,47 @@ const updateJerseyNumber = catchAsync(async (req: Request, res: Response) => {
   // Safely extract body even if req.body is undefined or stringified
   let bodyData: Record<string, any> = {};
   if (req.body) {
-    if (typeof req.body === 'string') {
+    if (typeof req.body === "string") {
       try {
         bodyData = JSON.parse(req.body);
       } catch {
         bodyData = {};
       }
-    } else if (typeof req.body === 'object') {
+    } else if (typeof req.body === "object") {
       bodyData = req.body;
-      if (typeof bodyData.data === 'string') {
+      if (typeof bodyData.data === "string") {
         try {
           bodyData = { ...bodyData, ...JSON.parse(bodyData.data) };
         } catch {
           // ignore
         }
-      } else if (typeof bodyData.data === 'object' && bodyData.data !== null) {
+      } else if (typeof bodyData.data === "object" && bodyData.data !== null) {
         bodyData = { ...bodyData, ...bodyData.data };
       }
     }
   }
 
-  let jerseyNumber = bodyData.jerseyNumber ?? bodyData.jerseyNo ?? bodyData.jersey_number ?? bodyData.number;
+  let jerseyNumber =
+    bodyData.jerseyNumber ??
+    bodyData.jerseyNo ??
+    bodyData.jersey_number ??
+    bodyData.number;
   let profile = bodyData.profile || bodyData.image;
 
   const files = req.files as any;
   if (files) {
-    const profileFile = files.profile?.[0] || files.image?.[0] || files.profilePic?.[0];
+    const profileFile =
+      files.profile?.[0] || files.image?.[0] || files.profilePic?.[0];
     if (profileFile) {
       profile = `/images/${profileFile.filename}`;
     }
   }
 
   const result = await UserManagementService.updateJerseyNumberToDB(id, {
-    jerseyNumber: jerseyNumber !== undefined && jerseyNumber !== null ? jerseyNumber.toString().trim() : undefined,
+    jerseyNumber:
+      jerseyNumber !== undefined && jerseyNumber !== null
+        ? jerseyNumber.toString().trim()
+        : undefined,
     profile: profile || undefined,
   });
 

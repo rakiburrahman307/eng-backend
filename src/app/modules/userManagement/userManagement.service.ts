@@ -796,9 +796,9 @@ const getIncompleteUsersAnalyticsFromDB = async () => {
     $or: incompleteConditions,
   };
 
-  const allIncompleteUsers = await User.find(baseFilter).select(
-    "status verified incompleteReason rejectionReason"
-  ).lean();
+  const allIncompleteUsers = await User.find(baseFilter)
+    .select("status verified incompleteReason rejectionReason")
+    .lean();
 
   const totalIncomplete = allIncompleteUsers.length;
 
@@ -809,10 +809,19 @@ const getIncompleteUsersAnalyticsFromDB = async () => {
 
   allIncompleteUsers.forEach((u: any) => {
     const st = (u.status || "").toUpperCase();
-    const reason = (u.incompleteReason || u.rejectionReason || "").toLowerCase();
+    const reason = (
+      u.incompleteReason ||
+      u.rejectionReason ||
+      ""
+    ).toLowerCase();
 
-    const isRejected = st === "REJECTED" || st === "REJECT" || reason.includes("reject");
-    const isUnverified = u.verified === false || u.verified === null || u.verified === undefined || reason.includes("unverified");
+    const isRejected =
+      st === "REJECTED" || st === "REJECT" || reason.includes("reject");
+    const isUnverified =
+      u.verified === false ||
+      u.verified === null ||
+      u.verified === undefined ||
+      reason.includes("unverified");
     const isPending = st === "PENDING";
 
     if (isRejected) rejectedCount++;
