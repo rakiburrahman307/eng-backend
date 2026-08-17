@@ -750,10 +750,91 @@ const updateJerseyNumberToDB = async (
   return updated;
 };
 
+// GET INCOMPLETE USERS ANALYTICS/STATS
+const getIncompleteUsersAnalyticsFromDB = async () => {
+  const activeSubUserIds = await Subscription.find({
+    status: "active",
+  }).distinct("user");
+
+  const parentIdsWithChildren = await User.find({
+    parentId: { $exists: true, $ne: null },
+  }).distinct("parentId");
+
+  const incompleteConditions = [
+    { status: { $in: ["REJECTED", "rejected"] } },
+    { rejectionReason: { $exists: true, $nin: [null, ""] } },
+    { verified: false },
+    {
+      role: {
+        $nin: [
+          USER_ROLES.ADMIN,
+          USER_ROLES.SUPER_ADMIN,
+          USER_ROLES.MANAGER,
+          USER_ROLES.REFEREE,
+        ],
+      },
+      parentId: null,
+      email: { $exists: true, $ne: null },
+      _id: { $nin: [...activeSubUserIds, ...parentIdsWithChildren] },
+      isSubscribed: { $ne: true },
+      hasAccess: { $ne: true },
+      dateOfBirth: null,
+      position: null,
+    },
+    {
+      role: USER_ROLES.MANAGER,
+      $or: [{ dateOfBirth: null }, { document: { $in: [null, [], ""] } }],
+    },
+    {
+      role: USER_ROLES.REFEREE,
+      $or: [{ dateOfBirth: null }, { document: { $in: [null, [], ""] } }],
+    },
+  ];
+
+  const baseFilter = {
+    role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
+    $or: incompleteConditions,
+  };
+
+  const allIncompleteUsers = await User.find(baseFilter).select(
+    "status verified incompleteReason rejectionReason"
+  ).lean();
+
+  const totalIncomplete = allIncompleteUsers.length;
+
+  let unverifiedCount = 0;
+  let verifiedCount = 0;
+  let rejectedCount = 0;
+  let pendingCount = 0;
+
+  allIncompleteUsers.forEach((u: any) => {
+    const st = (u.status || "").toUpperCase();
+    const reason = (u.incompleteReason || u.rejectionReason || "").toLowerCase();
+
+    const isRejected = st === "REJECTED" || st === "REJECT" || reason.includes("reject");
+    const isUnverified = u.verified === false || u.verified === null || u.verified === undefined || reason.includes("unverified");
+    const isPending = st === "PENDING";
+
+    if (isRejected) rejectedCount++;
+    if (isUnverified) unverifiedCount++;
+    if (u.verified === true) verifiedCount++;
+    if (isPending) pendingCount++;
+  });
+
+  return {
+    totalIncomplete,
+    unverifiedCount,
+    rejectedCount,
+    pendingCount,
+    verifiedCount,
+  };
+};
+
 export const UserManagementService = {
   getAllUsersFromDB,
   getAllParentsFromDB,
   getIncompleteUsersFromDB,
+  getIncompleteUsersAnalyticsFromDB,
   assignTeamToUserToDB,
   updateJerseyNumberToDB,
   toggleVerifiedToDB,

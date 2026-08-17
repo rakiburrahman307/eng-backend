@@ -20,6 +20,13 @@ router.get(
   UserManagementController.getAllParents
 );
 
+// GET INCOMPLETE USERS ANALYTICS/STATS
+router.get(
+  "/incomplete/analytics",
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  UserManagementController.getIncompleteUsersAnalytics
+);
+
 // GET INCOMPLETE USERS (FOR ADMIN REMOVAL)
 router.get(
   "/incomplete",

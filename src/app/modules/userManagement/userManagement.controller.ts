@@ -167,6 +167,18 @@ const getIncompleteUsers = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// GET INCOMPLETE USERS ANALYTICS / STATS
+const getIncompleteUsersAnalytics = catchAsync(async (req: Request, res: Response) => {
+  const result = await UserManagementService.getIncompleteUsersAnalyticsFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Incomplete users analytics retrieved successfully",
+    data: result,
+  });
+});
+
 // UPDATE PLAYER JERSEY NUMBER & PROFILE PICTURE
 const updateJerseyNumber = catchAsync(async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
@@ -222,6 +234,7 @@ export const UserManagementController = {
   getAllUsers,
   getAllParents,
   getIncompleteUsers,
+  getIncompleteUsersAnalytics,
   assignTeamToUser,
   updateJerseyNumber,
   toggleVerified,
