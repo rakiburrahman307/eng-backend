@@ -156,12 +156,48 @@ const toggleRewardProductStatus = catchAsync(
   }
 );
 
+// GET QR CODE
+const getRewardProductQrCode = catchAsync(
+  async (req: Request, res: Response) => {
+    const result =
+      await RewardProductService.getRewardProductQrCodeFromDB(
+        req.params.id as string,
+      );
+
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: 'Reward product QR code generated successfully',
+      data: result,
+    });
+  }
+);
+
+// REDEEM COFFEE REWARD
+const redeemCoffeeReward = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user as any;
+    const result = await RewardProductService.redeemCoffeeRewardInDB(
+      user._id,
+      req.body
+    );
+
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: 'Coffee reward redeemed successfully!',
+      data: result,
+    });
+  }
+);
+
 export const RewardProductController = {
   createRewardProduct,
   getAllRewardProducts,
   getSingleRewardProduct,
   updateRewardProduct,
   deleteRewardProduct,
-    toggleRewardProductStatus,
-
+  toggleRewardProductStatus,
+  getRewardProductQrCode,
+  redeemCoffeeReward,
 };

@@ -31,11 +31,16 @@ const updatePackage = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getPackage = catchAsync(async (req: Request, res: Response) => {
-  const { paymentType, userType } = req.query;
+  const { paymentType } = req.query;
+  let userType = req.query.userType as string;
+
+  if (!userType && (req.user as any)?.role) {
+    userType = (req.user as any).role;
+  }
 
   const result = await PackageService.getPackageFromDB(
     paymentType as string,
-    userType as string
+    userType
   );
 
   sendResponse(res, {

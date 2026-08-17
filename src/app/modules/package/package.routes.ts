@@ -28,7 +28,7 @@ router
         validateRequest(PackageValidation.createPackageZodSchema), 
         PackageController.createPackage
     )
-    .get(PackageController.getPackage)
+    .get(auth(false), PackageController.getPackage)
 
 router
     .route("/:id")

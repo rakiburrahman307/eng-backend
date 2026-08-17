@@ -108,7 +108,12 @@ export const handleSubscriptionCreated = async (data: any) => {
     hasAccess: true,
   };
 
-  if (targetUser.role === USER_ROLES.PLAYER || targetUser.parentId) {
+  if (
+    targetUser.role === USER_ROLES.PLAYER ||
+    targetUser.role === USER_ROLES.TOURNAMENT_PLAYER ||
+    targetUser.role === USER_ROLES.OTHER_CLUBS ||
+    targetUser.parentId
+  ) {
     updateData.blueTick = true;
   }
 

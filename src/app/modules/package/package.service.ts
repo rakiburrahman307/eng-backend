@@ -178,7 +178,23 @@ const getPackageFromDB = async (
 
     if (userType) {
         const normalized = normalizeUserType(userType);
-        query.userType = { $in: [normalized, userType, userType.toUpperCase(), userType.toLowerCase()] };
+        const clean = userType.trim().toUpperCase().replace(/[\s_-]+/g, '_');
+
+        let allowedUserTypes: string[] = [normalized, userType, userType.toUpperCase(), userType.toLowerCase()];
+
+        if (clean === 'TOURNAMENT_PLAYER') {
+            allowedUserTypes.push('Tournament Player', 'TOURNAMENT_PLAYER', 'TOURNAMENT PLAYER', 'TournamentPlayer');
+        } else if (clean === 'OTHER_CLUBS' || clean === 'CLUB') {
+            allowedUserTypes.push('OTHER_CLUBS', 'Other Clubs', 'OTHER CLUBS', 'Club', 'CLUB');
+        } else if (clean === 'PLAYER') {
+            allowedUserTypes.push('Player', 'PLAYER');
+        } else if (clean === 'MANAGER') {
+            allowedUserTypes.push('Manager', 'MANAGER');
+        } else if (clean === 'REFEREE') {
+            allowedUserTypes.push('Referee', 'REFEREE');
+        }
+
+        query.userType = { $in: Array.from(new Set(allowedUserTypes)) };
     }
 
     const result = await Package.find(query);
@@ -248,7 +264,23 @@ const getActivePackagesFromDB = async (
 
     if (filters.userType) {
         const normalized = normalizeUserType(filters.userType);
-        query.userType = { $in: [normalized, filters.userType, filters.userType.toUpperCase(), filters.userType.toLowerCase()] };
+        const clean = filters.userType.trim().toUpperCase().replace(/[\s_-]+/g, '_');
+
+        let allowedUserTypes: string[] = [normalized, filters.userType, filters.userType.toUpperCase(), filters.userType.toLowerCase()];
+
+        if (clean === 'TOURNAMENT_PLAYER') {
+            allowedUserTypes.push('Tournament Player', 'TOURNAMENT_PLAYER', 'TOURNAMENT PLAYER', 'TournamentPlayer');
+        } else if (clean === 'OTHER_CLUBS' || clean === 'CLUB') {
+            allowedUserTypes.push('OTHER_CLUBS', 'Other Clubs', 'OTHER CLUBS', 'Club', 'CLUB');
+        } else if (clean === 'PLAYER') {
+            allowedUserTypes.push('Player', 'PLAYER');
+        } else if (clean === 'MANAGER') {
+            allowedUserTypes.push('Manager', 'MANAGER');
+        } else if (clean === 'REFEREE') {
+            allowedUserTypes.push('Referee', 'REFEREE');
+        }
+
+        query.userType = { $in: Array.from(new Set(allowedUserTypes)) };
     }
 
     const result = await Package.find(query);
@@ -264,8 +296,20 @@ const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail
         throw new ApiError(StatusCodes.BAD_REQUEST, 'User email is required');
     }
 
-    // If playerId provided, verify ownership and APPROVED status
-    if (playerId) {
+    let targetUserId = playerId || userId;
+
+    // Check if user is a parent with child players. Subscription belongs to child player!
+    const childPlayers = await User.find({ parentId: userId });
+    if (childPlayers && childPlayers.length > 0) {
+        if (playerId) {
+            const validChild = childPlayers.find(c => c._id.toString() === playerId.toString());
+            if (validChild) {
+                targetUserId = validChild._id.toString();
+            }
+        } else if (childPlayers.length === 1) {
+            targetUserId = childPlayers[0]._id.toString();
+        }
+    } else if (playerId) {
         if (!mongoose.Types.ObjectId.isValid(playerId)) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid player ID');
         }
@@ -273,9 +317,7 @@ const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail
         if (!player) {
             throw new ApiError(StatusCodes.NOT_FOUND, 'Player profile not found');
         }
-        if (!player.parentId || player.parentId.toString() !== userId.toString()) {
-            throw new ApiError(StatusCodes.FORBIDDEN, 'You can only register players belonging to your account');
-        }
+        targetUserId = player._id.toString();
     }
 
     const pkg = await Package.findById(packageId);
@@ -306,13 +348,13 @@ const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail
             metadata: {
                 userId,
                 packageId,
-                targetUserId: playerId || userId,
+                targetUserId,
             },
         },
         metadata: {
             userId,
             packageId,
-            targetUserId: playerId || userId,
+            targetUserId,
         },
     });
 

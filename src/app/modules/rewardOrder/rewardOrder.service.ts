@@ -1,65 +1,76 @@
-import { StatusCodes } from 'http-status-codes';
-import mongoose from 'mongoose';
-import ApiError from '../../../errors/ApiErrors';
+import { StatusCodes } from "http-status-codes";
+import mongoose from "mongoose";
+import ApiError from "../../../errors/ApiErrors";
 import QueryBuilder from "../../../util/queryBuilder";
-import { User } from '../user/user.model';
-import { RewardProduct } from '../rewardProduct/rewardProduct.model';
-import { RewardOrder } from './rewardOrder.model';
-import { Subscription } from '../subscription/subscription.model';
-import { NotificationQueueHelper } from '../../../helpers/bullMQ/bullHelper';
-import { sendNotificationToAdmins } from '../../../helpers/notificationsHelper';
-import { NOTIFICATION_TYPE } from '../notification/notification.interface';
+import { User } from "../user/user.model";
+import { RewardProduct } from "../rewardProduct/rewardProduct.model";
+import { RewardOrder } from "./rewardOrder.model";
+import { Subscription } from "../subscription/subscription.model";
+import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
+import { sendNotificationToAdmins } from "../../../helpers/notificationsHelper";
+import { NOTIFICATION_TYPE } from "../notification/notification.interface";
+
+import { isPremiumPlayerPackage } from "../../../helpers/packageHelper";
 
 // CREATE ORDER
-const createRewardOrderToDB = async (
-  payload: any,
-  userId: string
-) => {
+const createRewardOrderToDB = async (payload: any, userId: string) => {
   const session = await mongoose.startSession();
 
   try {
     session.startTransaction();
 
-    const user = await User.findById(userId).session(session);
+    const targetPlayerId =
+      payload.player || payload.playerId || payload.user || userId;
+
+    const user = await User.findById(targetPlayerId).session(session);
 
     if (!user) {
-      throw new ApiError(
-        StatusCodes.NOT_FOUND,
-        "User not found"
-      );
+      throw new ApiError(StatusCodes.NOT_FOUND, "Player profile not found");
     }
 
     // Check active subscription package permissions for point redemption
-    const subscription = await Subscription.findOne({
-      user: userId,
-      status: 'active',
-    }).populate('package');
+    const subUserIds: any[] = [targetPlayerId, user._id];
+    if (user.parentId) subUserIds.push(user.parentId);
+    if (userId) subUserIds.push(userId);
 
-    if (subscription && subscription.package) {
-      const pkg = subscription.package as any;
-      if (pkg.canRedeemPoints === false || pkg.packageType === 'Semi Pro') {
-        throw new ApiError(
-          StatusCodes.FORBIDDEN,
-          'Your package does not allow point redemption.'
-        );
-      }
+    const subscription = await Subscription.findOne({
+      user: { $in: subUserIds },
+      status: "active",
+    }).populate("package");
+
+    if (!subscription || !subscription.package) {
+      throw new ApiError(
+        StatusCodes.FORBIDDEN,
+        "You must have an active subscription package to redeem rewards!",
+      );
+    }
+
+    const pkg = subscription.package as any;
+    const isPremium = await isPremiumPlayerPackage(pkg);
+
+    if (
+      !isPremium ||
+      pkg.canRedeemPoints === false ||
+      pkg.packageType === "Semi Pro"
+    ) {
+      throw new ApiError(
+        StatusCodes.FORBIDDEN,
+        "Only Premium subscription package holders are allowed to redeem rewards!",
+      );
     }
 
     const rewardProduct = await RewardProduct.findById(
-      payload.rewardProduct
+      payload.rewardProduct,
     ).session(session);
 
     if (!rewardProduct) {
-      throw new ApiError(
-        StatusCodes.NOT_FOUND,
-        "Reward product not found"
-      );
+      throw new ApiError(StatusCodes.NOT_FOUND, "Reward product not found");
     }
 
     if (rewardProduct.status !== "publish") {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
-        "Reward product is not available"
+        "Reward product is not available",
       );
     }
 
@@ -69,7 +80,7 @@ const createRewardOrderToDB = async (
     if (userCoin - rewardProduct.point < 10000) {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
-        `Insufficient coin balance! A minimum balance of 10,000 coins must be maintained in your account (Current: ${userCoin}, Required item cost: ${rewardProduct.point}).`
+        `Insufficient coin balance! A minimum balance of 10,000 coins must be maintained in your account (Current: ${userCoin}, Required item cost: ${rewardProduct.point}).`,
       );
     }
 
@@ -78,8 +89,6 @@ const createRewardOrderToDB = async (
     user.marketValue = (user.engCoine || 0) * 100;
 
     await user.save({ session });
-
-
 
     // Create Reward Order
     const order = await RewardOrder.create(
@@ -90,27 +99,34 @@ const createRewardOrderToDB = async (
           pointUsed: rewardProduct.point,
         },
       ],
-      { session }
+      { session },
     );
-
-
 
     await session.commitTransaction();
     session.endSession();
 
-
-
     // Notify Player via background queue
     await NotificationQueueHelper.sendNotification(
-      userId,
+      user._id.toString(),
       `Your reward order has been placed successfully. ${rewardProduct.point} points have been deducted from your ENG Coins.`,
       "Reward Order Placed 🎁",
       NOTIFICATION_TYPE.REWARD_ORDER_PLACED,
       undefined,
       order[0]._id.toString(),
-      'RewardOrder'
+      "RewardOrder",
     );
 
+    if (userId && userId.toString() !== user._id.toString()) {
+      await NotificationQueueHelper.sendNotification(
+        userId.toString(),
+        `Reward order placed for ${user.firstName || "Player"}. ${rewardProduct.point} points have been deducted.`,
+        "Reward Order Placed 🎁",
+        NOTIFICATION_TYPE.REWARD_ORDER_PLACED,
+        undefined,
+        order[0]._id.toString(),
+        "RewardOrder",
+      );
+    }
 
     // Notify Admins
     console.log("Sending notification to admins...");
@@ -142,24 +158,22 @@ const createRewardOrderToDB = async (
 };
 
 // GET ALL
-const getAllRewardOrdersFromDB = async (
-  query: Record<string, any>
-) => {
+const getAllRewardOrdersFromDB = async (query: Record<string, any>) => {
   const rewardOrderQuery = new QueryBuilder(
     RewardOrder.find()
       .populate({
-        path: 'user',
-        select: 'userName firstName lastName',
+        path: "user",
+        select: "userName firstName lastName",
       })
       .populate({
-        path: 'rewardProduct',
-        select: 'brand point',
+        path: "rewardProduct",
+        select: "brand point",
       })
       .populate({
-        path: 'approvedBy',
-        select: 'firstName lastName',
+        path: "approvedBy",
+        select: "firstName lastName",
       }),
-    query
+    query,
   )
     .filter()
     .sort()
@@ -170,20 +184,18 @@ const getAllRewardOrdersFromDB = async (
 
   const meta = await rewardOrderQuery.getPaginationInfo();
 
-  const result = orders.map(
-    (order: any, index: number) => ({
-      id: order._id,
-      userId: order.user?._id,
-      userName: order.user?.userName,
-      firstName: order.user?.firstName,
-      lastName: order.user?.lastName,
-      brandName: order.rewardProduct?.brand,
-      point: order.rewardProduct?.point,
-      pointUsed: order.pointUsed,
-      status: order.status,
-      updatedAt: order.updatedAt,
-    })
-  );
+  const result = orders.map((order: any, index: number) => ({
+    id: order._id,
+    userId: order.user?._id,
+    userName: order.user?.userName,
+    firstName: order.user?.firstName,
+    lastName: order.user?.lastName,
+    brandName: order.rewardProduct?.brand,
+    point: order.rewardProduct?.point,
+    pointUsed: order.pointUsed,
+    status: order.status,
+    updatedAt: order.updatedAt,
+  }));
 
   return {
     meta,
@@ -192,57 +204,69 @@ const getAllRewardOrdersFromDB = async (
 };
 
 // MY ORDERS
-const getMyRewardOrdersFromDB = async (
-  userId: string
-) => {
-  return await RewardOrder.find({
-    user: userId,
-  })
-    .populate('rewardProduct')
-    .sort({ createdAt: -1 });
+const getMyRewardOrdersFromDB = async (query: Record<string, any>) => {
+  const page = Math.max(Number(query.page) || 1, 1);
+  const limit = Math.min(Math.max(Number(query.limit) || 10, 1), 100);
+  const skip = (page - 1) * limit;
+
+  const filter = {
+    user: query.player,
+  };
+
+  const [result, total] = await Promise.all([
+    RewardOrder.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("rewardProduct")
+      .lean(),
+
+    RewardOrder.countDocuments(filter),
+  ]);
+
+  const totalPage = Math.ceil(total / limit);
+
+  return {
+    data: result,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPage
+    },
+  };
 };
 
 // SINGLE
-const getSingleRewardOrderFromDB = async (
-  id: string
-) => {
+const getSingleRewardOrderFromDB = async (id: string) => {
   const result = await RewardOrder.findById(id)
-    .populate('user')
-    .populate('rewardProduct')
-    .populate('approvedBy');
+    .populate("user")
+    .populate("rewardProduct")
+    .populate("approvedBy");
 
   if (!result) {
-    throw new ApiError(
-      StatusCodes.NOT_FOUND,
-      'Reward order not found'
-    );
+    throw new ApiError(StatusCodes.NOT_FOUND, "Reward order not found");
   }
 
   return result;
 };
 
 // APPROVE
-const approveRewardOrderToDB = async (
-  id: string,
-  adminId: string
-) => {
+const approveRewardOrderToDB = async (id: string, adminId: string) => {
   const order = await RewardOrder.findById(id);
 
   if (!order) {
-    throw new ApiError(
-      StatusCodes.NOT_FOUND,
-      'Reward order not found'
-    );
+    throw new ApiError(StatusCodes.NOT_FOUND, "Reward order not found");
   }
 
-  if (order.status !== 'pending') {
+  if (order.status !== "pending") {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      'Only pending orders can be approved'
+      "Only pending orders can be approved",
     );
   }
 
-  order.status = 'approved';
+  order.status = "approved";
   order.approvedBy = adminId as any;
   order.approvedAt = new Date();
 
@@ -251,12 +275,12 @@ const approveRewardOrderToDB = async (
   // 🔔 Notify player: order approved via background queue
   await NotificationQueueHelper.sendNotification(
     order.user.toString(),
-    'Your reward order has been approved! It will be delivered to you soon.',
-    '✅ Reward Order Approved!',
+    "Your reward order has been approved! It will be delivered to you soon.",
+    "✅ Reward Order Approved!",
     NOTIFICATION_TYPE.REWARD_ORDER_APPROVED,
     undefined,
     order._id.toString(),
-    'RewardOrder'
+    "RewardOrder",
   );
 
   return order;
@@ -266,7 +290,7 @@ const approveRewardOrderToDB = async (
 const rejectRewardOrderToDB = async (
   id: string,
   rejectReason: string | undefined,
-  adminId: string
+  adminId: string,
 ) => {
   const session = await mongoose.startSession();
 
@@ -274,33 +298,25 @@ const rejectRewardOrderToDB = async (
     session.startTransaction();
 
     const order = await RewardOrder.findById(id)
-      .populate('rewardProduct')
+      .populate("rewardProduct")
       .session(session);
 
     if (!order) {
-      throw new ApiError(
-        StatusCodes.NOT_FOUND,
-        'Reward order not found'
-      );
+      throw new ApiError(StatusCodes.NOT_FOUND, "Reward order not found");
     }
 
-    if (order.status !== 'pending') {
+    if (order.status !== "pending") {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
-        'Only pending orders can be rejected'
+        "Only pending orders can be rejected",
       );
     }
 
     // RETURN POINT
-    const user = await User.findById(order.user).session(
-      session
-    );
+    const user = await User.findById(order.user).session(session);
 
     if (!user) {
-      throw new ApiError(
-        StatusCodes.NOT_FOUND,
-        'User not found'
-      );
+      throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
     }
 
     // Refund points to user's ENG Coins (primary) and reward points (legacy)
@@ -310,7 +326,7 @@ const rejectRewardOrderToDB = async (
     await user.save({ session });
 
     // UPDATE ORDER
-    order.status = 'rejected';
+    order.status = "rejected";
     if (rejectReason) {
       order.rejectReason = rejectReason;
     }
@@ -321,16 +337,16 @@ const rejectRewardOrderToDB = async (
     await session.commitTransaction();
     session.endSession();
 
-    const reasonText = rejectReason ? ` Reason: ${rejectReason}` : '';
+    const reasonText = rejectReason ? ` Reason: ${rejectReason}` : "";
     // 🔔 Notify player: order rejected + points refunded via background queue
     await NotificationQueueHelper.sendNotification(
       order.user.toString(),
       `Your reward order has been rejected. ${order.pointUsed} points have been refunded to your account.${reasonText}`,
-      'Reward Order Rejected',
+      "Reward Order Rejected",
       NOTIFICATION_TYPE.REWARD_ORDER_REJECTED,
       undefined,
       order._id.toString(),
-      'RewardOrder'
+      "RewardOrder",
     );
 
     return order;
@@ -343,38 +359,33 @@ const rejectRewardOrderToDB = async (
 };
 
 // DELIVERED
-const deliveredRewardOrderToDB = async (
-  id: string
-) => {
+const deliveredRewardOrderToDB = async (id: string) => {
   const order = await RewardOrder.findById(id);
 
   if (!order) {
-    throw new ApiError(
-      StatusCodes.NOT_FOUND,
-      'Reward order not found'
-    );
+    throw new ApiError(StatusCodes.NOT_FOUND, "Reward order not found");
   }
 
-  if (order.status !== 'approved') {
+  if (order.status !== "approved") {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      'Only approved orders can be delivered'
+      "Only approved orders can be delivered",
     );
   }
 
-  order.status = 'delivered';
+  order.status = "delivered";
 
   await order.save();
 
   // 🔔 Notify player: order delivered via background queue
   await NotificationQueueHelper.sendNotification(
     order.user.toString(),
-    'Your reward order has been delivered! Enjoy your reward.',
-    '🚚 Reward Order Delivered!',
+    "Your reward order has been delivered! Enjoy your reward.",
+    "🚚 Reward Order Delivered!",
     NOTIFICATION_TYPE.REWARD_ORDER_DELIVERED,
     undefined,
     order._id.toString(),
-    'RewardOrder'
+    "RewardOrder",
   );
 
   return order;

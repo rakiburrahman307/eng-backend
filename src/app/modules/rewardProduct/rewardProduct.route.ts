@@ -1,11 +1,19 @@
 import express from 'express';
-import { USER_ROLES } from '../../../enums/user';
+import { ROLE_GROUPS, USER_ROLES } from '../../../enums/user';
 import auth from '../../middlewares/auth';
 import fileUploadHandler from '../../middlewares/fileUploaderHandler';
 import { RewardProductController } from './rewardProduct.controller';
 
 
 const router = express.Router();
+
+// REDEEM COFFEE REWARD (All Authenticated Users / Players / Parents)
+router
+  .route('/redeem-coffee')
+  .post(
+    auth(...ROLE_GROUPS.All),
+    RewardProductController.redeemCoffeeReward
+  );
 
 // CREATE + GET ALL
 router
@@ -15,13 +23,13 @@ router
     fileUploadHandler(),
     RewardProductController.createRewardProduct
   )
-.get(RewardProductController.getAllRewardProducts);
+  .get(RewardProductController.getAllRewardProducts);
   
 
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')
-  .get( RewardProductController.getSingleRewardProduct)
+  .get(RewardProductController.getSingleRewardProduct)
   .patch(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
     fileUploadHandler(),
@@ -38,6 +46,14 @@ router
   .patch(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
     RewardProductController.toggleRewardProductStatus
+  );
+
+// GET QR CODE (ONLY Coffee)
+router
+  .route('/:id/qr-code')
+  .get(
+    auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+    RewardProductController.getRewardProductQrCode
   );
 
 export default router;

@@ -30,6 +30,29 @@ const rewardProductSchema = new Schema<IRewardProduct>(
       default: 'publish',
     },
 
+    rewardToken: {
+      type: String,
+      default: null,
+    },
+
+    redeemedUsers: [
+      {
+        user: {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+          required: true,
+        },
+        redeemedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        points: {
+          type: Number,
+          default: 0,
+        },
+      },
+    ],
+
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -40,6 +63,15 @@ const rewardProductSchema = new Schema<IRewardProduct>(
     timestamps: true,
   }
 );
+
+rewardProductSchema.pre('save', function () {
+  if (this.productType === 'Coffee' && !this.rewardToken) {
+    this.rewardToken =
+      'rp_reward_' +
+      Math.random().toString(36).substring(2, 10) +
+      Date.now().toString(36);
+  }
+});
 
 export const RewardProduct = model<IRewardProduct>(
   'RewardProduct',
