@@ -32,24 +32,18 @@ export const isPremiumPlayerPackage = async (
 
   if (!pkg) return false;
 
-  // 2. Normalize userType
+  // 2. Normalize userType and packageType
+  const pkgType = (pkg.packageType || "").toString().trim();
+  const pkgTypeUpper = pkgType.toUpperCase().replace(/[\s_-]+/g, "_");
   const userTypeUpper = (pkg.userType || "")
     .toString()
     .trim()
     .toUpperCase()
     .replace(/[\s_-]+/g, "_");
 
-  // 3. Tournament Player
-  // Tournament Player has only one package.
-  // Any active subscription for this user type is Premium.
-  if (userTypeUpper === "TOURNAMENT_PLAYER") {
-    return true;
-  }
-
-  // 4. Trial Player / Other Club
-  // These user types have only one package.
-  // Any active subscription is Premium.
+  // 3. Tournament Player, Trial Player / Other Clubs
   if (
+    userTypeUpper === "TOURNAMENT_PLAYER" ||
     userTypeUpper === "TRIAL_PLAYER" ||
     userTypeUpper === "OTHER_CLUBS" ||
     userTypeUpper === "OTHER_CLUB" ||
@@ -58,30 +52,34 @@ export const isPremiumPlayerPackage = async (
     return true;
   }
 
-  // 5. Regular Player packages
-  // For regular Players, Premium depends on package price.
+  // 4. Check Package Type name
+  if (pkgTypeUpper === "SEMI_PRO" || pkgType === "Semi Pro") {
+    return false;
+  }
+
+  if (
+    pkgTypeUpper === "PROFESSIONAL" ||
+    pkgType === "Professional" ||
+    pkgTypeUpper === "TOURNAMENT_PLAYER" ||
+    pkgTypeUpper === "TRIAL_PLAYER" ||
+    pkgTypeUpper === "OTHER"
+  ) {
+    return true;
+  }
+
+  // 5. Dynamic price check fallback (case-insensitive status check)
   const playerPackages = await Package.find({
     $or: [{ userType: "Player" }, { userType: "PLAYER" }],
-    status: "Active",
+    status: { $in: ["Active", "active"] },
   })
     .sort({ price: 1 })
     .lean();
 
-  // 6. No active Player packages found
-  if (playerPackages.length === 0) {
-    return false;
-  }
-
-  // 7. If only one Player package exists,
-  // that package is Premium.
-  if (playerPackages.length === 1) {
+  if (playerPackages.length <= 1) {
     return true;
   }
 
-  // 8. Multiple Player packages exist.
-  // The package with the highest price is Premium.
   const currentPrice = Number(pkg.price) || 0;
-
   const maxPrice = Math.max(
     ...playerPackages.map((playerPackage) => Number(playerPackage.price) || 0),
   );

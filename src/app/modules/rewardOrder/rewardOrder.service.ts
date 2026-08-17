@@ -48,11 +48,7 @@ const createRewardOrderToDB = async (payload: any, userId: string) => {
     const pkg = subscription.package as any;
     const isPremium = await isPremiumPlayerPackage(pkg);
 
-    if (
-      !isPremium ||
-      pkg.canRedeemPoints === false ||
-      pkg.packageType === "Semi Pro"
-    ) {
+    if (!isPremium || pkg.packageType === "Semi Pro") {
       throw new ApiError(
         StatusCodes.FORBIDDEN,
         "Only Premium subscription package holders are allowed to redeem rewards!",
