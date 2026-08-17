@@ -14,8 +14,9 @@ const getTeamDashboardFromDB = async (teamId: string) => {
   const activeSubUserIds = await Subscription.find({
     status: "active",
   }).distinct("user");
-  // 👥 PLAYERS (Only genuine Player profiles, exclude Parent accounts)
+  // 👥 PLAYERS (Only genuine Player profiles belonging to THIS TEAM, exclude Parent accounts)
   const rawPlayers = await User.find({
+    selectTeam: { $in: [teamObjectId, teamId] },
     status: "APPROVED",
     role: {
       $in: [

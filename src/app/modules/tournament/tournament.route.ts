@@ -1,9 +1,16 @@
 import express from 'express';
-import { USER_ROLES } from '../../../enums/user';
+import { ROLE_GROUPS, USER_ROLES } from '../../../enums/user';
 import auth from '../../middlewares/auth';
 import { TournamentController } from './tournament.controller';
 
 const router = express.Router();
+
+// REDEEM PRIZE COINS BY SCANNING QR CODE (PLAYER / AUTH USER)
+router.post(
+  '/redeem-reward',
+  auth(...ROLE_GROUPS.All),
+  TournamentController.redeemTournamentReward
+);
 
 router
   .route('/')
@@ -12,6 +19,13 @@ router
     TournamentController.createTournament
   )
   .get(TournamentController.getAllTournaments);
+
+// GET QR CODE PAYLOAD FOR TOURNAMENT (ADMIN / MANAGER)
+router.get(
+  '/:id/qr-code',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MANAGER),
+  TournamentController.getTournamentQrCode
+);
 
 router
   .route('/:id')

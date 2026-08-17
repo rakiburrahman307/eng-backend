@@ -64,10 +64,37 @@ const deleteTournament = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getTournamentQrCode = catchAsync(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const result = await TournamentService.getTournamentQrCodeFromDB(id);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Tournament QR code generated successfully',
+    data: result,
+  });
+});
+
+const redeemTournamentReward = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user as any;
+  const userId = user._id || user.id;
+  const result = await TournamentService.redeemTournamentRewardInDB(userId, req.body);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Tournament prize coins redeemed successfully!',
+    data: result,
+  });
+});
+
 export const TournamentController = {
   createTournament,
   getAllTournaments,
   getSingleTournament,
   updateTournament,
   deleteTournament,
+  getTournamentQrCode,
+  redeemTournamentReward,
 };

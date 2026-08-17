@@ -3,7 +3,16 @@ import { Model, Types } from 'mongoose';
 export type IPositionReward = {
   position: number;
   positionName: string;
-  points: number;
+  points: number; // Prize Money Coins
+  rewardToken?: string;
+};
+
+export type IRedeemedPlayer = {
+  player: Types.ObjectId;
+  position: number;
+  positionName: string;
+  redeemedAt: Date;
+  coins: number;
 };
 
 export type ITournament = {
@@ -14,6 +23,8 @@ export type ITournament = {
   startDate: Date;
   endDate: Date;
   positionRewards: IPositionReward[];
+  rewardToken?: string;
+  redeemedPlayers?: IRedeemedPlayer[];
   status: 'upcoming' | 'active' | 'completed' | 'cancelled';
   createdBy?: Types.ObjectId;
   createdAt?: Date;

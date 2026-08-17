@@ -17,6 +17,10 @@ const positionRewardSchema = new Schema(
       required: true,
       min: 0,
     },
+    rewardToken: {
+      type: String,
+      default: '',
+    },
   },
   { _id: false }
 );
@@ -48,6 +52,22 @@ const tournamentSchema = new Schema<ITournament, TournamentModel>(
       type: [positionRewardSchema],
       default: [],
     },
+    rewardToken: {
+      type: String,
+      default: '',
+    },
+    redeemedPlayers: {
+      type: [
+        {
+          player: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+          position: { type: Number, required: true },
+          positionName: { type: String, default: 'Winner' },
+          redeemedAt: { type: Date, default: Date.now },
+          coins: { type: Number, required: true },
+        },
+      ],
+      default: [],
+    },
     status: {
       type: String,
       enum: ['upcoming', 'active', 'completed', 'cancelled'],
@@ -62,6 +82,19 @@ const tournamentSchema = new Schema<ITournament, TournamentModel>(
     timestamps: true,
   }
 );
+
+tournamentSchema.pre('save', function () {
+  if (!this.rewardToken) {
+    this.rewardToken = Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+  }
+  if (this.positionRewards && this.positionRewards.length > 0) {
+    this.positionRewards.forEach((r: any) => {
+      if (!r.rewardToken) {
+        r.rewardToken = Math.random().toString(36).substring(2, 10) + Date.now().toString(36) + '_' + r.position;
+      }
+    });
+  }
+});
 
 tournamentSchema.index({ status: 1 });
 tournamentSchema.index({ startDate: 1, endDate: 1 });
