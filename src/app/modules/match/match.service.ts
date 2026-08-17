@@ -329,6 +329,13 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
           { timerStatus: "paused" },
         ],
       });
+    } else if (lowerStatus === "upcoming" || lowerStatus === "scheduled") {
+      andConditions.push({
+        $or: [
+          { status: { $regex: /^(upcoming|scheduled)$/i } },
+          { status: { $ne: "finished" } },
+        ],
+      });
     } else {
       andConditions.push({ status: { $regex: new RegExp(`^${lowerStatus}$`, "i") } });
     }
@@ -437,7 +444,12 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     if (dateStatus === "today") {
       const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-      andConditions.push({ matchDate: { $gte: startOfDay, $lte: endOfDay } });
+      andConditions.push({
+        $or: [
+          { matchDate: { $gte: startOfDay, $lte: endOfDay } },
+          { scheduledAt: { $gte: startOfDay, $lte: endOfDay } },
+        ],
+      });
     } else if (dateStatus === "this_week") {
       const startOfWeek = new Date(now);
       startOfWeek.setDate(now.getDate() - now.getDay());
@@ -445,11 +457,26 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
       const endOfWeek = new Date(startOfWeek);
       endOfWeek.setDate(startOfWeek.getDate() + 6);
       endOfWeek.setHours(23, 59, 59, 999);
-      andConditions.push({ matchDate: { $gte: startOfWeek, $lte: endOfWeek } });
+      andConditions.push({
+        $or: [
+          { matchDate: { $gte: startOfWeek, $lte: endOfWeek } },
+          { scheduledAt: { $gte: startOfWeek, $lte: endOfWeek } },
+        ],
+      });
     } else if (dateStatus === "upcoming") {
-      andConditions.push({ matchDate: { $gte: now } });
+      andConditions.push({
+        $or: [
+          { matchDate: { $gte: now } },
+          { scheduledAt: { $gte: now } },
+        ],
+      });
     } else if (dateStatus === "past") {
-      andConditions.push({ matchDate: { $lt: now } });
+      andConditions.push({
+        $or: [
+          { matchDate: { $lt: now } },
+          { scheduledAt: { $lt: now } },
+        ],
+      });
     }
   }
 
@@ -459,7 +486,12 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
       const startOfDay = new Date(`${dateStr}T00:00:00.000Z`);
       const endOfDay = new Date(`${dateStr}T23:59:59.999Z`);
-      andConditions.push({ matchDate: { $gte: startOfDay, $lte: endOfDay } });
+      andConditions.push({
+        $or: [
+          { matchDate: { $gte: startOfDay, $lte: endOfDay } },
+          { scheduledAt: { $gte: startOfDay, $lte: endOfDay } },
+        ],
+      });
     } else {
       const d = new Date(matchDate as string);
       if (!isNaN(d.getTime())) {
@@ -467,7 +499,12 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
         startOfDay.setUTCHours(0, 0, 0, 0);
         const endOfDay = new Date(d);
         endOfDay.setUTCHours(23, 59, 59, 999);
-        andConditions.push({ matchDate: { $gte: startOfDay, $lte: endOfDay } });
+        andConditions.push({
+          $or: [
+            { matchDate: { $gte: startOfDay, $lte: endOfDay } },
+            { scheduledAt: { $gte: startOfDay, $lte: endOfDay } },
+          ],
+        });
       }
     }
   }
@@ -477,20 +514,49 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
   const effectiveEndDate = endDate || query.to || query.end;
 
   if (effectiveStartDate || effectiveEndDate) {
-    const dateRangeObj: any = {};
+    let startD: Date | null = null;
+    let endD: Date | null = null;
+
     if (effectiveStartDate) {
       const sStr = typeof effectiveStartDate === "string" ? effectiveStartDate.split("T")[0] : "";
-      dateRangeObj.$gte = sStr && /^\d{4}-\d{2}-\d{2}$/.test(sStr)
-        ? new Date(`${sStr}T00:00:00.000Z`)
-        : new Date(effectiveStartDate as string);
+      if (sStr && /^\d{4}-\d{2}-\d{2}$/.test(sStr)) {
+        startD = new Date(`${sStr}T00:00:00.000Z`);
+      } else {
+        const d = new Date(effectiveStartDate as string);
+        if (!isNaN(d.getTime())) {
+          startD = d;
+        }
+      }
     }
+
     if (effectiveEndDate) {
       const eStr = typeof effectiveEndDate === "string" ? effectiveEndDate.split("T")[0] : "";
-      dateRangeObj.$lte = eStr && /^\d{4}-\d{2}-\d{2}$/.test(eStr)
-        ? new Date(`${eStr}T23:59:59.999Z`)
-        : new Date(effectiveEndDate as string);
+      if (eStr && /^\d{4}-\d{2}-\d{2}$/.test(eStr)) {
+        endD = new Date(`${eStr}T23:59:59.999Z`);
+      } else {
+        const d = new Date(effectiveEndDate as string);
+        if (!isNaN(d.getTime())) {
+          endD = d;
+        }
+      }
     }
-    andConditions.push({ matchDate: dateRangeObj });
+
+    const dateQuery: any = {};
+    if (startD && !isNaN(startD.getTime())) {
+      dateQuery.$gte = startD;
+    }
+    if (endD && !isNaN(endD.getTime())) {
+      dateQuery.$lte = endD;
+    }
+
+    if (dateQuery.$gte || dateQuery.$lte) {
+      andConditions.push({
+        $or: [
+          { matchDate: dateQuery },
+          { scheduledAt: dateQuery },
+        ],
+      });
+    }
   }
 
   // SearchTerm Filter (Regex on teamName, leagueName, venueName, notes, status)

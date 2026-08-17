@@ -625,7 +625,8 @@ const getIncompleteUsersFromDB = async (query: Record<string, any>) => {
   // 3) Parent/User with email, no parentId, not in parentIdsWithChildren, no active sub, no child players
   // 4) Manager or Referee with missing DOB or missing documents
   const incompleteConditions = [
-    { status: "REJECTED" },
+    { status: { $in: ["REJECTED", "rejected"] } },
+    { rejectionReason: { $exists: true, $nin: [null, ""] } },
     { verified: false },
     {
       role: {
