@@ -662,6 +662,34 @@ const getIncompleteUsersFromDB = async (query: Record<string, any>) => {
     },
   ];
 
+  const rawStatus = (query.status || query.statusFilter || query.filter || "")
+    .toString()
+    .toUpperCase()
+    .trim();
+
+  if (rawStatus && rawStatus !== "ALL") {
+    if (rawStatus === "UNVERIFIED") {
+      andConditions.push({
+        $or: [
+          { verified: false },
+          { verified: null },
+          { verified: { $exists: false } },
+        ],
+      });
+    } else if (rawStatus === "VERIFIED") {
+      andConditions.push({ verified: true });
+    } else if (rawStatus === "REJECTED") {
+      andConditions.push({
+        $or: [
+          { status: { $in: ["REJECTED", "rejected", "REJECT", "reject"] } },
+          { rejectionReason: { $exists: true, $nin: [null, ""] } },
+        ],
+      });
+    } else if (rawStatus === "PENDING") {
+      andConditions.push({ status: { $in: ["PENDING", "pending"] } });
+    }
+  }
+
   const rawSearch = (searchTerm || searchValue || search) as string;
   if (rawSearch && rawSearch.trim()) {
     const searchRegex = new RegExp(rawSearch.trim(), "i");
