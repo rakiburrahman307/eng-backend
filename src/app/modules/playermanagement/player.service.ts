@@ -507,11 +507,12 @@ const getAllPlayersFromDB = async (
   }
 
   if (
-    (queryObj.selectTeam || queryObj.teamId) &&
+    (queryObj.selectTeam || queryObj.teamId || queryObj.team) &&
     queryObj.selectTeam !== "ALL" &&
-    queryObj.teamId !== "ALL"
+    queryObj.teamId !== "ALL" &&
+    queryObj.team !== "ALL"
   ) {
-    const tId = queryObj.selectTeam || queryObj.teamId;
+    const tId = queryObj.selectTeam || queryObj.teamId || queryObj.team;
     if (Types.ObjectId.isValid(tId)) {
       andConditions.push({ selectTeam: new Types.ObjectId(tId) });
     }
