@@ -619,12 +619,14 @@ const getIncompleteUsersFromDB = async (query: Record<string, any>) => {
     parentId: { $exists: true, $ne: null },
   }).distinct("parentId");
 
-  // Incomplete / Broken / Abandoned user conditions:
-  // 1) verified: false (Email OTP unverified)
-  // 2) Parent/User with email, no parentId, not in parentIdsWithChildren, no active sub, no child players
-  // 3) Manager or Referee with missing DOB or missing documents
+  // Incomplete / Broken / Abandoned / Rejected user conditions:
+  // 1) status: "REJECTED" (Profile rejected by Admin)
+  // 2) verified: false (Email OTP unverified)
+  // 3) Parent/User with email, no parentId, not in parentIdsWithChildren, no active sub, no child players
+  // 4) Manager or Referee with missing DOB or missing documents
   const incompleteConditions = [
-    { verified: false, status: "REJECTED" },
+    { status: "REJECTED" },
+    { verified: false },
     {
       role: {
         $nin: [
@@ -678,7 +680,7 @@ const getIncompleteUsersFromDB = async (query: Record<string, any>) => {
   const [rawUsers, total] = await Promise.all([
     User.find(finalFilter)
       .select(
-        "userName role profile verified status document firstName lastName email phone location createdAt",
+        "userName role profile verified status document firstName lastName email phone location rejectionReason createdAt",
       )
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -689,7 +691,9 @@ const getIncompleteUsersFromDB = async (query: Record<string, any>) => {
 
   const result = rawUsers.map((u: any) => {
     let reason = "Incomplete Registration Setup";
-    if (u.verified === false) {
+    if (u.status === "REJECTED") {
+      reason = u.rejectionReason || "Profile / Application Rejected by Admin";
+    } else if (u.verified === false) {
       reason = "Unverified Email / Abandoned Signup";
     } else if (u.role === USER_ROLES.MANAGER) {
       reason = "Manager Missing Verification Documents";
