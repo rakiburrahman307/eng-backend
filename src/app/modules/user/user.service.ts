@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { USER_ROLES } from "../../../enums/user";
 import { IUser } from "./user.interface";
-import { JwtPayload } from 'jsonwebtoken';
+import { JwtPayload } from "jsonwebtoken";
 import { User } from "./user.model";
 import { StatusCodes } from "http-status-codes";
 import ApiError from "../../../errors/ApiErrors";
@@ -19,81 +19,86 @@ import { ManagerTeam } from "../managerTeam/managerTeam.model";
 import stripe from "../../../config/stripe";
 import { getPlayerStatsSummary } from "../../../helpers/playerStatsHelper";
 
-
-
-
-
 const createAdminToDB = async (payload: any): Promise<IUser> => {
+  // check admin is exist or not;
+  const isExistAdmin = await User.findOne({ email: payload.email });
+  if (isExistAdmin) {
+    throw new ApiError(StatusCodes.CONFLICT, "This Email already taken");
+  }
 
-    // check admin is exist or not;
-    const isExistAdmin = await User.findOne({ email: payload.email })
-    if (isExistAdmin) {
-        throw new ApiError(StatusCodes.CONFLICT, "This Email already taken");
-    }
+  // create admin to db
+  const createAdmin = await User.create(payload);
+  if (!createAdmin) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create Admin");
+  } else {
+    await User.findByIdAndUpdate(
+      { _id: createAdmin?._id },
+      { verified: true },
+      { new: true },
+    );
+  }
 
-    // create admin to db
-    const createAdmin = await User.create(payload);
-    if (!createAdmin) {
-        throw new ApiError(StatusCodes.BAD_REQUEST, 'Failed to create Admin');
-    } else {
-        await User.findByIdAndUpdate({ _id: createAdmin?._id }, { verified: true }, { new: true });
-    }
-
-    return createAdmin;
-}
+  return createAdmin;
+};
 
 const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
-    if (payload.role === USER_ROLES.OTHER_CLUBS) {
-        payload.marketValue = 0;
-    }
+  if (payload.role === USER_ROLES.OTHER_CLUBS) {
+    payload.marketValue = 0;
+  }
 
-    // Roles requiring Admin Approval: PLAYER, MANAGER, REFEREE, OTHER_CLUBS
-    const rolesRequiringApproval = [
-      USER_ROLES.PLAYER,
-      USER_ROLES.MANAGER,
-      USER_ROLES.REFEREE,
-      USER_ROLES.OTHER_CLUBS,
-    ];
+  // Roles requiring Admin Approval: PLAYER, MANAGER, REFEREE, OTHER_CLUBS
+  const rolesRequiringApproval = [
+    USER_ROLES.PLAYER,
+    USER_ROLES.MANAGER,
+    USER_ROLES.REFEREE,
+    USER_ROLES.OTHER_CLUBS,
+  ];
 
-    if (payload.role && rolesRequiringApproval.includes(payload.role as any)) {
-      payload.status = 'PENDING';
-    } else {
-      payload.status = 'APPROVED';
-    }
+  if (payload.role && rolesRequiringApproval.includes(payload.role as any)) {
+    payload.status = "PENDING";
+  } else {
+    payload.status = "APPROVED";
+  }
 
-    const createUser = await User.create(payload);
-    if (!createUser) {
-        throw new ApiError(StatusCodes.BAD_REQUEST, 'Failed to create user');
-    }
+  const createUser = await User.create(payload);
+  if (!createUser) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create user");
+  }
 
-    const otp = generateOTP();
-    const recipientName = createUser.firstName ? `${createUser.firstName} ${createUser.lastName || ''}`.trim() : (createUser.userName || createUser.email || 'User');
-    await EmailQueueHelper.sendWelcomeEmail(createUser.email!, recipientName, otp.toString());
+  const otp = generateOTP();
+  const recipientName = createUser.firstName
+    ? `${createUser.firstName} ${createUser.lastName || ""}`.trim()
+    : createUser.userName || createUser.email || "User";
+  await EmailQueueHelper.sendWelcomeEmail(
+    createUser.email!,
+    recipientName,
+    otp.toString(),
+  );
 
-    //save to DB
-    const authentication = {
-        oneTimeCode: otp,
-        expireAt: new Date(Date.now() + 3 * 60000),
-    };
+  //save to DB
+  const authentication = {
+    oneTimeCode: otp,
+    expireAt: new Date(Date.now() + 3 * 60000),
+  };
 
-    await User.findOneAndUpdate(
-        { _id: createUser._id },
-        { $set: { authentication } }
-    );
+  await User.findOneAndUpdate(
+    { _id: createUser._id },
+    { $set: { authentication } },
+  );
 
-    // 🔔 Notify all admins: new user registered
-    // await sendNotificationToAdmins({
-    //   title: "New User Registered",
-    //   message: `A new user (${createUser.email}) has registered on the platform.`,
-    //   type: NOTIFICATION_TYPE.USER_REGISTERED,
-    //   metadata: {
-    //     userId: createUser._id,
-    //     email: createUser.email,
-    //     role: createUser.role,
-    //   },
-    // });
+  // 🔔 Notify all admins: new user registered
+  // await sendNotificationToAdmins({
+  //   title: "New User Registered",
+  //   message: `A new user (${createUser.email}) has registered on the platform.`,
+  //   type: NOTIFICATION_TYPE.USER_REGISTERED,
+  //   metadata: {
+  //     userId: createUser._id,
+  //     email: createUser.email,
+  //     role: createUser.role,
+  //   },
+  // });
 
-    return createUser;
+  return createUser;
 };
 
 export const checkIsProfileCompleted = (user: any): boolean => {
@@ -105,14 +110,18 @@ export const checkIsProfileCompleted = (user: any): boolean => {
     // Screen 2 details for Manager: Date of Birth, Team, DBS / 1st Aid Certificate Document
     const hasDob = Boolean(user.dateOfBirth);
     const hasTeam = Boolean(user.selectTeam);
-    const hasDoc = Array.isArray(user.document) ? user.document.length > 0 : Boolean(user.document);
+    const hasDoc = Array.isArray(user.document)
+      ? user.document.length > 0
+      : Boolean(user.document);
     return hasDob && hasTeam && hasDoc;
   }
 
   if (role === USER_ROLES.REFEREE) {
     // Screen 2 details for Referee: Date of Birth, DBS / 1st Aid Certificate Document
     const hasDob = Boolean(user.dateOfBirth);
-    const hasDoc = Array.isArray(user.document) ? user.document.length > 0 : Boolean(user.document);
+    const hasDoc = Array.isArray(user.document)
+      ? user.document.length > 0
+      : Boolean(user.document);
     return hasDob && hasDoc;
   }
 
@@ -185,7 +194,6 @@ const getUserProfileFromDB = async (user: JwtPayload) => {
   };
 };
 
-
 const updateChieldInfoToDB = async (id: string, payload: any) => {
   const isExistUser = await User.findById(id);
   if (!isExistUser) {
@@ -194,13 +202,23 @@ const updateChieldInfoToDB = async (id: string, payload: any) => {
 
   // Clean up empty string / invalid ObjectId fields like selectTeam or parentId
   if ("selectTeam" in payload) {
-    if (!payload.selectTeam || payload.selectTeam === "" || payload.selectTeam === "null" || !Types.ObjectId.isValid(payload.selectTeam)) {
+    if (
+      !payload.selectTeam ||
+      payload.selectTeam === "" ||
+      payload.selectTeam === "null" ||
+      !Types.ObjectId.isValid(payload.selectTeam)
+    ) {
       payload.selectTeam = null;
     }
   }
 
   if ("parentId" in payload) {
-    if (!payload.parentId || payload.parentId === "" || payload.parentId === "null" || !Types.ObjectId.isValid(payload.parentId)) {
+    if (
+      !payload.parentId ||
+      payload.parentId === "" ||
+      payload.parentId === "null" ||
+      !Types.ObjectId.isValid(payload.parentId)
+    ) {
       delete payload.parentId;
     }
   }
@@ -208,7 +226,11 @@ const updateChieldInfoToDB = async (id: string, payload: any) => {
   // If document files were uploaded in this request and existing documents exist, merge them or update them
   if (Array.isArray(payload.document) && payload.document.length === 0) {
     delete payload.document;
-  } else if (Array.isArray(payload.document) && payload.document.length > 0 && Array.isArray(isExistUser.document)) {
+  } else if (
+    Array.isArray(payload.document) &&
+    payload.document.length > 0 &&
+    Array.isArray(isExistUser.document)
+  ) {
     payload.document = [...isExistUser.document, ...payload.document];
   }
 
@@ -219,40 +241,42 @@ const updateChieldInfoToDB = async (id: string, payload: any) => {
   const result = await User.findByIdAndUpdate(
     id,
     { $set: payload },
-    { new: true, runValidators: true }
+    { new: true, runValidators: true },
   );
 
   return result;
 };
 
-const updateProfileToDB = async (user: JwtPayload, payload: Partial<IUser>): Promise<Partial<IUser | null>> => {
-    const { _id } = user;
-    const isExistUser = await User.isExistUserById(_id);
-    if (!isExistUser) {
-        throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
-    }
+const updateProfileToDB = async (
+  user: JwtPayload,
+  payload: Partial<IUser>,
+): Promise<Partial<IUser | null>> => {
+  const { _id } = user;
+  const isExistUser = await User.isExistUserById(_id);
+  if (!isExistUser) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+  }
 
-    //unlink file here
-    if (payload.profile) {
-        unlinkFile(isExistUser.profile);
-    }
+  //unlink file here
+  if (payload.profile) {
+    unlinkFile(isExistUser.profile);
+  }
 
-    const updateDoc = await User.findOneAndUpdate(
-        { _id: _id },
-        payload,
-        { new: true }
-    );
-    return updateDoc;
+  const updateDoc = await User.findOneAndUpdate({ _id: _id }, payload, {
+    new: true,
+  });
+  return updateDoc;
 };
-
-
 
 const createPlayerToDB = async (payload: any) => {
   // Find the user to get their role
   const user = await User.findById(payload.userId);
   if (!user) throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
 
-  if (user.role === USER_ROLES.OTHER_CLUBS || payload.role === USER_ROLES.OTHER_CLUBS) {
+  if (
+    user.role === USER_ROLES.OTHER_CLUBS ||
+    payload.role === USER_ROLES.OTHER_CLUBS
+  ) {
     payload.marketValue = 0;
   } else if (payload.marketValue === undefined) {
     // Assign starting market value from PlayerEconomy config in DB
@@ -260,11 +284,10 @@ const createPlayerToDB = async (payload: any) => {
     payload.marketValue = pe ? pe.startingMarketValue : 100000;
   }
 
-  const result = await User.findOneAndUpdate(
-    { _id: payload.userId },
-    payload,
-    { new: true, runValidators: true }
-  );
+  const result = await User.findOneAndUpdate({ _id: payload.userId }, payload, {
+    new: true,
+    runValidators: true,
+  });
 
   if (!result) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create player");
@@ -286,11 +309,7 @@ const createPlayerToDB = async (payload: any) => {
   return result;
 };
 
-
-const updatePlayerByUserId = async (
-  userId: string,
-  payload: any
-) => {
+const updatePlayerByUserId = async (userId: string, payload: any) => {
   const isExist = await User.findById(userId);
 
   if (!isExist) {
@@ -298,24 +317,23 @@ const updatePlayerByUserId = async (
   }
 
   if ("selectTeam" in payload) {
-    if (!payload.selectTeam || payload.selectTeam === "" || payload.selectTeam === "null" || !Types.ObjectId.isValid(payload.selectTeam)) {
+    if (
+      !payload.selectTeam ||
+      payload.selectTeam === "" ||
+      payload.selectTeam === "null" ||
+      !Types.ObjectId.isValid(payload.selectTeam)
+    ) {
       payload.selectTeam = null;
     }
   }
 
-  const result = await User.findByIdAndUpdate(
-    userId,
-    payload,
-    {
-      new: true,
-      runValidators: true,
-    }
-  );
+  const result = await User.findByIdAndUpdate(userId, payload, {
+    new: true,
+    runValidators: true,
+  });
 
   return result;
 };
-
-
 
 const getPlayerByUserId = async (userId: string) => {
   const [result, activeSub, stats] = await Promise.all([
@@ -328,15 +346,14 @@ const getPlayerByUserId = async (userId: string) => {
     Subscription.findOne({
       user: userId,
       status: "active",
-    }).populate("package").lean(),
+    })
+      .populate("package")
+      .lean(),
     getPlayerStatsSummary(userId),
   ]);
 
   if (!result) {
-    throw new ApiError(
-      StatusCodes.NOT_FOUND,
-      "Player not found"
-    );
+    throw new ApiError(StatusCodes.NOT_FOUND, "Player not found");
   }
 
   const isDetailsSubmitted = checkIsProfileCompleted(result);
@@ -361,19 +378,13 @@ const getPlayerByUserId = async (userId: string) => {
   };
 };
 
-
-const getManagerByUserId = async (
-  userId: string
-) => {
+const getManagerByUserId = async (userId: string) => {
   const result = await User.findById(userId)
-    .populate('selectTeam', 'teamName')
+    .populate("selectTeam", "teamName")
     .lean();
 
   if (!result) {
-    throw new ApiError(
-      StatusCodes.NOT_FOUND,
-      'Manager not found'
-    );
+    throw new ApiError(StatusCodes.NOT_FOUND, "Manager not found");
   }
 
   const isDetailsSubmitted = checkIsProfileCompleted(result);
@@ -394,17 +405,11 @@ const getManagerByUserId = async (
   };
 };
 
-
-const getRefereeByUserId = async (
-  userId: string
-) => {
+const getRefereeByUserId = async (userId: string) => {
   const result = await User.findById(userId).lean();
 
   if (!result) {
-    throw new ApiError(
-      StatusCodes.NOT_FOUND,
-      'Referee not found'
-    );
+    throw new ApiError(StatusCodes.NOT_FOUND, "Referee not found");
   }
 
   const isDetailsSubmitted = checkIsProfileCompleted(result);
@@ -419,42 +424,35 @@ const getRefereeByUserId = async (
   };
 };
 
-
-
-const getOtherClubByUserId = async (
-  userId: string
-) => {
+const getOtherClubByUserId = async (userId: string) => {
   const result = await User.findById(userId).lean();
 
   if (!result) {
-    throw new ApiError(
-      StatusCodes.NOT_FOUND,
-      'Other club not found'
-    );
+    throw new ApiError(StatusCodes.NOT_FOUND, "Other club not found");
   }
 
   return { ...result, userId: result?._id };
 };
 
-
-
 const getPlayerDetailsByUserId = async (userId: string) => {
   const [result, activeSub, stats] = await Promise.all([
     User.findById(userId)
       .populate({
-        path: 'selectTeam',
-        select: 'teamName shortName teamLogo _id',
+        path: "selectTeam",
+        select: "teamName shortName teamLogo _id",
       })
       .lean(),
     Subscription.findOne({
       user: userId,
-      status: 'active',
-    }).populate('package').lean(),
+      status: "active",
+    })
+      .populate("package")
+      .lean(),
     getPlayerStatsSummary(userId),
   ]);
 
   if (!result) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Player/User not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "Player/User not found");
   }
 
   const teamData: any = result.selectTeam;
@@ -480,23 +478,25 @@ const getPlayerDetailsByUserId = async (userId: string) => {
 
 const getOtherClubByUserIdUserId = getPlayerDetailsByUserId;
 
-
 // UPDATE USER COIN OR MARKET VALUE (Admin only)
 const updateUserCoinOrMarketValue = async (
   userId: string,
-  payload: { engCoine?: number; marketValue?: number }
+  payload: { engCoine?: number; marketValue?: number },
 ) => {
   const user = await User.findById(userId);
 
   if (!user) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
   }
 
   const updateData: Record<string, number> = {};
 
   if (payload.engCoine !== undefined) {
-    if (typeof payload.engCoine !== 'number' || payload.engCoine < 0) {
-      throw new ApiError(StatusCodes.BAD_REQUEST, 'engCoine must be a non-negative number');
+    if (typeof payload.engCoine !== "number" || payload.engCoine < 0) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "engCoine must be a non-negative number",
+      );
     }
     updateData.engCoine = payload.engCoine;
     if (payload.marketValue === undefined) {
@@ -505,67 +505,82 @@ const updateUserCoinOrMarketValue = async (
   }
 
   if (payload.marketValue !== undefined) {
-    if (typeof payload.marketValue !== 'number' || payload.marketValue < 0) {
-      throw new ApiError(StatusCodes.BAD_REQUEST, 'marketValue must be a non-negative number');
+    if (typeof payload.marketValue !== "number" || payload.marketValue < 0) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "marketValue must be a non-negative number",
+      );
     }
     updateData.marketValue = payload.marketValue;
   }
 
   if (Object.keys(updateData).length === 0) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'At least one field (engCoine or marketValue) must be provided');
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "At least one field (engCoine or marketValue) must be provided",
+    );
   }
 
   return await User.findByIdAndUpdate(
     userId,
     { $set: updateData },
-    { new: true, runValidators: true }
+    { new: true, runValidators: true },
   );
 };
-
 
 // APPROVE OR REJECT USER (Admin only)
 const approveOrRejectUser = async (
   adminRole: string,
   userId: string,
-  status: 'APPROVED' | 'REJECTED',
-  rejectionReason?: string
+  status: "APPROVED" | "REJECTED",
+  rejectionReason?: string,
 ) => {
   // Only ADMIN and SUPER_ADMIN can perform this
-  const allowedAdminRoles = ['ADMIN', 'SUPER_ADMIN'];
+  const allowedAdminRoles = ["ADMIN", "SUPER_ADMIN"];
   if (!allowedAdminRoles.includes(adminRole)) {
-    throw new ApiError(StatusCodes.FORBIDDEN, 'Only admins can approve or reject users');
+    throw new ApiError(
+      StatusCodes.FORBIDDEN,
+      "Only admins can approve or reject users",
+    );
   }
 
   const user = await User.findById(userId);
   if (!user) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
   }
 
   // Only these roles need approval
-  const rolesRequiringApproval = ['PLAYER', 'MANAGER', 'REFEREE', 'OTHER_CLUBS'];
+  const rolesRequiringApproval = [
+    USER_ROLES.PLAYER,
+    USER_ROLES.OTHER_CLUBS,
+    USER_ROLES.MANAGER,
+    USER_ROLES.REFEREE,
+    USER_ROLES.TOURNAMENT_PLAYER,
+  ];
   if (!rolesRequiringApproval.includes(user.role)) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      `Only PLAYER, MANAGER, REFEREE and OTHER_CLUBS accounts require approval. This user is a ${user.role}.`
+      `Only PLAYER, MANAGER, REFEREE and OTHER_CLUBS accounts require approval. This user is a ${user.role}.`,
     );
   }
 
   const updateFields: Record<string, any> = { status };
-  if (status === 'REJECTED') {
-    updateFields.rejectionReason = rejectionReason || 'Profile did not meet verification criteria.';
-  } else if (status === 'APPROVED') {
-    updateFields.rejectionReason = '';
+  if (status === "REJECTED") {
+    updateFields.rejectionReason =
+      rejectionReason || "Profile did not meet verification criteria.";
+  } else if (status === "APPROVED") {
+    updateFields.rejectionReason = "";
   }
 
   const updated = await User.findByIdAndUpdate(
     userId,
     { $set: updateFields },
-    { new: true }
+    { new: true },
   );
 
   // ⚽ AUTO-ASSIGN MANAGER TO TEAM ON APPROVAL
   if (
-    status === 'APPROVED' &&
+    status === "APPROVED" &&
     user.role === USER_ROLES.MANAGER &&
     user.selectTeam
   ) {
@@ -579,15 +594,15 @@ const approveOrRejectUser = async (
         new: true,
         upsert: true,
         runValidators: true,
-      }
+      },
     );
   }
 
   // Fetch active subscription for user or parent
   const activeSub = await Subscription.findOne({
     user: { $in: [user._id, ...(user.parentId ? [user.parentId] : [])] },
-    status: 'active',
-  }).populate('package');
+    status: "active",
+  }).populate("package");
 
   const updatedObj = updated?.toObject ? updated.toObject() : updated;
 
@@ -603,33 +618,33 @@ const approveOrRejectUser = async (
 const toggleBlueTickUser = async (userId: string, blueTick: boolean) => {
   const user = await User.findById(userId);
   if (!user) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
   }
 
   const updated = await User.findByIdAndUpdate(
     userId,
     { $set: { blueTick } },
-    { new: true }
+    { new: true },
   );
 
   return updated;
 };
 
 export const UserService = {
-    createUserToDB,
-    getUserProfileFromDB,
-    updateProfileToDB,
-    createAdminToDB,
-    createPlayerToDB,
-    updatePlayerByUserId,
-    getPlayerByUserId,
-    getManagerByUserId,
-    getRefereeByUserId,
-    getOtherClubByUserId,
-    getOtherClubByUserIdUserId,
-    getPlayerDetailsByUserId,
-    updateUserCoinOrMarketValue,
-    approveOrRejectUser,
-    toggleBlueTickUser,
-    updateChieldInfoToDB,
+  createUserToDB,
+  getUserProfileFromDB,
+  updateProfileToDB,
+  createAdminToDB,
+  createPlayerToDB,
+  updatePlayerByUserId,
+  getPlayerByUserId,
+  getManagerByUserId,
+  getRefereeByUserId,
+  getOtherClubByUserId,
+  getOtherClubByUserIdUserId,
+  getPlayerDetailsByUserId,
+  updateUserCoinOrMarketValue,
+  approveOrRejectUser,
+  toggleBlueTickUser,
+  updateChieldInfoToDB,
 };
