@@ -1,14 +1,14 @@
-import { StatusCodes } from 'http-status-codes';
-import ApiError from '../../../errors/ApiErrors';
-import { Transfer } from './transfer.model';
-import { User } from '../user/user.model';
-import { Team } from '../team/team.model';
-import { ManagerTeam } from '../managerTeam/managerTeam.model';
-import { USER_ROLES } from '../../../enums/user';
-import mongoose from 'mongoose';
-import { NotificationQueueHelper } from '../../../helpers/bullMQ/bullHelper';
-import { sendNotificationToAdmins } from '../../../helpers/notificationsHelper';
-import { NOTIFICATION_TYPE } from '../notification/notification.interface';
+import { StatusCodes } from "http-status-codes";
+import ApiError from "../../../errors/ApiErrors";
+import { Transfer } from "./transfer.model";
+import { User } from "../user/user.model";
+import { Team } from "../team/team.model";
+import { ManagerTeam } from "../managerTeam/managerTeam.model";
+import { USER_ROLES } from "../../../enums/user";
+import mongoose from "mongoose";
+import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
+import { sendNotificationToAdmins } from "../../../helpers/notificationsHelper";
+import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 
 // CREATE
 const createTransferToDB = async (payload: any, userId: string) => {
@@ -16,7 +16,7 @@ const createTransferToDB = async (payload: any, userId: string) => {
   const player = await User.findById(payload.player);
 
   if (!player) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Player not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "Player not found");
   }
 
   const fromTeam = player.selectTeam || null;
@@ -25,32 +25,36 @@ const createTransferToDB = async (payload: any, userId: string) => {
   if (fromTeam && fromTeam.toString() === payload.toTeam.toString()) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      'You cannot send a transfer request for a player who is already in your team.'
+      "You cannot send a transfer request for a player who is already in your team.",
     );
   }
 
   // 💰 CHECK BUYING TEAM COIN BALANCE (ONLY FOR REGULAR PLAYERS WITH A FROM-TEAM)
   const isTrialPlayer = !fromTeam || player.role === USER_ROLES.OTHER_CLUBS;
-  const playerMarketValue = isTrialPlayer ? 0 : (player.marketValue || 0);
+  const playerMarketValue = isTrialPlayer ? 0 : player.marketValue || 0;
   const toTeamData = await Team.findById(payload.toTeam);
 
   if (!toTeamData) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Target buying team not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "Target buying team not found");
   }
 
   const buyingTeamCoin = toTeamData.coin || 0;
-  if (!isTrialPlayer && playerMarketValue > 0 && (buyingTeamCoin - playerMarketValue < 100000)) {
+  if (
+    !isTrialPlayer &&
+    playerMarketValue > 0 &&
+    buyingTeamCoin - playerMarketValue < 100000
+  ) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      `Insufficient team coin balance! Your team has ${buyingTeamCoin} coins. A minimum balance of 100,000 coins must be maintained after transferring (Player cost: ${playerMarketValue} coins).`
+      `Insufficient team coin balance! Your team has ${buyingTeamCoin} coins. A minimum balance of 100,000 coins must be maintained after transferring (Player cost: ${playerMarketValue} coins).`,
     );
   }
 
   // 3. Determine transfer type
-  let transferType: any = 'CLUB_TO_CLUB';
+  let transferType: any = "CLUB_TO_CLUB";
 
   if (isTrialPlayer) {
-    transferType = 'FREE_AGENT';
+    transferType = "FREE_AGENT";
   }
 
   // 4. Check manager permission
@@ -60,20 +64,20 @@ const createTransferToDB = async (payload: any, userId: string) => {
   });
 
   if (!isManager) {
-    throw new ApiError(StatusCodes.FORBIDDEN, 'Not your team');
+    throw new ApiError(StatusCodes.FORBIDDEN, "Not your team");
   }
 
   // 🛑 Check duplicate pending transfer request
   const existingPending = await Transfer.findOne({
     player: payload.player,
     toTeam: payload.toTeam,
-    status: { $in: ['PENDING', 'MANAGER_APPROVED'] },
+    status: { $in: ["PENDING", "MANAGER_APPROVED"] },
   });
 
   if (existingPending) {
     throw new ApiError(
       StatusCodes.CONFLICT,
-      'A pending transfer request already exists for this player.'
+      "A pending transfer request already exists for this player.",
     );
   }
 
@@ -89,17 +93,17 @@ const createTransferToDB = async (payload: any, userId: string) => {
   // 🔔 Notify player: transfer request submitted via background queue helper
   await NotificationQueueHelper.sendNotification(
     payload.player,
-    'A transfer request has been submitted for you. Awaiting approval.',
-    'Transfer Request Submitted',
+    "A transfer request has been submitted for you. Awaiting approval.",
+    "Transfer Request Submitted",
     NOTIFICATION_TYPE.TRANSFER_REQUESTED,
     undefined,
     transfer._id.toString(),
-    'Transfer'
+    "Transfer",
   );
 
   // 🔔 Notify admins: new transfer request
   await sendNotificationToAdmins({
-    title: 'New Transfer Request',
+    title: "New Transfer Request",
     message: `A new transfer request has been submitted (${transferType}). Please review.`,
     type: NOTIFICATION_TYPE.TRANSFER_REQUESTED,
     metadata: { transferId: transfer._id, transferType },
@@ -120,7 +124,7 @@ const getAllTransfersFromDB = async (query: Record<string, any>) => {
     filter.status = query.status;
   } else {
     // Default: show both PENDING and MANAGER_APPROVED requests needing Admin action
-    filter.status = { $in: ['PENDING', 'MANAGER_APPROVED'] };
+    filter.status = { $in: ["PENDING", "MANAGER_APPROVED"] };
   }
 
   const [transfers, total] = await Promise.all([
@@ -130,35 +134,33 @@ const getAllTransfersFromDB = async (query: Record<string, any>) => {
       .sort({ createdAt: -1 })
 
       .populate({
-        path: 'player',
-        select: 'email profile role',
+        path: "player",
+        select: "email profile role",
       })
       .populate({
-        path: 'requestedBy',
-        select: 'email profile role',
+        path: "requestedBy",
+        select: "email profile role",
       })
       .populate({
-        path: 'approvedBy',
-        select: 'email profile role',
+        path: "approvedBy",
+        select: "email profile role",
       })
       .populate({
-        path: 'fromTeam',
-        select: 'teamName',
+        path: "fromTeam",
+        select: "teamName",
       })
       .populate({
-        path: 'toTeam',
-        select: 'teamName',
+        path: "toTeam",
+        select: "teamName",
       }),
 
     Transfer.countDocuments(filter),
   ]);
 
   // 🔥 STEP 1: collect all user ids
-  const userIds = transfers.flatMap((t: any) => [
-    t.player?._id,
-    t.requestedBy?._id,
-    t.approvedBy?._id,
-  ]).filter(Boolean);
+  const userIds = transfers
+    .flatMap((t: any) => [t.player?._id, t.requestedBy?._id, t.approvedBy?._id])
+    .filter(Boolean);
 
   // 🔥 STEP 2: get UserDetails (firstName + lastName)
   const details = await User.find({
@@ -227,20 +229,18 @@ const getMyTransfersFromDB = async (userId: string) => {
       },
     },
 
-
-
     // User Profile
     {
       $lookup: {
-        from: 'users',
-        localField: 'player',
-        foreignField: '_id',
-        as: 'playerUser',
+        from: "users",
+        localField: "player",
+        foreignField: "_id",
+        as: "playerUser",
       },
     },
     {
       $unwind: {
-        path: '$playerUser',
+        path: "$playerUser",
         preserveNullAndEmptyArrays: true,
       },
     },
@@ -248,15 +248,15 @@ const getMyTransfersFromDB = async (userId: string) => {
     // From Team
     {
       $lookup: {
-        from: 'teams',
-        localField: 'fromTeam',
-        foreignField: '_id',
-        as: 'fromTeam',
+        from: "teams",
+        localField: "fromTeam",
+        foreignField: "_id",
+        as: "fromTeam",
       },
     },
     {
       $unwind: {
-        path: '$fromTeam',
+        path: "$fromTeam",
         preserveNullAndEmptyArrays: true,
       },
     },
@@ -264,15 +264,15 @@ const getMyTransfersFromDB = async (userId: string) => {
     // To Team
     {
       $lookup: {
-        from: 'teams',
-        localField: 'toTeam',
-        foreignField: '_id',
-        as: 'toTeam',
+        from: "teams",
+        localField: "toTeam",
+        foreignField: "_id",
+        as: "toTeam",
       },
     },
     {
       $unwind: {
-        path: '$toTeam',
+        path: "$toTeam",
         preserveNullAndEmptyArrays: true,
       },
     },
@@ -280,10 +280,10 @@ const getMyTransfersFromDB = async (userId: string) => {
     {
       $addFields: {
         player: {
-          _id: '$player',
-          firstName: '$playerUser.firstName',
-          lastName: '$playerUser.lastName',
-          profile: '$playerUser.profile',
+          _id: "$player",
+          firstName: "$playerUser.firstName",
+          lastName: "$playerUser.lastName",
+          profile: "$playerUser.profile",
         },
       },
     },
@@ -301,12 +301,12 @@ const getMyTransfersFromDB = async (userId: string) => {
 // SINGLE
 const getSingleTransferFromDB = async (id: string) => {
   const transfer = await Transfer.findById(id)
-    .populate('player')
-    .populate('fromTeam')
-    .populate('toTeam');
+    .populate("player")
+    .populate("fromTeam")
+    .populate("toTeam");
 
   if (!transfer) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Transfer not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "Transfer not found");
   }
 
   return transfer;
@@ -318,7 +318,7 @@ const approveTransferToDB = async (id: string, user: any) => {
   const transfer = await Transfer.findById(id);
 
   if (!transfer) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Transfer not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "Transfer not found");
   }
 
   const userId = user?._id || user?.id;
@@ -335,18 +335,19 @@ const approveTransferToDB = async (id: string, user: any) => {
       if (!isFromTeamManager) {
         throw new ApiError(
           StatusCodes.FORBIDDEN,
-          "Access Denied: Only the manager of the player's current team can approve this transfer."
+          "Access Denied: Only the manager of the player's current team can approve this transfer.",
         );
       }
     }
 
-    transfer.status = 'MANAGER_APPROVED';
+    transfer.status = "MANAGER_APPROVED";
     await transfer.save();
 
     // 🔔 Notify Admins for final approval
     await sendNotificationToAdmins({
-      title: 'Transfer Approved by Manager',
-      message: 'A team manager has approved a player transfer request. Final Admin approval is required.',
+      title: "Transfer Approved by Manager",
+      message:
+        "A team manager has approved a player transfer request. Final Admin approval is required.",
       type: NOTIFICATION_TYPE.TRANSFER_REQUESTED,
       metadata: { transferId: transfer._id },
     });
@@ -354,12 +355,12 @@ const approveTransferToDB = async (id: string, user: any) => {
     // 🔔 Notify player via background queue
     await NotificationQueueHelper.sendNotification(
       transfer.player.toString(),
-      'Your team manager has approved the transfer request. Awaiting final Admin approval.',
-      'Manager Approved Transfer 👍',
+      "Your team manager has approved the transfer request. Awaiting final Admin approval.",
+      "Manager Approved Transfer 👍",
       NOTIFICATION_TYPE.GENERAL,
       undefined,
       transfer._id.toString(),
-      'Transfer'
+      "Transfer",
     );
 
     return transfer;
@@ -370,23 +371,27 @@ const approveTransferToDB = async (id: string, user: any) => {
     const userDetails = await User.findById(transfer.player);
 
     if (!userDetails) {
-      throw new ApiError(StatusCodes.NOT_FOUND, 'Player user not found');
+      throw new ApiError(StatusCodes.NOT_FOUND, "Player user not found");
     }
 
-    const isTrialPlayer = !transfer.fromTeam || userDetails.role === USER_ROLES.OTHER_CLUBS;
-    const playerMarketValue = isTrialPlayer ? 0 : (userDetails.marketValue || 0);
+    const isTrialPlayer =
+      !transfer.fromTeam || userDetails.role === USER_ROLES.OTHER_CLUBS;
+    const playerMarketValue = isTrialPlayer ? 0 : userDetails.marketValue || 0;
 
     // 1. Regular Player: Deduct coins from buying team (toTeam) enforcing 100,000 minimum balance
     if (!isTrialPlayer && playerMarketValue > 0) {
       const toTeamObj = await Team.findById(transfer.toTeam);
       if (!toTeamObj) {
-        throw new ApiError(StatusCodes.NOT_FOUND, 'Target buying team not found');
+        throw new ApiError(
+          StatusCodes.NOT_FOUND,
+          "Target buying team not found",
+        );
       }
 
       if ((toTeamObj.coin || 0) - playerMarketValue < 100000) {
         throw new ApiError(
           StatusCodes.BAD_REQUEST,
-          `Cannot complete transfer: Target buying team has insufficient coins (${toTeamObj.coin || 0} available). A minimum balance of 100,000 coins must be maintained (Player cost: ${playerMarketValue} coins).`
+          `Cannot complete transfer: Target buying team has insufficient coins (${toTeamObj.coin || 0} available). A minimum balance of 100,000 coins must be maintained (Player cost: ${playerMarketValue} coins).`,
         );
       }
 
@@ -410,40 +415,43 @@ const approveTransferToDB = async (id: string, user: any) => {
     }
     await userDetails.save();
 
-    transfer.status = 'APPROVED';
+    transfer.status = "APPROVED";
     transfer.approvedBy = userId as any;
     await transfer.save();
 
     // 🔔 Notify player: transfer approved via background queue
     await NotificationQueueHelper.sendNotification(
       transfer.player.toString(),
-      'Congratulations! Your transfer request has been fully approved by Admin. You are now part of the new team.',
-      '🎉 Transfer Approved!',
+      "Congratulations! Your transfer request has been fully approved by Admin. You are now part of the new team.",
+      "🎉 Transfer Approved!",
       NOTIFICATION_TYPE.TRANSFER_APPROVED,
       undefined,
       transfer._id.toString(),
-      'Transfer'
+      "Transfer",
     );
 
     return transfer;
   }
 
-  throw new ApiError(StatusCodes.FORBIDDEN, 'Unauthorized role to approve transfer');
+  throw new ApiError(
+    StatusCodes.FORBIDDEN,
+    "Unauthorized role to approve transfer",
+  );
 };
 
 // REJECT
 const rejectTransferToDB = async (
   id: string,
   reason: string,
-  adminId: string
+  adminId: string,
 ) => {
   const transfer = await Transfer.findById(id);
 
   if (!transfer) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Transfer not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "Transfer not found");
   }
 
-  transfer.status = 'REJECTED';
+  transfer.status = "REJECTED";
   transfer.rejectReason = reason;
   transfer.approvedBy = adminId as any;
 
@@ -452,12 +460,12 @@ const rejectTransferToDB = async (
   // 🔔 Notify player: transfer rejected via background queue
   await NotificationQueueHelper.sendNotification(
     transfer.player.toString(),
-    `Your transfer request has been rejected. Reason: ${reason || 'No reason provided.'}`,
-    'Transfer Request Rejected',
+    `Your transfer request has been rejected. Reason: ${reason || "No reason provided."}`,
+    "Transfer Request Rejected",
     NOTIFICATION_TYPE.TRANSFER_REJECTED,
     undefined,
     transfer._id.toString(),
-    'Transfer'
+    "Transfer",
   );
 
   return transfer;
@@ -468,29 +476,29 @@ const withdrawTransferToDB = async (transferId: string, userId: string) => {
   const transfer = await Transfer.findById(transferId);
 
   if (!transfer) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Transfer not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "Transfer not found");
   }
 
   if (transfer.requestedBy.toString() !== userId.toString()) {
-    throw new ApiError(StatusCodes.FORBIDDEN, 'Not allowed');
+    throw new ApiError(StatusCodes.FORBIDDEN, "Not allowed");
   }
 
-  if (transfer.status !== 'PENDING') {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Only pending can withdraw');
+  if (transfer.status !== "PENDING") {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Only pending can withdraw");
   }
 
-  transfer.status = 'WITHDRAWN';
+  transfer.status = "WITHDRAWN";
 
   await transfer.save();
 
   return transfer;
 };
 
-// avilabe 
+// avilabe
 const getAvailablePlayersFromDB = async (
   managerId: string,
   page = 1,
-  limit = 10
+  limit = 10,
 ) => {
   const managerObjectId = new mongoose.Types.ObjectId(managerId);
   const skip = (page - 1) * limit;
@@ -500,8 +508,8 @@ const getAvailablePlayersFromDB = async (
   const managerTeamId = managerTeam ? managerTeam.team : null;
 
   const matchConditions: any = {
-    status: 'APPROVED',
-    role: { $in: [USER_ROLES.PLAYER, USER_ROLES.TOURNAMENT_PLAYER, USER_ROLES.OTHER_CLUBS] },
+    status: "APPROVED",
+    role: { $in: [USER_ROLES.OTHER_CLUBS] },
     $or: [
       { parentId: { $ne: null } },
       { password: null },
@@ -584,8 +592,6 @@ const getAvailablePlayersFromDB = async (
       },
     },
 
-
-
     // 7️⃣ Final projection
     {
       $project: {
@@ -614,13 +620,8 @@ const getAvailablePlayersFromDB = async (
     // 9️⃣ PAGINATION (IMPORTANT)
     {
       $facet: {
-        data: [
-          { $skip: skip },
-          { $limit: limit },
-        ],
-        meta: [
-          { $count: "total" },
-        ],
+        data: [{ $skip: skip }, { $limit: limit }],
+        meta: [{ $count: "total" }],
       },
     },
   ]);
@@ -629,19 +630,19 @@ const getAvailablePlayersFromDB = async (
   const total = result[0]?.meta[0]?.total || 0;
 
   return {
-      meta: {
-          total,
-          page,
-          limit,
-          totalPage: Math.ceil(total / limit),
-        },
-        data,
+    meta: {
+      total,
+      page,
+      limit,
+      totalPage: Math.ceil(total / limit),
+    },
+    data,
   };
 };
 
 const getManagerTransferRequestsFromDB = async (
   managerId: string,
-  query: Record<string, any>
+  query: Record<string, any>,
 ) => {
   const managerTeams = await ManagerTeam.find({
     manager: managerId,
@@ -675,17 +676,13 @@ const getManagerTransferRequestsFromDB = async (
   if (!transfers.length) return [];
 
   // 🔥 ADD USERDETAILS MANUALLY IF NEEDED
-  const userIds = transfers
-    .map((t) => t.player?._id)
-    .filter(Boolean);
+  const userIds = transfers.map((t) => t.player?._id).filter(Boolean);
 
   const details = await User.find({
     _id: { $in: userIds },
   });
 
-  const detailsMap = new Map(
-    details.map((d) => [d._id.toString(), d])
-  );
+  const detailsMap = new Map(details.map((d) => [d._id.toString(), d]));
 
   const result = transfers.map((t: any) => {
     const playerObj = t.player || {};
@@ -711,8 +708,7 @@ export const TransferService = {
   getSingleTransferFromDB,
   approveTransferToDB,
   rejectTransferToDB,
-    withdrawTransferToDB,
-    getAvailablePlayersFromDB,
-    getManagerTransferRequestsFromDB
-  
+  withdrawTransferToDB,
+  getAvailablePlayersFromDB,
+  getManagerTransferRequestsFromDB,
 };
