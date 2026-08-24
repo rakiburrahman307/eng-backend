@@ -14,6 +14,7 @@ import ApiError from "../../../errors/ApiErrors";
 import { StatusCodes } from "http-status-codes";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { MatchResult } from "../matchResult/matchResult.model";
+import { MatchEvaluation } from "../refereeRating/refereeRating.model";
 import { PlayerStats } from "../playerStats/playerStats.model";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 import dayjs from "dayjs";
@@ -675,10 +676,131 @@ const getSingleMatchFromDB = async (id: string) => {
     .populate("venueSubCategory", "name");
 
   if (!match) {
-    throw new Error("Match not found");
+    throw new ApiError(StatusCodes.NOT_FOUND, "Match not found");
   }
 
-  return await formatMatchVenue(match);
+  // Use the existing formatMatchVenue helper to ensure all dynamic fields (venueName, liveSeconds, etc.) are correctly formatted
+  const baseMatch = await formatMatchVenue(match);
+
+  // Fetch match events, referee report, and managers for home and away teams in parallel
+  const [matchEvents, evaluation, homeManagerDoc, awayManagerDoc] = await Promise.all([
+    MatchResult.find({ match: id })
+      .populate("player", "firstName lastName profile")
+      .populate("eventMeta.assist", "firstName lastName"),
+    MatchEvaluation.findOne({ match: id })
+      .populate("manOfTheMatch", "firstName lastName profile"),
+    match.homeTeam?._id
+      ? ManagerTeam.findOne({ team: match.homeTeam._id }).populate("manager", "firstName lastName userName profile")
+      : Promise.resolve(null),
+    match.awayTeam?._id
+      ? ManagerTeam.findOne({ team: match.awayTeam._id }).populate("manager", "firstName lastName userName profile")
+      : Promise.resolve(null),
+  ]);
+
+  // Format Goals
+  const goals = matchEvents
+    .filter((e) => e.eventType === "goal")
+    .map((e) => ({
+      _id: e._id,
+      team: e.team,
+      isHome: String(e.team) === String(match.homeTeam?._id),
+      minute: e.minute,
+      goalType: e.eventMeta?.goalType || null,
+      player: e.player ? {
+        _id: e.player._id,
+        firstName: (e.player as any).firstName || "",
+        lastName: (e.player as any).lastName || "",
+        profile: (e.player as any).profile || null,
+      } : null,
+      assist: e.eventMeta?.assist ? {
+        _id: (e.eventMeta.assist as any)._id,
+        firstName: (e.eventMeta.assist as any).firstName || "",
+        lastName: (e.eventMeta.assist as any).lastName || "",
+      } : null,
+    }));
+
+  // Format Cards
+  const cards = matchEvents
+    .filter((e) => e.eventType === "yellow_card" || e.eventType === "red_card")
+    .map((e) => ({
+      _id: e._id,
+      team: e.team,
+      isHome: String(e.team) === String(match.homeTeam?._id),
+      minute: e.minute,
+      cardType: e.eventType === "yellow_card" ? "yellow" : "red",
+      player: e.player ? {
+        _id: e.player._id,
+        firstName: (e.player as any).firstName || "",
+        lastName: (e.player as any).lastName || "",
+      } : null,
+    }));
+
+  // Format Referee Report
+  const refereeReport = evaluation ? {
+    homeTeamRating: evaluation.homeTeamRating,
+    awayTeamRating: evaluation.awayTeamRating,
+    manOfTheMatch: evaluation.manOfTheMatch ? {
+      _id: evaluation.manOfTheMatch._id,
+      firstName: (evaluation.manOfTheMatch as any).firstName || "",
+      lastName: (evaluation.manOfTheMatch as any).lastName || "",
+      profile: (evaluation.manOfTheMatch as any).profile || null,
+    } : null,
+  } : null;
+
+  // Format referee object
+  const refereeObj = match.referee && typeof match.referee === "object" ? {
+    _id: match.referee._id,
+    firstName: (match.referee as any).firstName || "",
+    lastName: (match.referee as any).lastName || "",
+    userName: (match.referee as any).userName || "",
+    profile: (match.referee as any).profile || null,
+  } : null;
+
+  // Construct final response data matching the exact requested JSON structure
+  return {
+    _id: baseMatch._id,
+    league: baseMatch.league ? {
+      _id: baseMatch.league._id,
+      leagueName: baseMatch.league.leagueName,
+      season: baseMatch.league.season,
+    } : null,
+    matchDate: baseMatch.matchDate,
+    venueName: baseMatch.venueName,
+    status: baseMatch.status,
+    period: baseMatch.period,
+    referee: refereeObj,
+    homeScore: baseMatch.homeScore,
+    awayScore: baseMatch.awayScore,
+    homeTeam: baseMatch.homeTeam ? {
+      _id: baseMatch.homeTeam._id,
+      teamName: baseMatch.homeTeam.teamName,
+      shortName: baseMatch.homeTeam.shortName,
+      teamLogo: baseMatch.homeTeam.teamLogo,
+      manager: homeManagerDoc && homeManagerDoc.manager ? {
+        _id: (homeManagerDoc.manager as any)._id,
+        firstName: (homeManagerDoc.manager as any).firstName || "",
+        lastName: (homeManagerDoc.manager as any).lastName || "",
+        userName: (homeManagerDoc.manager as any).userName || "",
+        profile: (homeManagerDoc.manager as any).profile || null,
+      } : null,
+    } : null,
+    awayTeam: baseMatch.awayTeam ? {
+      _id: baseMatch.awayTeam._id,
+      teamName: baseMatch.awayTeam.teamName,
+      shortName: baseMatch.awayTeam.shortName,
+      teamLogo: baseMatch.awayTeam.teamLogo,
+      manager: awayManagerDoc && awayManagerDoc.manager ? {
+        _id: (awayManagerDoc.manager as any)._id,
+        firstName: (awayManagerDoc.manager as any).firstName || "",
+        lastName: (awayManagerDoc.manager as any).lastName || "",
+        userName: (awayManagerDoc.manager as any).userName || "",
+        profile: (awayManagerDoc.manager as any).profile || null,
+      } : null,
+    } : null,
+    goals,
+    cards,
+    refereeReport,
+  };
 };
 
 // UPDATE

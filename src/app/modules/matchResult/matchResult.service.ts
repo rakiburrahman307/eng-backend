@@ -2,11 +2,11 @@ import { MatchResult } from "./matchResult.model";
 import { PlayerStats } from "../playerStats/playerStats.model";
 
 import { StatusCodes } from "http-status-codes";
-import QueryBuilder from "../../../util/queryBuilder";
 import ApiError from "../../../errors/ApiErrors";
 import { Match } from "../match/match.model";
 import { Team } from "../team/team.model";
 import { User } from "../user/user.model";
+import { League } from "../league/league.model";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
@@ -148,19 +148,101 @@ const createMatchResultToDB = async (payload: any) => {
 
 // ========================== GET ALL ==========================
 const getAllMatchResultsFromDB = async (query: Record<string, any>) => {
-  const matchQuery = new QueryBuilder(MatchResult.find(), query)
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
+  const { searchTerm, search, sort, page, limit, fields, ...filterKeys } = query;
 
-  const result = await matchQuery.modelQuery
-    .populate("match")
-    .populate("team")
-    .populate("player")
-    .populate("addedBy");
+  // 1. Build Filter Query
+  const filterQuery: Record<string, any> = {};
 
-  const meta = await matchQuery.getPaginationInfo();
+  // Clean and apply other filters
+  for (const key in filterKeys) {
+    const val = filterKeys[key];
+    if (val !== undefined && val !== null && val !== "" && val !== "undefined") {
+      filterQuery[key] = val;
+    }
+  }
+
+  // 2. Handle Search Term
+  const searchVal = searchTerm || search;
+  if (searchVal) {
+    const searchRegex = new RegExp(String(searchVal), "i");
+
+    // Fetch matching references in parallel to perform matching in MatchResult
+    const [matchingTeams, matchingUsers, matchingLeagues] = await Promise.all([
+      Team.find({
+        $or: [
+          { teamName: { $regex: searchRegex } },
+          { shortName: { $regex: searchRegex } },
+        ],
+      }).distinct("_id"),
+      User.find({
+        $or: [
+          { userName: { $regex: searchRegex } },
+          { firstName: { $regex: searchRegex } },
+          { lastName: { $regex: searchRegex } },
+          { email: { $regex: searchRegex } },
+        ],
+      }).distinct("_id"),
+      League.find({
+        $or: [
+          { leagueName: { $regex: searchRegex } },
+          { season: { $regex: searchRegex } },
+        ],
+      }).distinct("_id"),
+    ]);
+
+    filterQuery.$or = [
+      { eventType: { $regex: searchRegex } },
+      { "eventMeta.goalType": { $regex: searchRegex } },
+      { "eventMeta.cardType": { $regex: searchRegex } },
+      { "eventMeta.substitutionType": { $regex: searchRegex } },
+      { team: { $in: matchingTeams } },
+      { player: { $in: matchingUsers } },
+      { addedBy: { $in: matchingUsers } },
+      { "eventMeta.assist": { $in: matchingUsers } },
+      { league: { $in: matchingLeagues } },
+    ];
+  }
+
+  // 3. Sorting
+  const sortField = (sort as string) || "-createdAt";
+
+  // 4. Pagination
+  const pageNumber = Number(page) || 1;
+  const limitNumber = Number(limit) || 10;
+  const skip = (pageNumber - 1) * limitNumber;
+
+  // 5. Fields Selection
+  const selectFields = (fields as string)?.split(",").join(" ") || "-__v";
+
+  // 6. Execute Main Query & Pagination Total
+  const [total, result] = await Promise.all([
+    MatchResult.countDocuments(filterQuery),
+    MatchResult.find(filterQuery)
+      .sort(sortField)
+      .skip(skip)
+      .limit(limitNumber)
+      .select(selectFields)
+      .populate("league")
+      .populate({
+        path: "match",
+        populate: [
+          { path: "homeTeam", select: "teamName shortName teamLogo" },
+          { path: "awayTeam", select: "teamName shortName teamLogo" }
+        ]
+      })
+      .populate("team")
+      .populate("player")
+      .populate("addedBy")
+      .populate("eventMeta.assist")
+  ]);
+
+  const totalPage = Math.ceil(total / limitNumber) || 1;
+  const meta = {
+    total,
+    limit: limitNumber,
+    page: pageNumber,
+    totalPage,
+  };
 
   return { meta, result };
 };

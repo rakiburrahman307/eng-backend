@@ -1,7 +1,7 @@
-import { League } from '../league/league.model';
-import { LeagueTeam } from '../leagueTeam/leagueTeam.model';
-import { Match } from '../match/match.model';
-
+import { League } from "../league/league.model";
+import { LeagueTeam } from "../leagueTeam/leagueTeam.model";
+import { Match } from "../match/match.model";
+import mongoose from "mongoose";
 
 // Helper to calculate standings synchronously from prefetched teams & matches
 const computeStandings = (leagueTeams: any[], matches: any[]) => {
@@ -76,9 +76,10 @@ const computeStandings = (leagueTeams: any[], matches: any[]) => {
     // Sort by Points (desc), Goal Difference (desc), Goals For (desc), Team Name (asc)
     list.sort((a: any, b: any) => {
       if (b.points !== a.points) return b.points - a.points;
-      if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+      if (b.goalDifference !== a.goalDifference)
+        return b.goalDifference - a.goalDifference;
       if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
-      return (a.team?.teamName || '').localeCompare(b.team?.teamName || '');
+      return (a.team?.teamName || "").localeCompare(b.team?.teamName || "");
     });
 
     return list;
@@ -88,7 +89,10 @@ const computeStandings = (leagueTeams: any[], matches: any[]) => {
   const currentStandings = buildRawTable(sortedMatches);
 
   // 2. Previous Standings (before last match) to determine trend (UP/DOWN/SAME)
-  const prevMatches = sortedMatches.length > 0 ? sortedMatches.slice(0, sortedMatches.length - 1) : [];
+  const prevMatches =
+    sortedMatches.length > 0
+      ? sortedMatches.slice(0, sortedMatches.length - 1)
+      : [];
   const prevStandings = buildRawTable(prevMatches);
 
   const prevRankMap: Record<string, number> = {};
@@ -104,18 +108,22 @@ const computeStandings = (leagueTeams: any[], matches: any[]) => {
     const teamId = item.team?._id?.toString();
     const prevPosition = teamId ? prevRankMap[teamId] : undefined;
 
-    let movement = 'SAME';
-    let symbol = '•';
+    let movement = "SAME";
+    let symbol = "•";
     let positionChange = 0;
 
-    if (prevPosition !== undefined && sortedMatches.length > 0 && item.played > 0) {
+    if (
+      prevPosition !== undefined &&
+      sortedMatches.length > 0 &&
+      item.played > 0
+    ) {
       if (position < prevPosition) {
-        movement = 'UP';
-        symbol = '▲';
+        movement = "UP";
+        symbol = "▲";
         positionChange = prevPosition - position;
       } else if (position > prevPosition) {
-        movement = 'DOWN';
-        symbol = '▼';
+        movement = "DOWN";
+        symbol = "▼";
         positionChange = position - prevPosition;
       }
     }
@@ -140,19 +148,17 @@ const calculateLeague = async (league: any) => {
 
   const [leagueTeams, matches] = await Promise.all([
     LeagueTeam.find({ league: leagueId }).populate(
-      'team',
-      'teamName shortName teamLogo'
+      "team",
+      "teamName shortName teamLogo",
     ),
     Match.find({
       league: leagueId,
-      status: 'finished',
+      status: "finished",
     }),
   ]);
 
   return computeStandings(leagueTeams, matches);
 };
-
-import mongoose from 'mongoose';
 
 // =========================
 // MAIN API (WITH STRICT FILTERING BY QUERY)
@@ -167,34 +173,36 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     if (mongoose.Types.ObjectId.isValid(targetId)) {
       filter._id = targetId;
     } else {
-      // Invalid ObjectId format means no match exists
       return [];
     }
   }
 
   if (season) {
     console.log(season);
-    const escapedSeason = season.toString().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const pattern = escapedSeason.trim().replace(/\s+/g, '\\s+');
-    filter.season = { $regex: new RegExp(`^\\s*${pattern}\\s*$`, 'i') };
+    const escapedSeason = season
+      .toString()
+      .replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+    const pattern = escapedSeason.trim().replace(/\s+/g, "\\s+");
+    filter.season = { $regex: new RegExp(`^\\s*${pattern}\\s*$`, "i") };
   }
 
   if (leagueName) {
-    const escapedLeagueName = leagueName.toString().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const pattern = escapedLeagueName.trim().replace(/\s+/g, '\\s+');
-    filter.leagueName = { $regex: new RegExp(pattern, 'i') };
+    const escapedLeagueName = leagueName
+      .toString()
+      .replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+    const pattern = escapedLeagueName.trim().replace(/\s+/g, "\\s+");
+    filter.leagueName = { $regex: new RegExp(pattern, "i") };
   }
 
   if (year) {
-    const escapedYear = year.toString().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const pattern = escapedYear.trim().replace(/\s+/g, '\\s+');
-    filter.season = { $regex: new RegExp(pattern, 'i') };
+    const escapedYear = year
+      .toString()
+      .replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+    const pattern = escapedYear.trim().replace(/\s+/g, "\\s+");
+    filter.season = { $regex: new RegExp(pattern, "i") };
   }
 
-  // Fetch only leagues matching the filter criteria
   const leagues = await League.find(filter).sort({ createdAt: -1 });
-
-  // If no league matches the filter (e.g. season=2022 doesn't match), return [] empty array!
   if (!leagues.length) {
     return [];
   }
@@ -203,10 +211,10 @@ const getPointTable = async (query: Record<string, any> = {}) => {
 
   const [allLeagueTeams, allMatches] = await Promise.all([
     LeagueTeam.find({ league: { $in: leagueIds } }).populate(
-      'team',
-      'teamName shortName teamLogo'
+      "team",
+      "teamName shortName teamLogo",
     ),
-    Match.find({ league: { $in: leagueIds }, status: 'finished' }),
+    Match.find({ league: { $in: leagueIds }, status: "finished" }),
   ]);
 
   const leagueTeamsMap: Record<string, any[]> = {};
@@ -251,7 +259,7 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     return response.slice(skip, skip + parsedLimit);
   }
 
-  console.log(response, "point table")
+  console.log(response, "point table");
 
   return response;
 };
