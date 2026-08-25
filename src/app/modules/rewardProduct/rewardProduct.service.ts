@@ -30,7 +30,14 @@ const getAllRewardProductsFromDB = async (query: Record<string, any>) => {
     .paginate()
     .fields();
 
-  const result = await rewardQuery.modelQuery;
+  const result = await rewardQuery.modelQuery.populate({
+    path: 'redeemedUsers.user',
+    select: 'userName firstName lastName email emergencyEmail phone profile role selectTeam parentId',
+    populate: {
+      path: 'parentId',
+      select: 'email emergencyEmail phone',
+    },
+  });
 
   const meta = await rewardQuery.getPaginationInfo();
 
@@ -49,7 +56,7 @@ const getSingleRewardProductFromDB = async (
 ) => {
   const result = await RewardProduct.findById(id).populate({
     path: 'redeemedUsers.user',
-    select: 'userName firstName lastName fullName email emergencyEmail phone profile role selectTeam parentId',
+    select: 'userName firstName lastName email emergencyEmail phone profile role selectTeam parentId',
     populate: {
       path: 'parentId',
       select: 'email emergencyEmail phone',

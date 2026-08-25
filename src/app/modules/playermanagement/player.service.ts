@@ -462,19 +462,39 @@ const getAllPlayersFromDB = async (
     queryObj.search) as string;
   if (rawSearch && rawSearch.trim()) {
     const searchRegex = new RegExp(rawSearch.trim(), "i");
-    andConditions.push({
-      $or: [
-        { firstName: searchRegex },
-        { lastName: searchRegex },
-        { userName: searchRegex },
-        { email: searchRegex },
-        { position: searchRegex },
-        { ageGroup: searchRegex },
-        { location: searchRegex },
-        { emergencyEmail: searchRegex },
-        { phone: searchRegex },
-      ],
-    });
+    const nameParts = rawSearch.trim().split(/\s+/);
+
+    const $orConditions: any[] = [
+      { firstName: searchRegex },
+      { lastName: searchRegex },
+      { userName: searchRegex },
+      { email: searchRegex },
+      { position: searchRegex },
+      { ageGroup: searchRegex },
+      { location: searchRegex },
+      { emergencyEmail: searchRegex },
+      { phone: searchRegex },
+    ];
+
+    if (nameParts.length > 1) {
+      $orConditions.push({
+        $expr: {
+          $regexMatch: {
+            input: {
+              $concat: [
+                { $ifNull: ["$firstName", ""] },
+                " ",
+                { $ifNull: ["$lastName", ""] },
+              ],
+            },
+            regex: rawSearch.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&"),
+            options: "i",
+          },
+        },
+      });
+    }
+
+    andConditions.push({ $or: $orConditions });
     delete queryObj.searchTerm;
     delete queryObj.searchValue;
     delete queryObj.search;
