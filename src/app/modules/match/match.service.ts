@@ -195,9 +195,30 @@ const createMatchToDB = async (payload: any) => {
     if (!matchData.scheduledAt && matchDate) {
       matchData.scheduledAt = new Date(matchDate);
     }
-    if (!matchData.status) {
-      matchData.status = "upcoming";
+    if (matchData.venueName && mongoose.Types.ObjectId.isValid(matchData.venueName)) {
+      matchData.venueCategory = matchData.venueName;
+      const categoryDoc = await VenueCategory.findById(matchData.venueName);
+      if (categoryDoc) {
+        matchData.venueName = categoryDoc.name;
+        
+        const subVal = matchData.subVenue || matchData.pitch;
+        if (subVal && mongoose.Types.ObjectId.isValid(subVal)) {
+          matchData.venueSubCategory = subVal;
+          const subCategoryObj = categoryDoc.subCategories?.find(
+            (s: any) => s._id?.toString() === subVal.toString() || s.id?.toString() === subVal.toString()
+          );
+          if (subCategoryObj) {
+            matchData.venueName = `${categoryDoc.name}, ${subCategoryObj.name}`;
+          }
+        }
+      }
+    } else {
+      const subVal = matchData.subVenue || matchData.pitch;
+      if (subVal && mongoose.Types.ObjectId.isValid(subVal)) {
+        matchData.venueSubCategory = subVal;
+      }
     }
+
     const match = await Match.create(matchData);
     createdMatches.push(match);
   }
@@ -848,6 +869,10 @@ const getSingleMatchFromDB = async (id: string) => {
       : null,
     matchDate: baseMatch.matchDate,
     venueName: baseMatch.venueName,
+    venueCategory: baseMatch.venueCategory || null,
+    venueSubCategory: baseMatch.venueSubCategory || null,
+    durationMinutes: baseMatch.durationMinutes || null,
+    formation: baseMatch.formation || null,
     status: baseMatch.status,
     period: baseMatch.period,
     referee: refereeObj,
@@ -924,6 +949,33 @@ const updateMatchToDB = async (id: string, payload: any) => {
       payload[field] = payload[field] ? new Date(payload[field]) : null;
     }
   });
+  if (payload.venueName && mongoose.Types.ObjectId.isValid(payload.venueName)) {
+    payload.venueCategory = payload.venueName;
+    const categoryDoc = await VenueCategory.findById(payload.venueName);
+    if (categoryDoc) {
+      payload.venueName = categoryDoc.name;
+      
+      const subVal = payload.subVenue || payload.pitch;
+      if (subVal && mongoose.Types.ObjectId.isValid(subVal)) {
+        payload.venueSubCategory = subVal;
+        const subCategoryObj = categoryDoc.subCategories?.find(
+          (s: any) => s._id?.toString() === subVal.toString() || s.id?.toString() === subVal.toString()
+        );
+        if (subCategoryObj) {
+          payload.venueName = `${categoryDoc.name}, ${subCategoryObj.name}`;
+        }
+      }
+    }
+  } else if (payload.venueName === "") {
+    payload.venueCategory = null;
+  }
+  
+  const subVal = payload.subVenue || payload.pitch;
+  if (subVal && mongoose.Types.ObjectId.isValid(subVal)) {
+    payload.venueSubCategory = subVal;
+  } else if (subVal === "" || subVal === undefined) {
+    payload.venueSubCategory = null;
+  }
 
   const updatedMatch = await Match.findByIdAndUpdate(id, payload, {
     new: true,
