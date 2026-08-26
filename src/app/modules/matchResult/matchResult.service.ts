@@ -54,12 +54,12 @@ const createMatchResultToDB = async (payload: any) => {
   const matchEndPlusExtra = new Date(matchStart);
   matchEndPlusExtra.setHours(matchEndPlusExtra.getHours() + 2);
 
-  if (now > matchEndPlusExtra) {
-    throw new ApiError(
-      StatusCodes.BAD_REQUEST,
-      "Match time expired, cannot update score",
-    );
-  }
+  // if (now > matchEndPlusExtra) {
+  //   throw new ApiError(
+  //     StatusCodes.BAD_REQUEST,
+  //     "Match time expired, cannot update score",
+  //   );
+  // }
 
   // 6️⃣ MINUTE VALIDATION
   if (minute < 0 || minute > 120) {

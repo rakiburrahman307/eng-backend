@@ -17,13 +17,38 @@ class QueryBuilder<T> {
     ) as string;
 
     if (searchTerm) {
-      this.modelQuery = this.modelQuery.find({
-        $or: fields.map((field) => ({
-          [field]: {
-            $regex: searchTerm,
-            $options: 'i',
+      const conditions: any[] = fields.map((field) => ({
+        [field]: {
+          $regex: searchTerm,
+          $options: 'i',
+        },
+      }));
+
+      // If both firstName and lastName are being searched, also support combined full name search
+      if (fields.includes('firstName') && fields.includes('lastName')) {
+        conditions.push({
+          $expr: {
+            $regexMatch: {
+              input: {
+                $concat: [
+                  { $ifNull: ['$firstName', ''] },
+                  ' ',
+                  { $ifNull: ['$lastName', ''] },
+                ],
+              },
+              regex: searchTerm,
+              options: 'i',
+            },
           },
-        })),
+        });
+      }
+
+      this.modelQuery = this.modelQuery.find({
+        $and: [
+          {
+            $or: conditions,
+          },
+        ],
       });
     }
 
