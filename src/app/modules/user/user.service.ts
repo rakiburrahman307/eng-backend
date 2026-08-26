@@ -261,6 +261,12 @@ const updateProfileToDB = async (
   if (payload.profile) {
     unlinkFile(isExistUser.profile);
   }
+  if (!payload.profile) {
+    delete payload.profile;
+  }
+  // if (Array.isArray(payload.document)) {
+  //   payload.document = [...isExistUser.document, ...payload.document];
+  // }
 
   const updateDoc = await User.findOneAndUpdate({ _id: _id }, payload, {
     new: true,

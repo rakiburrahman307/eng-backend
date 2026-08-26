@@ -33,17 +33,23 @@ const formatMatchVenue = async (matchItem: any) => {
   const matchObj = matchItem.toObject ? matchItem.toObject() : { ...matchItem };
 
   const parts: string[] = [];
-  let rawVenueName = matchObj.venueName || '';
+  let rawVenueName = matchObj.venueName || "";
 
   // 1. If rawVenueName is a valid ObjectId, try finding its VenueCategory document
   if (rawVenueName && mongoose.Types.ObjectId.isValid(rawVenueName)) {
-    const venueCatDoc = await VenueCategory.findById(rawVenueName).populate('parentCategory', 'name');
+    const venueCatDoc = await VenueCategory.findById(rawVenueName).populate(
+      "parentCategory",
+      "name",
+    );
     if (venueCatDoc) {
-      if (venueCatDoc.parentCategory && (venueCatDoc.parentCategory as any).name) {
+      if (
+        venueCatDoc.parentCategory &&
+        (venueCatDoc.parentCategory as any).name
+      ) {
         parts.push((venueCatDoc.parentCategory as any).name);
       }
       parts.push(venueCatDoc.name);
-      rawVenueName = ''; // reset since resolved
+      rawVenueName = ""; // reset since resolved
     }
   }
 
@@ -53,22 +59,25 @@ const formatMatchVenue = async (matchItem: any) => {
   }
 
   // 3. Add venueCategory name if present
-  const catName = matchObj.venueCategory?.name || '';
+  const catName = matchObj.venueCategory?.name || "";
   if (catName && !parts.includes(catName)) {
     parts.push(catName);
   }
 
   // 4. Add venueSubCategory name if present
-  const subCatName = matchObj.venueSubCategory?.name || '';
+  const subCatName = matchObj.venueSubCategory?.name || "";
   if (subCatName && !parts.includes(subCatName)) {
     parts.push(subCatName);
   }
 
-  const finalVenueString = parts.length > 0 ? parts.join(', ') : (matchObj.venueName || '');
+  const finalVenueString =
+    parts.length > 0 ? parts.join(", ") : matchObj.venueName || "";
 
   let liveSeconds = matchObj.elapsedSeconds || 0;
-  if (matchObj.timerStatus === 'running' && matchObj.timerStartedAt) {
-    const diff = Math.floor((Date.now() - new Date(matchObj.timerStartedAt).getTime()) / 1000);
+  if (matchObj.timerStatus === "running" && matchObj.timerStartedAt) {
+    const diff = Math.floor(
+      (Date.now() - new Date(matchObj.timerStartedAt).getTime()) / 1000,
+    );
     if (diff > 0) liveSeconds += diff;
   }
 
@@ -87,7 +96,7 @@ const formatMatchVenue = async (matchItem: any) => {
 
 /* ---------------- RATING LOGIC ---------------- */
 
-const VALID_FORMATIONS = ['5 v 5', '7 v 7', '8 v 8', '9 v 9'];
+const VALID_FORMATIONS = ["5 v 5", "7 v 7", "8 v 8", "9 v 9"];
 
 const createMatchToDB = async (payload: any) => {
   // single object হলে array বানাবে
@@ -95,8 +104,15 @@ const createMatchToDB = async (payload: any) => {
 
   const createdMatches: any[] = [];
   for (const matchData of matches) {
-    const { league, homeTeam, awayTeam, matchDate, referee, venueName, formation } =
-      matchData;
+    const {
+      league,
+      homeTeam,
+      awayTeam,
+      matchDate,
+      referee,
+      venueName,
+      formation,
+    } = matchData;
 
     // formation validation
     if (!formation) {
@@ -105,7 +121,7 @@ const createMatchToDB = async (payload: any) => {
     if (!VALID_FORMATIONS.includes(formation)) {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
-        `Invalid formation. Must be one of: ${VALID_FORMATIONS.join(', ')}`
+        `Invalid formation. Must be one of: ${VALID_FORMATIONS.join(", ")}`,
       );
     }
 
@@ -180,7 +196,7 @@ const createMatchToDB = async (payload: any) => {
       matchData.scheduledAt = new Date(matchDate);
     }
     if (!matchData.status) {
-      matchData.status = 'upcoming';
+      matchData.status = "upcoming";
     }
     const match = await Match.create(matchData);
     createdMatches.push(match);
@@ -220,7 +236,12 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
 
   // League Filter (supports leagueId, league, leagueName)
   const targetLeague = leagueId || league || leagueName;
-  if (targetLeague && targetLeague !== "ALL" && targetLeague !== "null" && targetLeague !== "undefined") {
+  if (
+    targetLeague &&
+    targetLeague !== "ALL" &&
+    targetLeague !== "null" &&
+    targetLeague !== "undefined"
+  ) {
     let targetLeagueIds: any[] = [];
     let teamIdsInLeague: any[] = [];
 
@@ -234,18 +255,24 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
 
       const leagueTeamIds = matchingLeagueTeams.map((lt) => lt._id);
       const directLeagueIds = matchingLeagueTeams.map((lt) => lt.league);
-      teamIdsInLeague = matchingLeagueTeams.map((lt) => lt.team).filter(Boolean);
+      teamIdsInLeague = matchingLeagueTeams
+        .map((lt) => lt.team)
+        .filter(Boolean);
 
       const idStrings = Array.from(
-        new Set([
-          objId.toString(),
-          ...leagueTeamIds.map((id) => id.toString()),
-          ...directLeagueIds.map((id) => id?.toString()),
-        ].filter(Boolean))
+        new Set(
+          [
+            objId.toString(),
+            ...leagueTeamIds.map((id) => id.toString()),
+            ...directLeagueIds.map((id) => id?.toString()),
+          ].filter(Boolean),
+        ),
       );
 
       targetLeagueIds = [
-        ...idStrings.map((idStr) => new mongoose.Types.ObjectId(idStr as string)),
+        ...idStrings.map(
+          (idStr) => new mongoose.Types.ObjectId(idStr as string),
+        ),
         ...idStrings,
       ];
     } else {
@@ -258,17 +285,23 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
       }).select("_id team");
 
       const leagueTeamIds = matchingLeagueTeams.map((lt) => lt._id);
-      teamIdsInLeague = matchingLeagueTeams.map((lt) => lt.team).filter(Boolean);
+      teamIdsInLeague = matchingLeagueTeams
+        .map((lt) => lt.team)
+        .filter(Boolean);
 
       const idStrings = Array.from(
-        new Set([
-          ...foundLeagueIds.map((id) => id.toString()),
-          ...leagueTeamIds.map((id) => id.toString()),
-        ].filter(Boolean))
+        new Set(
+          [
+            ...foundLeagueIds.map((id) => id.toString()),
+            ...leagueTeamIds.map((id) => id.toString()),
+          ].filter(Boolean),
+        ),
       );
 
       targetLeagueIds = [
-        ...idStrings.map((idStr) => new mongoose.Types.ObjectId(idStr as string)),
+        ...idStrings.map(
+          (idStr) => new mongoose.Types.ObjectId(idStr as string),
+        ),
         ...idStrings,
       ];
     }
@@ -281,15 +314,25 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     andConditions.push({
       $or: [
         { league: { $in: targetLeagueIds } },
-        ...(allTeamIdRefs.length > 0 ? [{ homeTeam: { $in: allTeamIdRefs } }] : []),
-        ...(allTeamIdRefs.length > 0 ? [{ awayTeam: { $in: allTeamIdRefs } }] : []),
+        ...(allTeamIdRefs.length > 0
+          ? [{ homeTeam: { $in: allTeamIdRefs } }]
+          : []),
+        ...(allTeamIdRefs.length > 0
+          ? [{ awayTeam: { $in: allTeamIdRefs } }]
+          : []),
       ],
     });
   }
 
   // Team Filter (supports teamId, team, teamName, homeTeam, awayTeam)
-  const targetTeam = teamId || teamName || team || query.homeTeam || query.awayTeam;
-  if (targetTeam && targetTeam !== "ALL" && targetTeam !== "null" && targetTeam !== "undefined") {
+  const targetTeam =
+    teamId || teamName || team || query.homeTeam || query.awayTeam;
+  if (
+    targetTeam &&
+    targetTeam !== "ALL" &&
+    targetTeam !== "null" &&
+    targetTeam !== "undefined"
+  ) {
     let teamObjIds: any[] = [];
     let teamStrIds: string[] = [];
 
@@ -338,7 +381,9 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
         ],
       });
     } else {
-      andConditions.push({ status: { $regex: new RegExp(`^${lowerStatus}$`, "i") } });
+      andConditions.push({
+        status: { $regex: new RegExp(`^${lowerStatus}$`, "i") },
+      });
     }
   }
 
@@ -372,13 +417,12 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
         new Set([
           searchVenue.toString(),
           ...subCats.map((s) => s._id.toString()),
-        ])
+        ]),
       );
       const allVenueNames = Array.from(
-        new Set([
-          venueDoc?.name,
-          ...subCats.map((s) => s.name),
-        ].filter(Boolean))
+        new Set(
+          [venueDoc?.name, ...subCats.map((s) => s.name)].filter(Boolean),
+        ),
       );
 
       const regexConditions = allVenueNames.map((name) => ({
@@ -406,7 +450,7 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
         parentCategory: { $in: parentIds },
       });
       const allVenueIds = Array.from(
-        new Set([...venueIds, ...subCats.map((s) => s._id.toString())])
+        new Set([...venueIds, ...subCats.map((s) => s._id.toString())]),
       );
 
       andConditions.push({
@@ -443,8 +487,20 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
   const now = new Date();
   if (dateStatus && dateStatus !== "ALL") {
     if (dateStatus === "today") {
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const startOfDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      );
+      const endOfDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        23,
+        59,
+        59,
+        999,
+      );
       andConditions.push({
         $or: [
           { matchDate: { $gte: startOfDay, $lte: endOfDay } },
@@ -466,24 +522,19 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
       });
     } else if (dateStatus === "upcoming") {
       andConditions.push({
-        $or: [
-          { matchDate: { $gte: now } },
-          { scheduledAt: { $gte: now } },
-        ],
+        $or: [{ matchDate: { $gte: now } }, { scheduledAt: { $gte: now } }],
       });
     } else if (dateStatus === "past") {
       andConditions.push({
-        $or: [
-          { matchDate: { $lt: now } },
-          { scheduledAt: { $lt: now } },
-        ],
+        $or: [{ matchDate: { $lt: now } }, { scheduledAt: { $lt: now } }],
       });
     }
   }
 
   // Specific Day Filter (matchDate) -> Full 24-hour range
   if (matchDate) {
-    const dateStr = typeof matchDate === "string" ? matchDate.split("T")[0] : "";
+    const dateStr =
+      typeof matchDate === "string" ? matchDate.split("T")[0] : "";
     if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
       const startOfDay = new Date(`${dateStr}T00:00:00.000Z`);
       const endOfDay = new Date(`${dateStr}T23:59:59.999Z`);
@@ -519,7 +570,10 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     let endD: Date | null = null;
 
     if (effectiveStartDate) {
-      const sStr = typeof effectiveStartDate === "string" ? effectiveStartDate.split("T")[0] : "";
+      const sStr =
+        typeof effectiveStartDate === "string"
+          ? effectiveStartDate.split("T")[0]
+          : "";
       if (sStr && /^\d{4}-\d{2}-\d{2}$/.test(sStr)) {
         startD = new Date(`${sStr}T00:00:00.000Z`);
       } else {
@@ -531,7 +585,10 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     }
 
     if (effectiveEndDate) {
-      const eStr = typeof effectiveEndDate === "string" ? effectiveEndDate.split("T")[0] : "";
+      const eStr =
+        typeof effectiveEndDate === "string"
+          ? effectiveEndDate.split("T")[0]
+          : "";
       if (eStr && /^\d{4}-\d{2}-\d{2}$/.test(eStr)) {
         endD = new Date(`${eStr}T23:59:59.999Z`);
       } else {
@@ -552,16 +609,17 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
 
     if (dateQuery.$gte || dateQuery.$lte) {
       andConditions.push({
-        $or: [
-          { matchDate: dateQuery },
-          { scheduledAt: dateQuery },
-        ],
+        $or: [{ matchDate: dateQuery }, { scheduledAt: dateQuery }],
       });
     }
   }
 
   // SearchTerm Filter (Regex on teamName, leagueName, venueName, notes, status)
-  if (searchTerm && typeof searchTerm === "string" && searchTerm.trim() !== "") {
+  if (
+    searchTerm &&
+    typeof searchTerm === "string" &&
+    searchTerm.trim() !== ""
+  ) {
     const searchRegex = { $regex: searchTerm.trim(), $options: "i" };
 
     const [matchingTeams, matchingLeagues] = await Promise.all([
@@ -611,7 +669,7 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     .populate("venueSubCategory", "name");
 
   const formattedResult = await Promise.all(
-    matches.map((m: any) => formatMatchVenue(m))
+    matches.map((m: any) => formatMatchVenue(m)),
   );
 
   return {
@@ -650,7 +708,7 @@ const getMatchesByRefereeFromDB = async (
     .populate("venueSubCategory", "name");
 
   const formattedResult = await Promise.all(
-    matches.map((m: any) => formatMatchVenue(m))
+    matches.map((m: any) => formatMatchVenue(m)),
   );
 
   return {
@@ -683,19 +741,28 @@ const getSingleMatchFromDB = async (id: string) => {
   const baseMatch = await formatMatchVenue(match);
 
   // Fetch match events, referee report, and managers for home and away teams in parallel
-  const [matchEvents, evaluation, homeManagerDoc, awayManagerDoc] = await Promise.all([
-    MatchResult.find({ match: id })
-      .populate("player", "firstName lastName profile")
-      .populate("eventMeta.assist", "firstName lastName"),
-    MatchEvaluation.findOne({ match: id })
-      .populate("manOfTheMatch", "firstName lastName profile"),
-    match.homeTeam?._id
-      ? ManagerTeam.findOne({ team: match.homeTeam._id }).populate("manager", "firstName lastName userName profile")
-      : Promise.resolve(null),
-    match.awayTeam?._id
-      ? ManagerTeam.findOne({ team: match.awayTeam._id }).populate("manager", "firstName lastName userName profile")
-      : Promise.resolve(null),
-  ]);
+  const [matchEvents, evaluation, homeManagerDoc, awayManagerDoc] =
+    await Promise.all([
+      MatchResult.find({ match: id })
+        .populate("player", "firstName lastName profile")
+        .populate("eventMeta.assist", "firstName lastName"),
+      MatchEvaluation.findOne({ match: id }).populate(
+        "manOfTheMatch",
+        "firstName lastName profile",
+      ),
+      match.homeTeam?._id
+        ? ManagerTeam.findOne({ team: match.homeTeam._id }).populate(
+            "manager",
+            "firstName lastName userName profile",
+          )
+        : Promise.resolve(null),
+      match.awayTeam?._id
+        ? ManagerTeam.findOne({ team: match.awayTeam._id }).populate(
+            "manager",
+            "firstName lastName userName profile",
+          )
+        : Promise.resolve(null),
+    ]);
 
   // Format Goals
   const goals = matchEvents
@@ -706,17 +773,21 @@ const getSingleMatchFromDB = async (id: string) => {
       isHome: String(e.team) === String(match.homeTeam?._id),
       minute: e.minute,
       goalType: e.eventMeta?.goalType || null,
-      player: e.player ? {
-        _id: e.player._id,
-        firstName: (e.player as any).firstName || "",
-        lastName: (e.player as any).lastName || "",
-        profile: (e.player as any).profile || null,
-      } : null,
-      assist: e.eventMeta?.assist ? {
-        _id: (e.eventMeta.assist as any)._id,
-        firstName: (e.eventMeta.assist as any).firstName || "",
-        lastName: (e.eventMeta.assist as any).lastName || "",
-      } : null,
+      player: e.player
+        ? {
+            _id: e.player._id,
+            firstName: (e.player as any).firstName || "",
+            lastName: (e.player as any).lastName || "",
+            profile: (e.player as any).profile || null,
+          }
+        : null,
+      assist: e.eventMeta?.assist
+        ? {
+            _id: (e.eventMeta.assist as any)._id,
+            firstName: (e.eventMeta.assist as any).firstName || "",
+            lastName: (e.eventMeta.assist as any).lastName || "",
+          }
+        : null,
     }));
 
   // Format Cards
@@ -728,42 +799,53 @@ const getSingleMatchFromDB = async (id: string) => {
       isHome: String(e.team) === String(match.homeTeam?._id),
       minute: e.minute,
       cardType: e.eventType === "yellow_card" ? "yellow" : "red",
-      player: e.player ? {
-        _id: e.player._id,
-        firstName: (e.player as any).firstName || "",
-        lastName: (e.player as any).lastName || "",
-      } : null,
+      player: e.player
+        ? {
+            _id: e.player._id,
+            firstName: (e.player as any).firstName || "",
+            lastName: (e.player as any).lastName || "",
+          }
+        : null,
     }));
 
   // Format Referee Report
-  const refereeReport = evaluation ? {
-    homeTeamRating: evaluation.homeTeamRating,
-    awayTeamRating: evaluation.awayTeamRating,
-    manOfTheMatch: evaluation.manOfTheMatch ? {
-      _id: evaluation.manOfTheMatch._id,
-      firstName: (evaluation.manOfTheMatch as any).firstName || "",
-      lastName: (evaluation.manOfTheMatch as any).lastName || "",
-      profile: (evaluation.manOfTheMatch as any).profile || null,
-    } : null,
-  } : null;
+  const refereeReport = evaluation
+    ? {
+        homeTeamRating: evaluation.homeTeamRating,
+        awayTeamRating: evaluation.awayTeamRating,
+        manOfTheMatch: evaluation.manOfTheMatch
+          ? {
+              _id: evaluation.manOfTheMatch._id,
+              firstName: (evaluation.manOfTheMatch as any).firstName || "",
+              lastName: (evaluation.manOfTheMatch as any).lastName || "",
+              profile: (evaluation.manOfTheMatch as any).profile || null,
+            }
+          : null,
+      }
+    : null;
 
   // Format referee object
-  const refereeObj = match.referee && typeof match.referee === "object" ? {
-    _id: match.referee._id,
-    firstName: (match.referee as any).firstName || "",
-    lastName: (match.referee as any).lastName || "",
-    userName: (match.referee as any).userName || "",
-    profile: (match.referee as any).profile || null,
-  } : null;
+  const refereeObj =
+    match.referee && typeof match.referee === "object"
+      ? {
+          _id: match.referee._id,
+          firstName: (match.referee as any).firstName || "",
+          lastName: (match.referee as any).lastName || "",
+          userName: (match.referee as any).userName || "",
+          profile: (match.referee as any).profile || null,
+        }
+      : null;
 
   // Construct final response data matching the exact requested JSON structure
   return {
     _id: baseMatch._id,
-    league: baseMatch.league ? {
-      _id: baseMatch.league._id,
-      leagueName: baseMatch.league.leagueName,
-      season: baseMatch.league.season,
-    } : null,
+    league: baseMatch.league
+      ? {
+          _id: baseMatch.league._id,
+          leagueName: baseMatch.league.leagueName,
+          season: baseMatch.league.season,
+        }
+      : null,
     matchDate: baseMatch.matchDate,
     venueName: baseMatch.venueName,
     status: baseMatch.status,
@@ -771,32 +853,42 @@ const getSingleMatchFromDB = async (id: string) => {
     referee: refereeObj,
     homeScore: baseMatch.homeScore,
     awayScore: baseMatch.awayScore,
-    homeTeam: baseMatch.homeTeam ? {
-      _id: baseMatch.homeTeam._id,
-      teamName: baseMatch.homeTeam.teamName,
-      shortName: baseMatch.homeTeam.shortName,
-      teamLogo: baseMatch.homeTeam.teamLogo,
-      manager: homeManagerDoc && homeManagerDoc.manager ? {
-        _id: (homeManagerDoc.manager as any)._id,
-        firstName: (homeManagerDoc.manager as any).firstName || "",
-        lastName: (homeManagerDoc.manager as any).lastName || "",
-        userName: (homeManagerDoc.manager as any).userName || "",
-        profile: (homeManagerDoc.manager as any).profile || null,
-      } : null,
-    } : null,
-    awayTeam: baseMatch.awayTeam ? {
-      _id: baseMatch.awayTeam._id,
-      teamName: baseMatch.awayTeam.teamName,
-      shortName: baseMatch.awayTeam.shortName,
-      teamLogo: baseMatch.awayTeam.teamLogo,
-      manager: awayManagerDoc && awayManagerDoc.manager ? {
-        _id: (awayManagerDoc.manager as any)._id,
-        firstName: (awayManagerDoc.manager as any).firstName || "",
-        lastName: (awayManagerDoc.manager as any).lastName || "",
-        userName: (awayManagerDoc.manager as any).userName || "",
-        profile: (awayManagerDoc.manager as any).profile || null,
-      } : null,
-    } : null,
+    homeTeam: baseMatch.homeTeam
+      ? {
+          _id: baseMatch.homeTeam._id,
+          teamName: baseMatch.homeTeam.teamName,
+          shortName: baseMatch.homeTeam.shortName,
+          teamLogo: baseMatch.homeTeam.teamLogo,
+          manager:
+            homeManagerDoc && homeManagerDoc.manager
+              ? {
+                  _id: (homeManagerDoc.manager as any)._id,
+                  firstName: (homeManagerDoc.manager as any).firstName || "",
+                  lastName: (homeManagerDoc.manager as any).lastName || "",
+                  userName: (homeManagerDoc.manager as any).userName || "",
+                  profile: (homeManagerDoc.manager as any).profile || null,
+                }
+              : null,
+        }
+      : null,
+    awayTeam: baseMatch.awayTeam
+      ? {
+          _id: baseMatch.awayTeam._id,
+          teamName: baseMatch.awayTeam.teamName,
+          shortName: baseMatch.awayTeam.shortName,
+          teamLogo: baseMatch.awayTeam.teamLogo,
+          manager:
+            awayManagerDoc && awayManagerDoc.manager
+              ? {
+                  _id: (awayManagerDoc.manager as any)._id,
+                  firstName: (awayManagerDoc.manager as any).firstName || "",
+                  lastName: (awayManagerDoc.manager as any).lastName || "",
+                  userName: (awayManagerDoc.manager as any).userName || "",
+                  profile: (awayManagerDoc.manager as any).profile || null,
+                }
+              : null,
+        }
+      : null,
     goals,
     cards,
     refereeReport,
@@ -819,8 +911,15 @@ const updateMatchToDB = async (id: string, payload: any) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Same team cannot play match");
   }
 
-  const dateFields = ['scheduledAt', 'startedAt', 'firstHalfStartedAt', 'halfTimeAt', 'secondHalfStartedAt', 'finishedAt'];
-  dateFields.forEach(field => {
+  const dateFields = [
+    "scheduledAt",
+    "startedAt",
+    "firstHalfStartedAt",
+    "halfTimeAt",
+    "secondHalfStartedAt",
+    "finishedAt",
+  ];
+  dateFields.forEach((field) => {
     if (payload[field] !== undefined) {
       payload[field] = payload[field] ? new Date(payload[field]) : null;
     }
@@ -863,7 +962,10 @@ const toggleMatchStatusToDB = async (id: string, userRole: string = "") => {
   if (match.status === "scheduled" || match.status === "upcoming") {
     nextStatus = "live";
     nextPeriod = "first_half";
-  } else if (match.status === "live" && (match.period === "first_half" || !match.period)) {
+  } else if (
+    match.status === "live" &&
+    (match.period === "first_half" || !match.period)
+  ) {
     nextStatus = "half_time";
     nextPeriod = "first_half";
   } else if (match.status === "half_time") {
@@ -877,10 +979,18 @@ const toggleMatchStatusToDB = async (id: string, userRole: string = "") => {
     nextPeriod = "second_half";
   }
 
-  return await updateMatchStatusInDB(id, { status: nextStatus, period: nextPeriod }, userRole);
+  return await updateMatchStatusInDB(
+    id,
+    { status: nextStatus, period: nextPeriod },
+    userRole,
+  );
 };
 
-const updateMatchStatusInDB = async (id: string, payload: any, userRole: string = "") => {
+const updateMatchStatusInDB = async (
+  id: string,
+  payload: any,
+  userRole: string = "",
+) => {
   const match = await Match.findById(id);
 
   if (!match) {
@@ -890,12 +1000,26 @@ const updateMatchStatusInDB = async (id: string, payload: any, userRole: string 
   const roleUpper = (userRole || "").toString().trim().toUpperCase();
   const isAdmin = roleUpper === "ADMIN" || roleUpper === "SUPER_ADMIN";
 
-  const targetStatus = typeof payload === "string" ? payload.toLowerCase() : (payload?.status || "").toLowerCase();
-  const targetPeriod = typeof payload === "object" ? payload?.period : undefined;
+  const targetStatus =
+    typeof payload === "string"
+      ? payload.toLowerCase()
+      : (payload?.status || "").toLowerCase();
+  const targetPeriod =
+    typeof payload === "object" ? payload?.period : undefined;
 
-  const validStatuses = ["scheduled", "upcoming", "live", "half_time", "finished", "cancelled"];
+  const validStatuses = [
+    "scheduled",
+    "upcoming",
+    "live",
+    "half_time",
+    "finished",
+    "cancelled",
+  ];
   if (!validStatuses.includes(targetStatus)) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, `Invalid status. Must be one of: ${validStatuses.join(", ")}`);
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+    );
   }
 
   const oldStatus = match.status;
@@ -906,7 +1030,7 @@ const updateMatchStatusInDB = async (id: string, payload: any, userRole: string 
     if (!match.referee) {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
-        "A referee must be assigned to the match before making it live"
+        "A referee must be assigned to the match before making it live",
       );
     }
   }
@@ -920,21 +1044,25 @@ const updateMatchStatusInDB = async (id: string, payload: any, userRole: string 
     }
   } else if (targetStatus === "live") {
     match.status = "live";
-    const requestedPeriod = targetPeriod || (oldStatus === "half_time" ? "second_half" : "first_half");
+    const requestedPeriod =
+      targetPeriod ||
+      (oldStatus === "half_time" ? "second_half" : "first_half");
     match.period = requestedPeriod as any;
 
     if (requestedPeriod === "first_half") {
       if (!match.startedAt) match.startedAt = ukNow;
-      if (!match.firstHalfStartedAt || isAdmin) match.firstHalfStartedAt = ukNow;
+      if (!match.firstHalfStartedAt || isAdmin)
+        match.firstHalfStartedAt = ukNow;
     } else if (requestedPeriod === "second_half") {
-      if (!match.secondHalfStartedAt || isAdmin) match.secondHalfStartedAt = ukNow;
+      if (!match.secondHalfStartedAt || isAdmin)
+        match.secondHalfStartedAt = ukNow;
     }
 
     // 🪙 1000 Coin Awarding Logic (Strictly Once)
     if (!match.coinAwarded) {
       await Team.updateMany(
         { _id: { $in: [match.homeTeam, match.awayTeam] } },
-        { $inc: { coin: 1000 } }
+        { $inc: { coin: 1000 } },
       );
       match.coinAwarded = true;
     }
@@ -956,33 +1084,55 @@ const updateMatchStatusInDB = async (id: string, payload: any, userRole: string 
 
   // 2️⃣ Allow Admin to manually overwrite timestamps & state
   if (isAdmin && typeof payload === "object") {
-    if (payload.scheduledAt !== undefined) match.scheduledAt = payload.scheduledAt ? new Date(payload.scheduledAt) : null;
-    if (payload.startedAt !== undefined) match.startedAt = payload.startedAt ? new Date(payload.startedAt) : null;
-    if (payload.firstHalfStartedAt !== undefined) match.firstHalfStartedAt = payload.firstHalfStartedAt ? new Date(payload.firstHalfStartedAt) : null;
-    if (payload.halfTimeAt !== undefined) match.halfTimeAt = payload.halfTimeAt ? new Date(payload.halfTimeAt) : null;
-    if (payload.secondHalfStartedAt !== undefined) match.secondHalfStartedAt = payload.secondHalfStartedAt ? new Date(payload.secondHalfStartedAt) : null;
-    if (payload.finishedAt !== undefined) match.finishedAt = payload.finishedAt ? new Date(payload.finishedAt) : null;
+    if (payload.scheduledAt !== undefined)
+      match.scheduledAt = payload.scheduledAt
+        ? new Date(payload.scheduledAt)
+        : null;
+    if (payload.startedAt !== undefined)
+      match.startedAt = payload.startedAt ? new Date(payload.startedAt) : null;
+    if (payload.firstHalfStartedAt !== undefined)
+      match.firstHalfStartedAt = payload.firstHalfStartedAt
+        ? new Date(payload.firstHalfStartedAt)
+        : null;
+    if (payload.halfTimeAt !== undefined)
+      match.halfTimeAt = payload.halfTimeAt
+        ? new Date(payload.halfTimeAt)
+        : null;
+    if (payload.secondHalfStartedAt !== undefined)
+      match.secondHalfStartedAt = payload.secondHalfStartedAt
+        ? new Date(payload.secondHalfStartedAt)
+        : null;
+    if (payload.finishedAt !== undefined)
+      match.finishedAt = payload.finishedAt
+        ? new Date(payload.finishedAt)
+        : null;
     if (payload.period !== undefined) match.period = payload.period;
   }
 
   await match.save();
 
   // Send notifications if status has changed significantly
-  if ((targetStatus === "live" || targetStatus === "finished") && oldStatus !== targetStatus && !isAdmin) {
+  if (
+    (targetStatus === "live" || targetStatus === "finished") &&
+    oldStatus !== targetStatus &&
+    !isAdmin
+  ) {
     try {
       const homeTeam = await Team.findById(match.homeTeam);
       const awayTeam = await Team.findById(match.awayTeam);
       const matchName = `${homeTeam?.teamName || "Home Team"} vs ${awayTeam?.teamName || "Away Team"}`;
 
       const userDetails = await User.find({
-        selectTeam: { $in: [match.homeTeam, match.awayTeam] }
+        selectTeam: { $in: [match.homeTeam, match.awayTeam] },
       });
 
       if (userDetails.length > 0) {
-        const title = targetStatus === "live" ? "Match is Live! ⚽" : "Match Finished! 🏁";
-        const message = targetStatus === "live"
-          ? `The match ${matchName} has officially started and is now live!`
-          : `The match ${matchName} has finished. Check the final match results and ratings.`;
+        const title =
+          targetStatus === "live" ? "Match is Live! ⚽" : "Match Finished! 🏁";
+        const message =
+          targetStatus === "live"
+            ? `The match ${matchName} has officially started and is now live!`
+            : `The match ${matchName} has finished. Check the final match results and ratings.`;
 
         const userIds = userDetails.map((u) => u._id.toString());
 
@@ -993,7 +1143,7 @@ const updateMatchStatusInDB = async (id: string, payload: any, userRole: string 
           NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,
           undefined,
           match._id.toString(),
-          "Match"
+          "Match",
         );
       }
     } catch (err) {
@@ -1072,7 +1222,9 @@ const getUpcomingMatchesForManagerFromDB = async (
     .populate("venueSubCategory", "name");
 
   const meta = await matchQuery.getPaginationInfo();
-  const formattedResult = await Promise.all(matches.map((m: any) => formatMatchVenue(m)));
+  const formattedResult = await Promise.all(
+    matches.map((m: any) => formatMatchVenue(m)),
+  );
 
   return {
     meta,
@@ -1082,22 +1234,22 @@ const getUpcomingMatchesForManagerFromDB = async (
 
 const updateMatchTimerInDB = async (
   matchId: string,
-  action: 'START' | 'PAUSE' | 'RESUME' | 'FINISH',
-  user?: any
+  action: "START" | "PAUSE" | "RESUME" | "FINISH",
+  user?: any,
 ) => {
   const match = await Match.findById(matchId);
 
   if (!match) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Match not found');
+    throw new ApiError(StatusCodes.NOT_FOUND, "Match not found");
   }
 
   const now = new Date();
   let elapsed = match.elapsedSeconds || 0;
 
   // Accumulate segment elapsed time if timer was running
-  if (match.timerStatus === 'running' && match.timerStartedAt) {
+  if (match.timerStatus === "running" && match.timerStartedAt) {
     const diffSeconds = Math.floor(
-      (now.getTime() - new Date(match.timerStartedAt).getTime()) / 1000
+      (now.getTime() - new Date(match.timerStartedAt).getTime()) / 1000,
     );
     if (diffSeconds > 0) {
       elapsed += diffSeconds;
@@ -1105,44 +1257,44 @@ const updateMatchTimerInDB = async (
   }
 
   switch (action) {
-    case 'START':
+    case "START":
       if (!match.referee) {
         throw new ApiError(
           StatusCodes.BAD_REQUEST,
-          "A referee must be assigned to the match before starting the match timer"
+          "A referee must be assigned to the match before starting the match timer",
         );
       }
-      match.timerStatus = 'running';
+      match.timerStatus = "running";
       match.timerStartedAt = now;
       match.elapsedSeconds = 0;
-      match.status = 'live';
+      match.status = "live";
       break;
 
-    case 'PAUSE':
-      match.timerStatus = 'paused';
+    case "PAUSE":
+      match.timerStatus = "paused";
       match.timerStartedAt = null;
       match.elapsedSeconds = elapsed;
-      match.status = 'live';
+      match.status = "live";
       break;
 
-    case 'RESUME':
-      match.timerStatus = 'running';
+    case "RESUME":
+      match.timerStatus = "running";
       match.timerStartedAt = now;
       match.elapsedSeconds = elapsed;
-      match.status = 'live';
+      match.status = "live";
       break;
 
-    case 'FINISH':
-      match.timerStatus = 'finished';
+    case "FINISH":
+      match.timerStatus = "finished";
       match.timerStartedAt = null;
       match.elapsedSeconds = elapsed;
-      match.status = 'finished';
+      match.status = "finished";
       break;
 
     default:
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
-        'Invalid timer action. Valid actions: START, PAUSE, RESUME, FINISH'
+        "Invalid timer action. Valid actions: START, PAUSE, RESUME, FINISH",
       );
   }
 
@@ -1150,8 +1302,10 @@ const updateMatchTimerInDB = async (
 
   // Calculate live current elapsed for instant response & socket emit
   let liveSeconds = match.elapsedSeconds || 0;
-  if (match.timerStatus === 'running' && match.timerStartedAt) {
-    const diff = Math.floor((Date.now() - new Date(match.timerStartedAt).getTime()) / 1000);
+  if (match.timerStatus === "running" && match.timerStartedAt) {
+    const diff = Math.floor(
+      (Date.now() - new Date(match.timerStartedAt).getTime()) / 1000,
+    );
     if (diff > 0) liveSeconds += diff;
   }
 
@@ -1187,9 +1341,10 @@ const modifyMatchScoreInDB = async (
       team: string;
       player: string;
       assistPlayer?: string;
+      goalType?: 'normal' | 'penalty' | 'header' | 'own_goal' | 'free_kick';
       minute?: number;
     }>;
-  }
+  },
 ) => {
   const match = await Match.findById(id);
 
@@ -1198,7 +1353,10 @@ const modifyMatchScoreInDB = async (
   }
 
   if (payload.homeScore === undefined || payload.awayScore === undefined) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Both homeScore and awayScore must be provided");
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Both homeScore and awayScore must be provided",
+    );
   }
 
   const oldHomeScore = match.homeScore ?? 0;
@@ -1214,7 +1372,7 @@ const modifyMatchScoreInDB = async (
   }
 
   // If the match is already finished, adjust team coins & market value rewards
-  if (match.status === 'finished') {
+  if (match.status === "finished") {
     const ce = await ClubEconomy.findOne();
     const drawCoin = ce?.drawMatch?.coin ?? 2000;
     const drawMV = ce?.drawMatch?.budgetValue ?? 20000;
@@ -1223,19 +1381,32 @@ const modifyMatchScoreInDB = async (
 
     // Rollback old coin/MV allocations
     if (oldHomeScore === oldAwayScore) {
-      await Team.findByIdAndUpdate(match.homeTeam, { $inc: { coin: -drawCoin, marketValue: -drawMV } });
-      await Team.findByIdAndUpdate(match.awayTeam, { $inc: { coin: -drawCoin, marketValue: -drawMV } });
+      await Team.findByIdAndUpdate(match.homeTeam, {
+        $inc: { coin: -drawCoin, marketValue: -drawMV },
+      });
+      await Team.findByIdAndUpdate(match.awayTeam, {
+        $inc: { coin: -drawCoin, marketValue: -drawMV },
+      });
     } else {
-      const oldWinner = oldHomeScore > oldAwayScore ? match.homeTeam : match.awayTeam;
-      await Team.findByIdAndUpdate(oldWinner, { $inc: { coin: -winCoin, marketValue: -winMV } });
+      const oldWinner =
+        oldHomeScore > oldAwayScore ? match.homeTeam : match.awayTeam;
+      await Team.findByIdAndUpdate(oldWinner, {
+        $inc: { coin: -winCoin, marketValue: -winMV },
+      });
     }
 
     // Apply new coin/MV allocations
     if (newHomeScore === newAwayScore) {
-      await Team.findByIdAndUpdate(match.homeTeam, { $inc: { coin: drawCoin, marketValue: drawMV } });
-      await Team.findByIdAndUpdate(match.awayTeam, { $inc: { coin: drawCoin, marketValue: drawMV } });
+      await Team.findByIdAndUpdate(match.homeTeam, {
+        $inc: { coin: drawCoin, marketValue: drawMV },
+      });
+      await Team.findByIdAndUpdate(match.awayTeam, {
+        $inc: { coin: drawCoin, marketValue: drawMV },
+      });
     } else {
-      await Team.findByIdAndUpdate(newWinnerTeam, { $inc: { coin: winCoin, marketValue: winMV } });
+      await Team.findByIdAndUpdate(newWinnerTeam, {
+        $inc: { coin: winCoin, marketValue: winMV },
+      });
     }
   }
 
@@ -1257,24 +1428,27 @@ const modifyMatchScoreInDB = async (
           league: match.league,
           team: scorer.team,
           player: scorer.player,
-          eventType: 'goal',
+          eventType: "goal",
           minute: min,
           addedBy: scorer.player,
-          eventMeta: scorer.assistPlayer ? { assist: scorer.assistPlayer } : undefined,
+          eventMeta: {
+            goalType: scorer.goalType || "normal",
+            ...(scorer.assistPlayer ? { assist: scorer.assistPlayer } : {}),
+          },
         });
 
         // 2. Increment player stats
         await PlayerStats.findOneAndUpdate(
           { player: scorer.player },
           { $inc: { goals: 1 }, $set: { team: scorer.team } },
-          { upsert: true, new: true }
+          { upsert: true, new: true },
         );
 
         // 3. Increment player coins & MV
         const scorerUser = await User.findById(scorer.player);
         if (scorerUser) {
           await User.findByIdAndUpdate(scorer.player, {
-            $inc: { engCoine: goalCoin, marketValue: goalMV }
+            $inc: { engCoine: goalCoin, marketValue: goalMV },
           });
         }
 
@@ -1283,12 +1457,12 @@ const modifyMatchScoreInDB = async (
           await PlayerStats.findOneAndUpdate(
             { player: scorer.assistPlayer },
             { $inc: { assists: 1 } },
-            { upsert: true, new: true }
+            { upsert: true, new: true },
           );
           const assistUser = await User.findById(scorer.assistPlayer);
           if (assistUser) {
             await User.findByIdAndUpdate(scorer.assistPlayer, {
-              $inc: { engCoine: assistCoin, marketValue: assistMV }
+              $inc: { engCoine: assistCoin, marketValue: assistMV },
             });
           }
         }
@@ -1299,14 +1473,14 @@ const modifyMatchScoreInDB = async (
             String(scorer.player),
             `Congratulations! You scored a goal at minute ${min}.`,
             "Goal Scored! ⚽",
-            NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED
+            NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,
           );
           if (scorer.assistPlayer) {
             await NotificationQueueHelper.sendNotification(
               String(scorer.assistPlayer),
               `Well done! You assisted a goal at minute ${min}.`,
               "Assist Recorded! 👟⚽",
-              NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED
+              NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,
             );
           }
         } catch (err) {
