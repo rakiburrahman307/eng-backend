@@ -91,19 +91,25 @@ const updatePlayerByParent = catchAsync(async (req: Request, res: Response) => {
   const files = req.files as {
     profile?: Express.Multer.File[];
     document?: Express.Multer.File[];
-  };
+  } | undefined;
 
   const data = req.body?.data ? JSON.parse(req.body.data) : req.body || {};
   const payload: any = { ...data };
 
   if (files?.profile?.[0]) {
     payload.profile = files.profile[0].path.replace(/\\/g, "/").split("uploads")[1];
+  } else {
+    // If no new profile image is uploaded, do not overwrite the existing profile
+    delete payload.profile;
   }
 
-  if (files?.document) {
+  if (files?.document && files.document.length > 0) {
     payload.document = files.document.map((doc) =>
       doc.path.replace(/\\/g, "/").split("uploads")[1]
     );
+  } else {
+    // If no new documents are uploaded, do not overwrite the existing documents
+    delete payload.document;
   }
 
   const result = await PlayerService.updatePlayerByParentToDB(userId, playerId, payload);
@@ -201,7 +207,7 @@ const updatePlayerByAdmin = catchAsync(async (req: Request, res: Response) => {
   const files = req.files as {
     image?: Express.Multer.File[];
     profile?: Express.Multer.File[];
-  };
+  } | undefined;
 
   const image = files?.image?.[0] || files?.profile?.[0];
   const data = req.body?.data ? JSON.parse(req.body.data) : req.body || {};
@@ -211,6 +217,8 @@ const updatePlayerByAdmin = catchAsync(async (req: Request, res: Response) => {
     payload.profile = image.path
       .replace(/\\/g, "/")
       .split("uploads")[1];
+  } else {
+    delete payload.profile;
   }
 
   const result = await PlayerService.updatePlayerByAdminToDB(id, payload);
