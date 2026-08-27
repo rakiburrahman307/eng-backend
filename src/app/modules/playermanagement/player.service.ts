@@ -864,13 +864,6 @@ const assignJerseyNumberToDB = async (
 
   return updatedPlayer;
 };
-
-export const test = async () => {
-  const result = await getMyPlayersFromDB("6a7b7e20827578532d044eb5");
-
-  console.log("resulttttttttttttttttttt", result);
-};
-
 export const PlayerService = {
   createPlayerByParentToDB,
   getMyPlayersFromDB,

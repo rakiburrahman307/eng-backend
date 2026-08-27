@@ -11,6 +11,7 @@ import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
+import { emitMatchUpdate } from "../match/match.service";
 
 // ========================== CREATE ==========================
 const createMatchResultToDB = async (payload: any) => {
@@ -61,8 +62,31 @@ const createMatchResultToDB = async (payload: any) => {
   //   );
   // }
 
+  // Dynamic minute calculation if missing (e.g. referee live panel event)
+  let eventMinute = minute;
+  if (
+    eventMinute === undefined ||
+    eventMinute === null ||
+    eventMinute === "" ||
+    isNaN(Number(eventMinute)) ||
+    Number(eventMinute) <= 0
+  ) {
+    let liveSeconds = matchData.elapsedSeconds || 0;
+    if (matchData.timerStatus === "running" && matchData.timerStartedAt) {
+      const diff = Math.floor(
+        (Date.now() - new Date(matchData.timerStartedAt).getTime()) / 1000,
+      );
+      if (diff > 0) liveSeconds += diff;
+    }
+    eventMinute = Math.floor(liveSeconds / 60) || 1;
+    payload.minute = eventMinute;
+  } else {
+    eventMinute = Number(eventMinute);
+    payload.minute = eventMinute;
+  }
+
   // 6️⃣ MINUTE VALIDATION
-  if (minute < 0 || minute > 120) {
+  if (eventMinute < 0 || eventMinute > 120) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid match minute");
   }
 
@@ -142,6 +166,8 @@ const createMatchResultToDB = async (payload: any) => {
   } catch (error) {
     console.error("❌ Failed to send match result notifications:", error);
   }
+
+  await emitMatchUpdate(match.toString());
 
   return result;
 };
@@ -283,6 +309,7 @@ const updateMatchResultToDB = async (id: string, payload: any) => {
     await applyPlayerStats(updated);
     await applyMatchScore(updated);
     await updateMatchWinner(updated.match);
+    await emitMatchUpdate(updated.match.toString());
   }
 
   return updated;
@@ -302,6 +329,7 @@ const deleteMatchResultFromDB = async (id: string) => {
   const deleted = await MatchResult.findByIdAndDelete(id);
 
   await updateMatchWinner(existing.match);
+  await emitMatchUpdate(existing.match.toString());
 
   return deleted;
 };

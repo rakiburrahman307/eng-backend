@@ -9,6 +9,7 @@ import mongoose from "mongoose";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
 import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
+import { socketService } from "../../../helpers/socket/service";
 import { VenueCategory } from "../venueCategory/venueCategory.model";
 import ApiError from "../../../errors/ApiErrors";
 import { StatusCodes } from "http-status-codes";
@@ -81,7 +82,7 @@ const formatMatchVenue = async (matchItem: any) => {
     if (diff > 0) liveSeconds += diff;
   }
 
-  const durationMinutes = Number(matchObj.durationMinutes) || 90;
+  const durationMinutes = parseInt(matchObj.durationMinutes) || 90;
 
   return {
     ...matchObj,
@@ -91,6 +92,9 @@ const formatMatchVenue = async (matchItem: any) => {
     currentElapsedSeconds: liveSeconds,
     currentElapsedMinutes: Math.floor(liveSeconds / 60),
     totalDurationMinutes: durationMinutes,
+    timerStatus: matchObj.timerStatus || "stopped",
+    timerStartedAt: matchObj.timerStartedAt || null,
+    elapsedSeconds: matchObj.elapsedSeconds || 0,
   };
 };
 
@@ -918,6 +922,12 @@ const getSingleMatchFromDB = async (id: string) => {
     goals,
     cards,
     refereeReport,
+    timerStatus: baseMatch.timerStatus,
+    timerStartedAt: baseMatch.timerStartedAt,
+    elapsedSeconds: baseMatch.elapsedSeconds || 0,
+    currentElapsedSeconds: baseMatch.currentElapsedSeconds,
+    currentElapsedMinutes: baseMatch.currentElapsedMinutes,
+    totalDurationMinutes: baseMatch.totalDurationMinutes,
   };
 };
 
@@ -987,6 +997,8 @@ const updateMatchToDB = async (id: string, payload: any) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to update match");
   }
 
+  await emitMatchUpdate(id);
+
   return await formatMatchVenue(updatedMatch);
 };
 
@@ -998,7 +1010,13 @@ const deleteMatchFromDB = async (id: string) => {
     throw new Error("Match not found");
   }
 
-  return await Match.findByIdAndDelete(id);
+  const deleted = await Match.findByIdAndDelete(id);
+  if (deleted) {
+    if ((global as any).io) {
+      (global as any).io.emit("matches_list_update", { _id: id, deleted: true });
+    }
+  }
+  return deleted;
 };
 
 // TOGGLE STATUS (Sequence: scheduled -> live (1st half) -> half_time -> live (2nd half) -> finished)
@@ -1106,10 +1124,15 @@ const updateMatchStatusInDB = async (
       if (!match.startedAt) match.startedAt = ukNow;
       if (!match.firstHalfStartedAt || isAdmin)
         match.firstHalfStartedAt = ukNow;
+      match.elapsedSeconds = 0; // reset on new first half start
     } else if (requestedPeriod === "second_half") {
       if (!match.secondHalfStartedAt || isAdmin)
         match.secondHalfStartedAt = ukNow;
     }
+
+    // Automatically run the match timer
+    match.timerStatus = "running";
+    match.timerStartedAt = ukNow;
 
     // 🪙 1000 Coin Awarding Logic (Strictly Once)
     if (!match.coinAwarded) {
@@ -1120,19 +1143,45 @@ const updateMatchStatusInDB = async (
       match.coinAwarded = true;
     }
   } else if (targetStatus === "half_time") {
+    // Accumulate elapsed seconds if timer was running
+    if (match.timerStatus === "running" && match.timerStartedAt) {
+      const diff = Math.floor(
+        (ukNow.getTime() - new Date(match.timerStartedAt).getTime()) / 1000,
+      );
+      if (diff > 0) {
+        match.elapsedSeconds = (match.elapsedSeconds || 0) + diff;
+      }
+    }
     match.status = "half_time";
     match.period = targetPeriod || "first_half";
     if (!match.halfTimeAt || isAdmin) {
       match.halfTimeAt = ukNow;
     }
+    // Pause timer
+    match.timerStatus = "paused";
+    match.timerStartedAt = null;
   } else if (targetStatus === "finished") {
+    // Accumulate elapsed seconds if timer was running
+    if (match.timerStatus === "running" && match.timerStartedAt) {
+      const diff = Math.floor(
+        (ukNow.getTime() - new Date(match.timerStartedAt).getTime()) / 1000,
+      );
+      if (diff > 0) {
+        match.elapsedSeconds = (match.elapsedSeconds || 0) + diff;
+      }
+    }
     match.status = "finished";
     match.period = targetPeriod || "second_half";
     if (!match.finishedAt || isAdmin) {
       match.finishedAt = ukNow;
     }
+    // Stop/finish timer
+    match.timerStatus = "finished";
+    match.timerStartedAt = null;
   } else if (targetStatus === "cancelled") {
     match.status = "cancelled";
+    match.timerStatus = "stopped";
+    match.timerStartedAt = null;
   }
 
   // 2️⃣ Allow Admin to manually overwrite timestamps & state
@@ -1203,6 +1252,8 @@ const updateMatchStatusInDB = async (
       console.error("Failed to send status update notification", err);
     }
   }
+
+  await emitMatchUpdate(match._id.toString());
 
   return await formatMatchVenue(match);
 };
@@ -1285,7 +1336,7 @@ const getUpcomingMatchesForManagerFromDB = async (
   };
 };
 
-const updateMatchTimerInDB = async (
+const updateMatchTimerInDB = async (    
   matchId: string,
   action: "START" | "PAUSE" | "RESUME" | "FINISH",
   user?: any,
@@ -1363,8 +1414,9 @@ const updateMatchTimerInDB = async (
   }
 
   // 📡 Socket broadcast
-  if ((global as any).io) {
-    (global as any).io.emit(`match_${matchId}_timer`, {
+  const io = socketService.io;
+  if (io) {
+    io.emit(`match_${matchId}_timer`, {
       matchId,
       action,
       timerStatus: match.timerStatus,
@@ -1376,6 +1428,8 @@ const updateMatchTimerInDB = async (
       durationMinutes: match.durationMinutes,
     });
   }
+
+  await emitMatchUpdate(matchId);
 
   const formatted = await formatMatchVenue(match);
   return {
@@ -1549,7 +1603,49 @@ const modifyMatchScoreInDB = async (
 
   await match.save();
 
+  await emitMatchUpdate(match._id.toString());
+
   return await formatMatchVenue(match);
+};
+
+export const emitMatchUpdate = async (matchId: string) => {
+  try {
+    const match = await Match.findById(matchId)
+      .populate("league")
+      .populate("homeTeam")
+      .populate("awayTeam")
+      .populate("referee")
+      .populate("winnerTeam")
+      .populate("venueCategory", "name")
+      .populate("venueSubCategory", "name");
+
+    if (!match) return;
+
+    const formatted = await formatMatchVenue(match);
+
+    const io = socketService.io;
+    if (io) {
+      // 1. Emit deep populated match object to the specific match room
+      io.to(`match_${matchId}`).emit("match_update", formatted);
+
+      // 2. Emit lightweight payload to the global list channel
+      const lightweightPayload = {
+        _id: formatted._id,
+        homeScore: formatted.homeScore,
+        awayScore: formatted.awayScore,
+        status: formatted.status,
+        period: formatted.period,
+        elapsedSeconds: formatted.elapsedSeconds,
+        currentElapsedSeconds: formatted.currentElapsedSeconds,
+        currentElapsedMinutes: formatted.currentElapsedMinutes,
+        timerStatus: formatted.timerStatus,
+        timerStartedAt: formatted.timerStartedAt,
+      };
+      io.emit("matches_list_update", lightweightPayload);
+    }
+  } catch (error) {
+    console.error("❌ Failed to emit match update:", error);
+  }
 };
 
 export const MatchService = {
