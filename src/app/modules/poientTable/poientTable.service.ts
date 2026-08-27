@@ -258,9 +258,6 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     const skip = (parsedPage - 1) * parsedLimit;
     return response.slice(skip, skip + parsedLimit);
   }
-
-  console.log(response, "point table");
-
   return response;
 };
 
