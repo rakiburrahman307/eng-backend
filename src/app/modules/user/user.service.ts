@@ -165,7 +165,7 @@ const getUserProfileFromDB = async (user: JwtPayload) => {
     userName: isExistUser.userName,
     profile: isExistUser.profile,
     role: isExistUser.role,
-
+    jerseyNumber: isExistUser.jerseyNumber || null,
     firstName: userDetails?.firstName || null,
     lastName: userDetails?.lastName || null,
     dateOfBirth: isExistUser.dateOfBirth || null,
@@ -367,8 +367,10 @@ const getPlayerByUserId = async (userId: string) => {
   return {
     ...result,
     userId: result._id,
+    jerseyNumber: result.jerseyNumber || null,
     activeSubscription: activeSub || null,
     activePackage: activeSub?.package || null,
+
     stats: {
       goals: stats.goals,
       assists: stats.assists,

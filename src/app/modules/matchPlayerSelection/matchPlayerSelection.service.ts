@@ -12,15 +12,24 @@ import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 const validatePlayersBelongToTeam = async (players: any[], teamId: string) => {
   if (!Array.isArray(players) || players.length === 0) return;
 
-  const playerIds = players.map((p: any) => p.player?.toString()).filter(Boolean);
-  const playerUsers = await User.find({ _id: { $in: playerIds } }).select("firstName lastName selectTeam");
+  const playerIds = players
+    .map((p: any) => p.player?.toString())
+    .filter(Boolean);
+  const playerUsers = await User.find({ _id: { $in: playerIds } }).select(
+    "firstName lastName selectTeam",
+  );
 
   for (const playerUser of playerUsers) {
-    if (!playerUser.selectTeam || playerUser.selectTeam.toString() !== teamId.toString()) {
-      const playerName = `${playerUser.firstName || ''} ${playerUser.lastName || ''}`.trim() || 'Selected player';
+    if (
+      !playerUser.selectTeam ||
+      playerUser.selectTeam.toString() !== teamId.toString()
+    ) {
+      const playerName =
+        `${playerUser.firstName || ""} ${playerUser.lastName || ""}`.trim() ||
+        "Selected player";
       throw new ApiError(
         400,
-        `Player "${playerName}" does not belong to this team. You can only select players from your own team.`
+        `Player "${playerName}" does not belong to this team. You can only select players from your own team.`,
       );
     }
   }
@@ -45,14 +54,17 @@ const verifyManagerOfTeam = async (user: any, teamId: string) => {
     if (!isManagerOfTeam) {
       throw new ApiError(
         403,
-        "Access Denied: You are not the assigned official manager of this team."
+        "Access Denied: You are not the assigned official manager of this team.",
       );
     }
 
     return true;
   }
 
-  throw new ApiError(403, "Access Denied: Only managers can perform player selection.");
+  throw new ApiError(
+    403,
+    "Access Denied: Only managers can perform player selection.",
+  );
 };
 
 // CREATE
@@ -80,7 +92,7 @@ const createSelectionIntoDB = async (payload: any, user: any) => {
     if (players.length > maxAllowed) {
       throw new ApiError(
         400,
-        `Maximum ${maxAllowed} players allowed per team for this match as set by Admin`
+        `Maximum ${maxAllowed} players allowed per team for this match as set by Admin`,
       );
     }
   }
@@ -110,7 +122,7 @@ const createSelectionIntoDB = async (payload: any, user: any) => {
   const notifyPromises = players
     .filter((p) => p.player)
     .map((p) => {
-      const positionText = p.position ? `as a ${p.position} ` : '';
+      const positionText = p.position ? `as a ${p.position} ` : "";
       const statusText = p.substitute ? "(Substitute)" : "(Starting Lineup)";
       return NotificationQueueHelper.sendNotification(
         p.player.toString(),
@@ -119,7 +131,7 @@ const createSelectionIntoDB = async (payload: any, user: any) => {
         NOTIFICATION_TYPE.GENERAL,
         undefined,
         match.toString(),
-        'Match'
+        "Match",
       );
     });
 
@@ -186,7 +198,7 @@ const getAllSelectionsFromDB = async () => {
     .populate({
       path: "players.player",
       model: "User",
-      select: "_id profile firstName lastName",
+      select: "_id profile firstName lastName jerseyNumber",
     })
     .lean();
 
@@ -208,6 +220,7 @@ const getAllSelectionsFromDB = async () => {
         profile: user?.profile,
         firstName: user?.firstName,
         lastName: user?.lastName,
+        jerseyNumber: user?.jerseyNumber,
       };
     }),
   }));
@@ -247,7 +260,7 @@ const updateSelectionIntoDB = async (id: string, payload: any, user: any) => {
       if (payload.players.length > maxAllowed) {
         throw new ApiError(
           400,
-          `Maximum ${maxAllowed} players allowed per team for this match as set by Admin`
+          `Maximum ${maxAllowed} players allowed per team for this match as set by Admin`,
         );
       }
     }
@@ -315,7 +328,7 @@ const getPlayersByMatchAndTeamFromDB = async (
     .populate({
       path: "players.player",
       model: "User",
-      select: "_id profile firstName lastName",
+      select: "_id profile firstName lastName jerseyNumber",
     })
     .lean();
 
@@ -344,6 +357,7 @@ const getPlayersByMatchAndTeamFromDB = async (
         profile: user?.profile,
         firstName: user?.firstName || null,
         lastName: user?.lastName || null,
+        jerseyNumber: user?.jerseyNumber,
       };
     }),
   };

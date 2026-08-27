@@ -780,6 +780,7 @@ const getFilteredPlayersFromDB = async (
     _id: player._id,
     firstName: player.firstName,
     lastName: player.lastName,
+    jerseyNumber: player.jerseyNumber,
     position: player.position,
     engCoine: player.engCoine || 0,
     marketValue: player.marketValue || 0,

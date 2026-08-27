@@ -54,6 +54,7 @@ const getTeamDashboardFromDB = async (teamId: string) => {
     ageGroup: p.ageGroup || null,
     dateOfBirth: p.dateOfBirth || null,
     status: p.status || "APPROVED",
+    jerseyNumber: p.jerseyNumber
   }));
 
   const totalPlayers = players.length;
