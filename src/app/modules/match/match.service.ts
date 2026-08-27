@@ -840,6 +840,7 @@ const getSingleMatchFromDB = async (id: string) => {
               firstName: (evaluation.manOfTheMatch as any).firstName || "",
               lastName: (evaluation.manOfTheMatch as any).lastName || "",
               profile: (evaluation.manOfTheMatch as any).profile || null,
+              jerseyNumber: (evaluation.manOfTheMatch as any).jerseyNumber || null,
             }
           : null,
       }
