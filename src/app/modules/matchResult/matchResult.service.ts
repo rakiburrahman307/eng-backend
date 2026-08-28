@@ -392,9 +392,9 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "yellow_card") {
     inc.yellowCards = 1;
 
-    // yellowCard.coin and yellowCard.marketValue are stored as negative in DB
-    const yellowCardCoin = pe?.yellowCard?.coin ?? -500;
-    const yellowCardMV = pe?.yellowCard?.marketValue ?? -5000;
+    // Force yellowCard.coin and yellowCard.marketValue to be negative deductions
+    const yellowCardCoin = -Math.abs(pe?.yellowCard?.coin ?? 500);
+    const yellowCardMV = -Math.abs(pe?.yellowCard?.marketValue ?? 5000);
     const user = await User.findById(player);
     if (user) {
       const newCoins = Math.max(0, (user.engCoine ?? 0) + yellowCardCoin);
@@ -410,9 +410,9 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "red_card") {
     inc.redCards = 1;
 
-    // redCard.coin and redCard.marketValue are stored as negative in DB
-    const redCardCoin = pe?.redCard?.coin ?? -5000;
-    const redCardMV = pe?.redCard?.marketValue ?? -50000;
+    // Force redCard.coin and redCard.marketValue to be negative deductions
+    const redCardCoin = -Math.abs(pe?.redCard?.coin ?? 5000);
+    const redCardMV = -Math.abs(pe?.redCard?.marketValue ?? 50000);
     const user = await User.findById(player);
     if (user) {
       const newCoins = Math.max(0, (user.engCoine ?? 0) + redCardCoin);

@@ -32,13 +32,13 @@ const getConductReward = async (rating: number): Promise<{ coin: number; budgetV
   }
   if (rating >= 30) {
     return {
-      coin: ce?.poorConduct?.coin ?? -1000,
-      budgetValue: ce?.poorConduct?.budgetValue ?? -10000,
+      coin: -Math.abs(ce?.poorConduct?.coin ?? 1000),
+      budgetValue: -Math.abs(ce?.poorConduct?.budgetValue ?? 10000),
     };
   }
   return {
-    coin: ce?.unprofessionalConduct?.coin ?? -3000,
-    budgetValue: ce?.unprofessionalConduct?.budgetValue ?? -30000,
+    coin: -Math.abs(ce?.unprofessionalConduct?.coin ?? 3000),
+    budgetValue: -Math.abs(ce?.unprofessionalConduct?.budgetValue ?? 30000),
   };
 };
 
