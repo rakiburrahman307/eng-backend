@@ -362,8 +362,8 @@ const applyPlayerStats = async (payload: any) => {
       inc.goals = 1;
 
       // Goal Reward — dynamic from DB
-      const goalCoin = pe?.goal?.coin ?? 2000;
-      const goalMV = pe?.goal?.marketValue ?? 20000;
+      const goalCoin = pe?.goal?.coin ?? 0;
+      const goalMV = pe?.goal?.marketValue ?? 0;
       await User.findOneAndUpdate(
         { _id: player },
         { $inc: { engCoine: goalCoin, marketValue: goalMV } },
@@ -379,8 +379,8 @@ const applyPlayerStats = async (payload: any) => {
       );
 
       // Assist Reward — dynamic from DB
-      const assistCoin = pe?.assist?.coin ?? 1000;
-      const assistMV = pe?.assist?.marketValue ?? 10000;
+      const assistCoin = pe?.assist?.coin ?? 0;
+      const assistMV = pe?.assist?.marketValue ?? 0;
       await User.findOneAndUpdate(
         { _id: eventMeta.assist },
         { $inc: { engCoine: assistCoin, marketValue: assistMV } },
@@ -393,8 +393,8 @@ const applyPlayerStats = async (payload: any) => {
     inc.yellowCards = 1;
 
     // Force yellowCard.coin and yellowCard.marketValue to be negative deductions
-    const yellowCardCoin = -Math.abs(pe?.yellowCard?.coin ?? 500);
-    const yellowCardMV = -Math.abs(pe?.yellowCard?.marketValue ?? 5000);
+    const yellowCardCoin = -Math.abs(pe?.yellowCard?.coin ?? 0);
+    const yellowCardMV = -Math.abs(pe?.yellowCard?.marketValue ?? 0);
     const user = await User.findById(player);
     if (user) {
       const newCoins = Math.max(0, (user.engCoine ?? 0) + yellowCardCoin);
@@ -411,8 +411,8 @@ const applyPlayerStats = async (payload: any) => {
     inc.redCards = 1;
 
     // Force redCard.coin and redCard.marketValue to be negative deductions
-    const redCardCoin = -Math.abs(pe?.redCard?.coin ?? 5000);
-    const redCardMV = -Math.abs(pe?.redCard?.marketValue ?? 50000);
+    const redCardCoin = -Math.abs(pe?.redCard?.coin ?? 0);
+    const redCardMV = -Math.abs(pe?.redCard?.marketValue ?? 0);
     const user = await User.findById(player);
     if (user) {
       const newCoins = Math.max(0, (user.engCoine ?? 0) + redCardCoin);
@@ -428,8 +428,8 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "clean_sheet") {
     inc.cleanSheets = 1;
 
-    const csCoin = pe?.cleanSheet?.coin ?? 2000;
-    const csMV = pe?.cleanSheet?.marketValue ?? 20000;
+    const csCoin = pe?.cleanSheet?.coin ?? 0;
+    const csMV = pe?.cleanSheet?.marketValue ?? 0;
     await User.findOneAndUpdate(
       { _id: player },
       { $inc: { engCoine: csCoin, marketValue: csMV } },
@@ -440,8 +440,8 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "player_of_the_day") {
     inc.playerOfTheDay = 1;
 
-    const potdCoin = pe?.playerOfTheDay?.coin ?? 5000;
-    const potdMV = pe?.playerOfTheDay?.marketValue ?? 50000;
+    const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
+    const potdMV = pe?.playerOfTheDay?.marketValue ?? 0;
     await User.findOneAndUpdate(
       { _id: player },
       { $inc: { engCoine: potdCoin, marketValue: potdMV } },
@@ -473,8 +473,8 @@ const rollbackPlayerStats = async (payload: any) => {
       inc.goals = -1;
 
       // Rollback goal coins and market value
-      const goalCoin = pe?.goal?.coin ?? 2000;
-      const goalMV = pe?.goal?.marketValue ?? 20000;
+      const goalCoin = pe?.goal?.coin ?? 0;
+      const goalMV = pe?.goal?.marketValue ?? 0;
       const user = await User.findById(player);
       if (user) {
         const newCoins = Math.max(0, (user.engCoine ?? 0) - goalCoin);
@@ -494,8 +494,8 @@ const rollbackPlayerStats = async (payload: any) => {
       );
 
       // Rollback assist coins and market value
-      const assistCoin = pe?.assist?.coin ?? 1000;
-      const assistMV = pe?.assist?.marketValue ?? 10000;
+      const assistCoin = pe?.assist?.coin ?? 0;
+      const assistMV = pe?.assist?.marketValue ?? 0;
       const assistUser = await User.findById(eventMeta.assist);
       if (assistUser) {
         const newCoins = Math.max(0, (assistUser.engCoine ?? 0) - assistCoin);
@@ -513,8 +513,8 @@ const rollbackPlayerStats = async (payload: any) => {
     inc.yellowCards = -1;
 
     // yellowCard.coin is negative — rollback by adding back absolute value
-    const yellowCardCoin = Math.abs(pe?.yellowCard?.coin ?? -500);
-    const yellowCardMV = Math.abs(pe?.yellowCard?.marketValue ?? -5000);
+    const yellowCardCoin = Math.abs(pe?.yellowCard?.coin ?? 0);
+    const yellowCardMV = Math.abs(pe?.yellowCard?.marketValue ?? 0);
     await User.findOneAndUpdate(
       { _id: player },
       { $inc: { engCoine: yellowCardCoin, marketValue: yellowCardMV } },
@@ -526,8 +526,8 @@ const rollbackPlayerStats = async (payload: any) => {
     inc.redCards = -1;
 
     // redCard.coin is negative — rollback by adding back absolute value
-    const redCardCoin = Math.abs(pe?.redCard?.coin ?? -5000);
-    const redCardMV = Math.abs(pe?.redCard?.marketValue ?? -50000);
+    const redCardCoin = Math.abs(pe?.redCard?.coin ?? 0);
+    const redCardMV = Math.abs(pe?.redCard?.marketValue ?? 0);
     await User.findOneAndUpdate(
       { _id: player },
       { $inc: { engCoine: redCardCoin, marketValue: redCardMV } },
@@ -538,8 +538,8 @@ const rollbackPlayerStats = async (payload: any) => {
   if (eventType === "clean_sheet") {
     inc.cleanSheets = -1;
 
-    const csCoin = pe?.cleanSheet?.coin ?? 2000;
-    const csMV = pe?.cleanSheet?.marketValue ?? 20000;
+    const csCoin = pe?.cleanSheet?.coin ?? 0;
+    const csMV = pe?.cleanSheet?.marketValue ?? 0;
     const user = await User.findById(player);
     if (user) {
       const newCoins = Math.max(0, (user.engCoine ?? 0) - csCoin);
@@ -555,8 +555,8 @@ const rollbackPlayerStats = async (payload: any) => {
   if (eventType === "player_of_the_day") {
     inc.playerOfTheDay = -1;
 
-    const potdCoin = pe?.playerOfTheDay?.coin ?? 5000;
-    const potdMV = pe?.playerOfTheDay?.marketValue ?? 50000;
+    const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
+    const potdMV = pe?.playerOfTheDay?.marketValue ?? 0;
     const user = await User.findById(player);
     if (user) {
       const newCoins = Math.max(0, (user.engCoine ?? 0) - potdCoin);

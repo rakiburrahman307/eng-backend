@@ -9,7 +9,7 @@ const router = express.Router();
 router
   .route('/')
   .post(
-    auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.REFEREE),
+    auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.REFEREE, USER_ROLES.MANAGER),
     MatchResultController.createMatchResult
   )
   .get(MatchResultController.getAllMatchResults);
@@ -25,7 +25,7 @@ router
   .route('/:id')
   .get(MatchResultController.getSingleMatchResult)
   .patch(
-    auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.REFEREE),
+    auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.REFEREE, USER_ROLES.MANAGER),
     MatchResultController.updateMatchResult
   )
   .delete(

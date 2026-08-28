@@ -80,8 +80,8 @@ const createEvaluationIntoDB = async (payload: any) => {
       const { NOTIFICATION_TYPE } = await import("../notification/notification.interface");
 
       const pe = await PlayerEconomy.findOne();
-      const potdCoin = pe?.playerOfTheDay?.coin ?? 5000;
-      const potdMV = pe?.playerOfTheDay?.marketValue ?? 50000;
+      const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
+      const potdMV = pe?.playerOfTheDay?.marketValue ?? 0;
 
       await User.findByIdAndUpdate(payload.manOfTheMatch, {
         $inc: {

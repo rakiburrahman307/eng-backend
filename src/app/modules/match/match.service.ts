@@ -1529,10 +1529,10 @@ const modifyMatchScoreInDB = async (
   // Handle assigned goal scorers for player stats, coins & notifications
   if (Array.isArray(payload.goalScorers) && payload.goalScorers.length > 0) {
     const pe = await PlayerEconomy.findOne();
-    const goalCoin = pe?.goal?.coin ?? 2000;
-    const goalMV = pe?.goal?.marketValue ?? 20000;
-    const assistCoin = pe?.assist?.coin ?? 1000;
-    const assistMV = pe?.assist?.marketValue ?? 10000;
+    const goalCoin = pe?.goal?.coin ?? 0;
+    const goalMV = pe?.goal?.marketValue ?? 0;
+    const assistCoin = pe?.assist?.coin ?? 0;
+    const assistMV = pe?.assist?.marketValue ?? 0;
 
     for (const scorer of payload.goalScorers) {
       if (scorer.player && scorer.team) {
