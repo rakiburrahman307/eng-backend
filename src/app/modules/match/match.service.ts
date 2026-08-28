@@ -1136,6 +1136,7 @@ const updateMatchStatusInDB = async (
     } else if (requestedPeriod === "second_half") {
       if (!match.secondHalfStartedAt || isAdmin)
         match.secondHalfStartedAt = ukNow;
+      match.elapsedSeconds = 0; // restart to 0 for second half
     }
 
     // Automatically run the match timer
