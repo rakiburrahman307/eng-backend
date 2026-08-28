@@ -76,6 +76,11 @@ const playerEconomySchema = new Schema(
       coin: { type: Number, default: -10000 },
       marketValue: { type: Number, default: -100000 },
     },
+
+    foul: {
+      coin: { type: Number, default: -100 },
+      marketValue: { type: Number, default: -1000 },
+    },
   },
   {
     timestamps: true,

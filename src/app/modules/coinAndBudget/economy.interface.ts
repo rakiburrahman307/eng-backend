@@ -26,6 +26,7 @@ export interface IPlayerEconomy {
   redCard: IEconomyValue;
   disrespectToReferee: IEconomyValue;
   grossMisconduct: IEconomyValue;
+  foul?: IEconomyValue;
 }
 
 export interface IClubEconomy {

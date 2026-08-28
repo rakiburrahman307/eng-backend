@@ -397,8 +397,9 @@ const applyPlayerStats = async (payload: any) => {
     const yellowCardMV = -Math.abs(pe?.yellowCard?.marketValue ?? 0);
     const user = await User.findById(player);
     if (user) {
-      const newCoins = Math.max(0, (user.engCoine ?? 0) + yellowCardCoin);
-      const newMV = Math.max(0, (user.marketValue ?? 0) + yellowCardMV);
+      const newCoins = Math.max(10000, (user.engCoine ?? 0) + yellowCardCoin);
+      const rate = pe?.conversionRate ?? 100;
+      const newMV = newCoins * rate;
       await User.findOneAndUpdate(
         { _id: player },
         { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -415,8 +416,9 @@ const applyPlayerStats = async (payload: any) => {
     const redCardMV = -Math.abs(pe?.redCard?.marketValue ?? 0);
     const user = await User.findById(player);
     if (user) {
-      const newCoins = Math.max(0, (user.engCoine ?? 0) + redCardCoin);
-      const newMV = Math.max(0, (user.marketValue ?? 0) + redCardMV);
+      const newCoins = Math.max(10000, (user.engCoine ?? 0) + redCardCoin);
+      const rate = pe?.conversionRate ?? 100;
+      const newMV = newCoins * rate;
       await User.findOneAndUpdate(
         { _id: player },
         { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -445,6 +447,112 @@ const applyPlayerStats = async (payload: any) => {
     await User.findOneAndUpdate(
       { _id: player },
       { $inc: { engCoine: potdCoin, marketValue: potdMV } },
+    );
+  }
+
+  // ================= FOUL =================
+  if (eventType === "foul") {
+    inc.fouls = 1;
+
+    const foulCoin = -Math.abs(pe?.foul?.coin ?? 0);
+    const foulMV = -Math.abs(pe?.foul?.marketValue ?? 0);
+    const user = await User.findById(player);
+    if (user) {
+      const newCoins = Math.max(10000, (user.engCoine ?? 0) + foulCoin);
+      const rate = pe?.conversionRate ?? 100;
+      const newMV = newCoins * rate;
+      await User.findOneAndUpdate(
+        { _id: player },
+        { $set: { engCoine: newCoins, marketValue: newMV } },
+      );
+    }
+  }
+
+  // ================= SIN BIN =================
+  if (eventType === "sin_bin") {
+    const sinBinCoin = -Math.abs(pe?.sinBin?.coin ?? 0);
+    const sinBinMV = -Math.abs(pe?.sinBin?.marketValue ?? 0);
+    const user = await User.findById(player);
+    if (user) {
+      const newCoins = Math.max(10000, (user.engCoine ?? 0) + sinBinCoin);
+      const rate = pe?.conversionRate ?? 100;
+      const newMV = newCoins * rate;
+      await User.findOneAndUpdate(
+        { _id: player },
+        { $set: { engCoine: newCoins, marketValue: newMV } },
+      );
+    }
+  }
+
+  // ================= DISRESPECT TO REFEREE =================
+  if (eventType === "disrespect_to_referee") {
+    const disrespectCoin = -Math.abs(pe?.disrespectToReferee?.coin ?? 0);
+    const disrespectMV = -Math.abs(pe?.disrespectToReferee?.marketValue ?? 0);
+    const user = await User.findById(player);
+    if (user) {
+      const newCoins = Math.max(10000, (user.engCoine ?? 0) + disrespectCoin);
+      const rate = pe?.conversionRate ?? 100;
+      const newMV = newCoins * rate;
+      await User.findOneAndUpdate(
+        { _id: player },
+        { $set: { engCoine: newCoins, marketValue: newMV } },
+      );
+    }
+  }
+
+  // ================= GROSS MISCONDUCT =================
+  if (eventType === "gross_misconduct") {
+    const misconductCoin = -Math.abs(pe?.grossMisconduct?.coin ?? 0);
+    const misconductMV = -Math.abs(pe?.grossMisconduct?.marketValue ?? 0);
+    const user = await User.findById(player);
+    if (user) {
+      const newCoins = Math.max(10000, (user.engCoine ?? 0) + misconductCoin);
+      const rate = pe?.conversionRate ?? 100;
+      const newMV = newCoins * rate;
+      await User.findOneAndUpdate(
+        { _id: player },
+        { $set: { engCoine: newCoins, marketValue: newMV } },
+      );
+    }
+  }
+
+  // ================= GOOD RATING =================
+  if (eventType === "good_rating") {
+    const coin = pe?.goodRating?.coin ?? 0;
+    const mv = pe?.goodRating?.marketValue ?? 0;
+    await User.findOneAndUpdate(
+      { _id: player },
+      { $inc: { engCoine: coin, marketValue: mv } },
+    );
+  }
+
+  // ================= GREAT RATING =================
+  if (eventType === "great_rating") {
+    const coin = pe?.greatRating?.coin ?? 0;
+    const mv = pe?.greatRating?.marketValue ?? 0;
+    await User.findOneAndUpdate(
+      { _id: player },
+      { $inc: { engCoine: coin, marketValue: mv } },
+    );
+  }
+
+  // ================= ELITE RATING =================
+  if (eventType === "elite_rating") {
+    const coin = pe?.eliteRating?.coin ?? 0;
+    const mv = pe?.eliteRating?.marketValue ?? 0;
+    await User.findOneAndUpdate(
+      { _id: player },
+      { $inc: { engCoine: coin, marketValue: mv } },
+    );
+  }
+
+  // ================= PLAYING MATCH =================
+  if (eventType === "playing_match") {
+    const coin = pe?.playingMatch?.coin ?? 0;
+    const mv = pe?.playingMatch?.marketValue ?? 0;
+    await User.findOneAndUpdate(
+      { _id: player },
+      { $inc: { engCoine: coin, marketValue: mv } },
     );
   }
 
@@ -477,8 +585,9 @@ const rollbackPlayerStats = async (payload: any) => {
       const goalMV = pe?.goal?.marketValue ?? 0;
       const user = await User.findById(player);
       if (user) {
-        const newCoins = Math.max(0, (user.engCoine ?? 0) - goalCoin);
-        const newMV = Math.max(0, (user.marketValue ?? 0) - goalMV);
+        const newCoins = Math.max(10000, (user.engCoine ?? 0) - goalCoin);
+        const rate = pe?.conversionRate ?? 100;
+        const newMV = newCoins * rate;
         await User.findOneAndUpdate(
           { _id: player },
           { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -498,8 +607,9 @@ const rollbackPlayerStats = async (payload: any) => {
       const assistMV = pe?.assist?.marketValue ?? 0;
       const assistUser = await User.findById(eventMeta.assist);
       if (assistUser) {
-        const newCoins = Math.max(0, (assistUser.engCoine ?? 0) - assistCoin);
-        const newMV = Math.max(0, (assistUser.marketValue ?? 0) - assistMV);
+        const newCoins = Math.max(10000, (assistUser.engCoine ?? 0) - assistCoin);
+        const rate = pe?.conversionRate ?? 100;
+        const newMV = newCoins * rate;
         await User.findOneAndUpdate(
           { _id: eventMeta.assist },
           { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -542,8 +652,9 @@ const rollbackPlayerStats = async (payload: any) => {
     const csMV = pe?.cleanSheet?.marketValue ?? 0;
     const user = await User.findById(player);
     if (user) {
-      const newCoins = Math.max(0, (user.engCoine ?? 0) - csCoin);
-      const newMV = Math.max(0, (user.marketValue ?? 0) - csMV);
+      const newCoins = Math.max(10000, (user.engCoine ?? 0) - csCoin);
+      const rate = pe?.conversionRate ?? 100;
+      const newMV = newCoins * rate;
       await User.findOneAndUpdate(
         { _id: player },
         { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -559,8 +670,111 @@ const rollbackPlayerStats = async (payload: any) => {
     const potdMV = pe?.playerOfTheDay?.marketValue ?? 0;
     const user = await User.findById(player);
     if (user) {
-      const newCoins = Math.max(0, (user.engCoine ?? 0) - potdCoin);
-      const newMV = Math.max(0, (user.marketValue ?? 0) - potdMV);
+      const newCoins = Math.max(10000, (user.engCoine ?? 0) - potdCoin);
+      const rate = pe?.conversionRate ?? 100;
+      const newMV = newCoins * rate;
+      await User.findOneAndUpdate(
+        { _id: player },
+        { $set: { engCoine: newCoins, marketValue: newMV } },
+      );
+    }
+  }
+
+  // ================= FOUL =================
+  if (eventType === "foul") {
+    inc.fouls = -1;
+
+    const foulCoin = Math.abs(pe?.foul?.coin ?? 0);
+    const foulMV = Math.abs(pe?.foul?.marketValue ?? 0);
+    await User.findOneAndUpdate(
+      { _id: player },
+      { $inc: { engCoine: foulCoin, marketValue: foulMV } },
+    );
+  }
+
+  // ================= SIN BIN =================
+  if (eventType === "sin_bin") {
+    const sinBinCoin = Math.abs(pe?.sinBin?.coin ?? 0);
+    const sinBinMV = Math.abs(pe?.sinBin?.marketValue ?? 0);
+    await User.findOneAndUpdate(
+      { _id: player },
+      { $inc: { engCoine: sinBinCoin, marketValue: sinBinMV } },
+    );
+  }
+
+  // ================= DISRESPECT TO REFEREE =================
+  if (eventType === "disrespect_to_referee") {
+    const disrespectCoin = Math.abs(pe?.disrespectToReferee?.coin ?? 0);
+    const disrespectMV = Math.abs(pe?.disrespectToReferee?.marketValue ?? 0);
+    await User.findOneAndUpdate(
+      { _id: player },
+      { $inc: { engCoine: disrespectCoin, marketValue: disrespectMV } },
+    );
+  }
+
+  // ================= GROSS MISCONDUCT =================
+  if (eventType === "gross_misconduct") {
+    const misconductCoin = Math.abs(pe?.grossMisconduct?.coin ?? 0);
+    const misconductMV = Math.abs(pe?.grossMisconduct?.marketValue ?? 0);
+    await User.findOneAndUpdate(
+      { _id: player },
+      { $inc: { engCoine: misconductCoin, marketValue: misconductMV } },
+    );
+  }
+
+  // ================= GOOD RATING =================
+  if (eventType === "good_rating") {
+    const coin = pe?.goodRating?.coin ?? 0;
+    const user = await User.findById(player);
+    if (user) {
+      const newCoins = Math.max(10000, (user.engCoine ?? 0) - coin);
+      const rate = pe?.conversionRate ?? 100;
+      const newMV = newCoins * rate;
+      await User.findOneAndUpdate(
+        { _id: player },
+        { $set: { engCoine: newCoins, marketValue: newMV } },
+      );
+    }
+  }
+
+  // ================= GREAT RATING =================
+  if (eventType === "great_rating") {
+    const coin = pe?.greatRating?.coin ?? 0;
+    const user = await User.findById(player);
+    if (user) {
+      const newCoins = Math.max(10000, (user.engCoine ?? 0) - coin);
+      const rate = pe?.conversionRate ?? 100;
+      const newMV = newCoins * rate;
+      await User.findOneAndUpdate(
+        { _id: player },
+        { $set: { engCoine: newCoins, marketValue: newMV } },
+      );
+    }
+  }
+
+  // ================= ELITE RATING =================
+  if (eventType === "elite_rating") {
+    const coin = pe?.eliteRating?.coin ?? 0;
+    const user = await User.findById(player);
+    if (user) {
+      const newCoins = Math.max(10000, (user.engCoine ?? 0) - coin);
+      const rate = pe?.conversionRate ?? 100;
+      const newMV = newCoins * rate;
+      await User.findOneAndUpdate(
+        { _id: player },
+        { $set: { engCoine: newCoins, marketValue: newMV } },
+      );
+    }
+  }
+
+  // ================= PLAYING MATCH =================
+  if (eventType === "playing_match") {
+    const coin = pe?.playingMatch?.coin ?? 0;
+    const user = await User.findById(player);
+    if (user) {
+      const newCoins = Math.max(10000, (user.engCoine ?? 0) - coin);
+      const rate = pe?.conversionRate ?? 100;
+      const newMV = newCoins * rate;
       await User.findOneAndUpdate(
         { _id: player },
         { $set: { engCoine: newCoins, marketValue: newMV } },
