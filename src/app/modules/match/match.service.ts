@@ -15,6 +15,7 @@ import ApiError from "../../../errors/ApiErrors";
 import { StatusCodes } from "http-status-codes";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { MatchResult } from "../matchResult/matchResult.model";
+import { MatchResultService } from "../matchResult/matchResult.service";
 import { MatchEvaluation } from "../refereeRating/refereeRating.model";
 import { PlayerStats } from "../playerStats/playerStats.model";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
@@ -1010,6 +1011,13 @@ const deleteMatchFromDB = async (id: string) => {
     throw new Error("Match not found");
   }
 
+  // 1. Rollback all match events (goals/assists/cards, reducing player stats & reversing user coins)
+  await MatchResultService.rollbackAllResultsForMatch(id);
+
+  // 2. Clean up referee ratings/evaluations for this match
+  await MatchEvaluation.deleteMany({ match: id });
+
+  // 3. Delete the match document itself
   const deleted = await Match.findByIdAndDelete(id);
   if (deleted) {
     if ((global as any).io) {

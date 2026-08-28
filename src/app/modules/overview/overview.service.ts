@@ -5,9 +5,9 @@ import { Subscription } from "../subscription/subscription.model";
 import { USER_ROLES } from "../../../enums/user";
 
 const getOverviewFromDB = async () => {
-  const activeSubUserIds = await Subscription.distinct('user', {
+  const activeSubUserIds = await Subscription.find({
     status: 'active',
-  });
+  }).distinct('user');
 
   const playerRoles = [
     USER_ROLES.PLAYER,
@@ -17,15 +17,26 @@ const getOverviewFromDB = async () => {
 
   const playerEligibility = {
     role: { $in: playerRoles },
-    _id: { $in: activeSubUserIds },
-    $or: [
-      { parentId: { $ne: null } },
-      { position: { $exists: true, $ne: null } },
-      { dateOfBirth: { $exists: true, $ne: null } },
-      { ageGroup: { $exists: true, $ne: null } },
-      { selectTeam: { $exists: true, $ne: null } },
-      { email: null },
-      { password: null },
+    $and: [
+      {
+        $or: [
+          { _id: { $in: activeSubUserIds } },
+          { parentId: { $in: activeSubUserIds } },
+          { isSubscribed: true },
+          { hasAccess: true },
+        ],
+      },
+      {
+        $or: [
+          { parentId: { $exists: true, $ne: null } },
+          { position: { $exists: true, $ne: null } },
+          { dateOfBirth: { $exists: true, $ne: null } },
+          { ageGroup: { $exists: true, $ne: null } },
+          { selectTeam: { $exists: true, $ne: null } },
+          { email: null },
+          { password: null },
+        ],
+      },
     ],
   };
 
@@ -41,7 +52,10 @@ const getOverviewFromDB = async () => {
     pendingMatches,
     activeSubscriptions,
   ] = await Promise.all([
-    User.countDocuments(playerEligibility),
+    User.countDocuments({
+      ...playerEligibility,
+      status: { $in: ['APPROVED', 'PENDING'] },
+    }),
 
     User.countDocuments({
       ...playerEligibility,
@@ -59,6 +73,7 @@ const getOverviewFromDB = async () => {
     User.countDocuments({
       ...playerEligibility,
       role: USER_ROLES.OTHER_CLUBS,
+      status: { $in: ['APPROVED', 'PENDING'] },
     }),
 
     User.countDocuments({

@@ -690,6 +690,14 @@ const updateMatchWinner = async (matchId: any) => {
   await Team.findByIdAndUpdate(winnerTeam, { $inc: { coin: winCoin, marketValue: winMV } });
 };
 
+const rollbackAllResultsForMatch = async (matchId: string) => {
+  const results = await MatchResult.find({ match: matchId });
+  for (const r of results) {
+    await rollbackPlayerStats(r);
+  }
+  await MatchResult.deleteMany({ match: matchId });
+};
+
 // ============================================================
 export const MatchResultService = {
   createMatchResultToDB,
@@ -698,4 +706,5 @@ export const MatchResultService = {
   updateMatchResultToDB,
   deleteMatchResultFromDB,
   getMatchWiseResultsFromDB,
+  rollbackAllResultsForMatch,
 };

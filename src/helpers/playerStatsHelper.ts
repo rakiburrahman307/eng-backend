@@ -151,7 +151,7 @@ export const getPlayerStatsSummary = async (
     MatchEvaluation.countDocuments({
       manOfTheMatch: playerObjectId,
     }),
-    PlayerStats.findOne({ player: playerObjectId }).lean(),
+    PlayerStats.find({ player: playerObjectId }).lean(),
   ]);
 
   const mr = matchResults[0] || {};
@@ -162,12 +162,23 @@ export const getPlayerStatsSummary = async (
   const cleanMR = Number(mr.cleanSheets) || 0;
   const potdMR = (Number(mr.playerOfTheDayEvents) || 0) + (evaluationsCount || 0);
 
-  const psGoals = Number((manualStats as any)?.goals) || 0;
-  const psAssists = Number((manualStats as any)?.assists) || 0;
-  const psYellow = Number((manualStats as any)?.yellowCards) || 0;
-  const psRed = Number((manualStats as any)?.redCards) || 0;
-  const psClean = Number((manualStats as any)?.cleanSheets) || 0;
-  const psPOTD = Number((manualStats as any)?.playerOfTheDay) || 0;
+  let psGoals = 0;
+  let psAssists = 0;
+  let psYellow = 0;
+  let psRed = 0;
+  let psClean = 0;
+  let psPOTD = 0;
+
+  if (Array.isArray(manualStats)) {
+    for (const stats of manualStats) {
+      psGoals += Number(stats.goals) || 0;
+      psAssists += Number(stats.assists) || 0;
+      psYellow += Number(stats.yellowCards) || 0;
+      psRed += Number(stats.redCards) || 0;
+      psClean += Number(stats.cleanSheets) || 0;
+      psPOTD += Number(stats.playerOfTheDay) || 0;
+    }
+  }
 
   return {
     goals: Math.max(goalsMR, psGoals),
@@ -298,18 +309,42 @@ export const getBatchPlayerStatsSummary = async (
     result.get(pId)!.playerOfTheDay += item.count;
   });
 
-  // Merge manual/upserted stats from PlayerStats
+  // Sum manual/upserted stats from PlayerStats for each player
+  const summedManualMap = new Map<string, any>();
   manualStats?.forEach((item: any) => {
     const pId = item.player?.toString();
-    if (!pId || !result.has(pId)) return;
+    if (!pId) return;
+
+    const existing = summedManualMap.get(pId) || {
+      goals: 0,
+      assists: 0,
+      yellowCards: 0,
+      redCards: 0,
+      cleanSheets: 0,
+      playerOfTheDay: 0,
+    };
+
+    summedManualMap.set(pId, {
+      goals: existing.goals + (Number(item.goals) || 0),
+      assists: existing.assists + (Number(item.assists) || 0),
+      yellowCards: existing.yellowCards + (Number(item.yellowCards) || 0),
+      redCards: existing.redCards + (Number(item.redCards) || 0),
+      cleanSheets: existing.cleanSheets + (Number(item.cleanSheets) || 0),
+      playerOfTheDay: existing.playerOfTheDay + (Number(item.playerOfTheDay) || 0),
+    });
+  });
+
+  // Merge summed manual stats with dynamic match results
+  summedManualMap.forEach((item: any, pId: string) => {
+    if (!result.has(pId)) return;
 
     const stats = result.get(pId)!;
-    stats.goals = Math.max(stats.goals, Number(item.goals) || 0);
-    stats.assists = Math.max(stats.assists, Number(item.assists) || 0);
-    stats.yellowCards = Math.max(stats.yellowCards, Number(item.yellowCards) || 0);
-    stats.redCards = Math.max(stats.redCards, Number(item.redCards) || 0);
-    stats.cleanSheets = Math.max(stats.cleanSheets, Number(item.cleanSheets) || 0);
-    stats.playerOfTheDay = Math.max(stats.playerOfTheDay, Number(item.playerOfTheDay) || 0);
+    stats.goals = Math.max(stats.goals, item.goals);
+    stats.assists = Math.max(stats.assists, item.assists);
+    stats.yellowCards = Math.max(stats.yellowCards, item.yellowCards);
+    stats.redCards = Math.max(stats.redCards, item.redCards);
+    stats.cleanSheets = Math.max(stats.cleanSheets, item.cleanSheets);
+    stats.playerOfTheDay = Math.max(stats.playerOfTheDay, item.playerOfTheDay);
   });
 
   return result;

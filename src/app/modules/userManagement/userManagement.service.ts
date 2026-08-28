@@ -431,6 +431,37 @@ const getUserAnalyticsFromDB = async () => {
     status: "active",
   }).distinct("user");
 
+  const playerEligibilityConditions = {
+    role: {
+      $in: [
+        USER_ROLES.PLAYER,
+        USER_ROLES.OTHER_CLUBS,
+        USER_ROLES.TOURNAMENT_PLAYER,
+      ],
+    },
+    $and: [
+      {
+        $or: [
+          { _id: { $in: activeSubUserIds } },
+          { parentId: { $in: activeSubUserIds } },
+          { isSubscribed: true },
+          { hasAccess: true },
+        ],
+      },
+      {
+        $or: [
+          { parentId: { $exists: true, $ne: null } },
+          { position: { $exists: true, $ne: null } },
+          { dateOfBirth: { $exists: true, $ne: null } },
+          { ageGroup: { $exists: true, $ne: null } },
+          { selectTeam: { $exists: true, $ne: null } },
+          { email: null },
+          { password: null },
+        ],
+      },
+    ],
+  };
+
   const baseEligibilityConditions = [
     {
       role: USER_ROLES.MANAGER,
@@ -442,25 +473,7 @@ const getUserAnalyticsFromDB = async () => {
       dateOfBirth: { $exists: true, $ne: null },
       document: { $exists: true, $ne: null, $nin: [[], ""] },
     },
-    {
-      role: {
-        $in: [
-          USER_ROLES.PLAYER,
-          USER_ROLES.OTHER_CLUBS,
-          USER_ROLES.TOURNAMENT_PLAYER,
-        ],
-      },
-      _id: { $in: activeSubUserIds },
-      $or: [
-        { parentId: { $ne: null } },
-        { position: { $exists: true, $ne: null } },
-        { dateOfBirth: { $exists: true, $ne: null } },
-        { ageGroup: { $exists: true, $ne: null } },
-        { selectTeam: { $exists: true, $ne: null } },
-        { email: null },
-        { password: null },
-      ],
-    },
+    playerEligibilityConditions,
   ];
 
   const [
@@ -496,38 +509,20 @@ const getUserAnalyticsFromDB = async () => {
       dateOfBirth: { $exists: false },
     }),
     User.countDocuments({
-      role: {
-        $in: [
-          USER_ROLES.PLAYER,
-          USER_ROLES.OTHER_CLUBS,
-          USER_ROLES.TOURNAMENT_PLAYER,
-        ],
-      },
-      _id: { $in: activeSubUserIds },
-      $or: [
-        { parentId: { $ne: null } },
-        { position: { $exists: true, $ne: null } },
-        { dateOfBirth: { $exists: true, $ne: null } },
-        { ageGroup: { $exists: true, $ne: null } },
-        { selectTeam: { $exists: true, $ne: null } },
-        { email: null },
-        { password: null },
-      ],
+      ...playerEligibilityConditions,
+      status: { $in: ["APPROVED", "PENDING"] },
     }),
     User.countDocuments({
+      ...playerEligibilityConditions,
       status: "PENDING",
-      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
-      $or: baseEligibilityConditions,
     }),
     User.countDocuments({
+      ...playerEligibilityConditions,
       status: "APPROVED",
-      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
-      $or: baseEligibilityConditions,
     }),
     User.countDocuments({
+      ...playerEligibilityConditions,
       status: "REJECTED",
-      role: { $nin: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN] },
-      $or: baseEligibilityConditions,
     }),
     User.countDocuments({
       role: USER_ROLES.MANAGER,
