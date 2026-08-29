@@ -27,6 +27,11 @@ const matchSchema = new Schema(
       type: String,
       default: null,
     },
+    ageGroupCategory: {
+      type: Schema.Types.ObjectId,
+      ref: 'AgeGroupCategory',
+      default: null,
+    },
 
     matchDate: {
       type: Date,

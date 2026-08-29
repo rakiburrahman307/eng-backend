@@ -7,6 +7,8 @@ export interface IMatch {
 
   ageGroup?: string;
 
+  ageGroupCategory?: Types.ObjectId | string;
+
   homeTeam: Types.ObjectId;
 
   awayTeam: Types.ObjectId;

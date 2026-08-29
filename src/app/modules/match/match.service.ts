@@ -87,6 +87,7 @@ const formatMatchVenue = async (matchItem: any) => {
 
   return {
     ...matchObj,
+    matchType: matchObj.matchType || null,
     formation: matchObj.formation || null,
     venueName: finalVenueString,
     venue: finalVenueString,
@@ -715,7 +716,8 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     .populate("referee")
     .populate("winnerTeam")
     .populate("venueCategory", "name")
-    .populate("venueSubCategory", "name");
+    .populate("venueSubCategory", "name")
+    .populate("ageGroupCategory");
 
   const formattedResult = await Promise.all(
     matches.map((m: any) => formatMatchVenue(m)),
@@ -754,7 +756,8 @@ const getMatchesByRefereeFromDB = async (
     .populate("referee")
     .populate("winnerTeam")
     .populate("venueCategory", "name")
-    .populate("venueSubCategory", "name");
+    .populate("venueSubCategory", "name")
+    .populate("ageGroupCategory");
 
   const formattedResult = await Promise.all(
     matches.map((m: any) => formatMatchVenue(m)),
@@ -780,7 +783,8 @@ const getSingleMatchFromDB = async (id: string) => {
     .populate("referee")
     .populate("winnerTeam")
     .populate("venueCategory", "name")
-    .populate("venueSubCategory", "name");
+    .populate("venueSubCategory", "name")
+    .populate("ageGroupCategory");
 
   if (!match) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Match not found");
@@ -883,12 +887,17 @@ const getSingleMatchFromDB = async (id: string) => {
           lastName: (match.referee as any).lastName || "",
           userName: (match.referee as any).userName || "",
           profile: (match.referee as any).profile || null,
+          email: (match.referee as any).email || "",
+          phone: (match.referee as any).phone || "",
         }
       : null;
 
   // Construct final response data matching the exact requested JSON structure
   return {
     _id: baseMatch._id,
+    matchType: baseMatch.matchType || "league",
+    ageGroupCategory: baseMatch.ageGroupCategory || null,
+    ageGroup: baseMatch.ageGroup || null,
     league: baseMatch.league
       ? {
           _id: baseMatch.league._id,
