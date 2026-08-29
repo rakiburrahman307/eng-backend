@@ -15,6 +15,9 @@ import { emitMatchUpdate } from "../match/match.service";
 
 // ========================== CREATE ==========================
 const createMatchResultToDB = async (payload: any) => {
+  if (payload.league === "" || !payload.league) {
+    delete payload.league;
+  }
   const { league, match, team, player, eventType, minute } = payload;
 
   // 1️⃣ VALIDATE MATCH
@@ -24,11 +27,13 @@ const createMatchResultToDB = async (payload: any) => {
   }
 
   // 2️⃣ VALIDATE LEAGUE
-  if (String(matchData.league) !== String(league)) {
-    throw new ApiError(
-      StatusCodes.BAD_REQUEST,
-      "League mismatch for this match",
-    );
+  if (matchData.matchType === "league" && matchData.league) {
+    if (String(matchData.league) !== String(league)) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "League mismatch for this match",
+      );
+    }
   }
 
   // 3️⃣ VALIDATE TEAM IN MATCH
@@ -290,6 +295,9 @@ const getSingleMatchResultFromDB = async (id: string) => {
 
 // ========================== UPDATE ==========================
 const updateMatchResultToDB = async (id: string, payload: any) => {
+  if (payload.league === "" || !payload.league) {
+    delete payload.league;
+  }
   const existing = await MatchResult.findById(id);
 
   if (!existing) {
