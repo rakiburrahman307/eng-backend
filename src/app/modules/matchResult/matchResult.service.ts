@@ -400,9 +400,8 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "yellow_card") {
     inc.yellowCards = 1;
 
-    // Force yellowCard.coin and yellowCard.marketValue to be negative deductions
+    // Force yellowCard.coin to be negative deduction
     const yellowCardCoin = -Math.abs(pe?.yellowCard?.coin ?? 0);
-    const yellowCardMV = -Math.abs(pe?.yellowCard?.marketValue ?? 0);
     const user = await User.findById(player);
     if (user) {
       const newCoins = Math.max(10000, (user.engCoine ?? 0) + yellowCardCoin);
@@ -419,9 +418,8 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "red_card") {
     inc.redCards = 1;
 
-    // Force redCard.coin and redCard.marketValue to be negative deductions
+    // Force redCard.coin to be negative deduction
     const redCardCoin = -Math.abs(pe?.redCard?.coin ?? 0);
-    const redCardMV = -Math.abs(pe?.redCard?.marketValue ?? 0);
     const user = await User.findById(player);
     if (user) {
       const newCoins = Math.max(10000, (user.engCoine ?? 0) + redCardCoin);
@@ -463,7 +461,6 @@ const applyPlayerStats = async (payload: any) => {
     inc.fouls = 1;
 
     const foulCoin = -Math.abs(pe?.foul?.coin ?? 0);
-    const foulMV = -Math.abs(pe?.foul?.marketValue ?? 0);
     const user = await User.findById(player);
     if (user) {
       const newCoins = Math.max(10000, (user.engCoine ?? 0) + foulCoin);
@@ -479,7 +476,6 @@ const applyPlayerStats = async (payload: any) => {
   // ================= SIN BIN =================
   if (eventType === "sin_bin") {
     const sinBinCoin = -Math.abs(pe?.sinBin?.coin ?? 0);
-    const sinBinMV = -Math.abs(pe?.sinBin?.marketValue ?? 0);
     const user = await User.findById(player);
     if (user) {
       const newCoins = Math.max(10000, (user.engCoine ?? 0) + sinBinCoin);
@@ -495,7 +491,6 @@ const applyPlayerStats = async (payload: any) => {
   // ================= DISRESPECT TO REFEREE =================
   if (eventType === "disrespect_to_referee") {
     const disrespectCoin = -Math.abs(pe?.disrespectToReferee?.coin ?? 0);
-    const disrespectMV = -Math.abs(pe?.disrespectToReferee?.marketValue ?? 0);
     const user = await User.findById(player);
     if (user) {
       const newCoins = Math.max(10000, (user.engCoine ?? 0) + disrespectCoin);
@@ -511,7 +506,6 @@ const applyPlayerStats = async (payload: any) => {
   // ================= GROSS MISCONDUCT =================
   if (eventType === "gross_misconduct") {
     const misconductCoin = -Math.abs(pe?.grossMisconduct?.coin ?? 0);
-    const misconductMV = -Math.abs(pe?.grossMisconduct?.marketValue ?? 0);
     const user = await User.findById(player);
     if (user) {
       const newCoins = Math.max(10000, (user.engCoine ?? 0) + misconductCoin);
