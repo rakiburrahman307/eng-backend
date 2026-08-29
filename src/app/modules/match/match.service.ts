@@ -75,18 +75,61 @@ const formatMatchVenue = async (matchItem: any) => {
   const finalVenueString =
     parts.length > 0 ? parts.join(", ") : matchObj.venueName || "";
 
+  const durationMinutes = parseInt(matchObj.durationMinutes) || 90;
+  const halfTimeSeconds = Math.floor((durationMinutes / 2) * 60);
+
   let liveSeconds = matchObj.elapsedSeconds || 0;
+  let timerStatus = matchObj.timerStatus || "stopped";
+  let timerStartedAt = matchObj.timerStartedAt || null;
+  let status = matchObj.status;
+
   if (matchObj.timerStatus === "running" && matchObj.timerStartedAt) {
     const diff = Math.floor(
       (Date.now() - new Date(matchObj.timerStartedAt).getTime()) / 1000,
     );
     if (diff > 0) liveSeconds += diff;
+
+    if (liveSeconds >= halfTimeSeconds) {
+      liveSeconds = halfTimeSeconds;
+      timerStatus = matchObj.period === "second_half" ? "finished" : "paused";
+      timerStartedAt = null;
+      if (matchObj.period === "second_half") {
+        status = "finished";
+      } else {
+        status = "half_time";
+      }
+
+      // Self-healing database write
+      if (typeof matchObj.save === "function") {
+        if (
+          matchObj.elapsedSeconds !== halfTimeSeconds ||
+          matchObj.timerStatus !== timerStatus ||
+          matchObj.status !== status
+        ) {
+          matchObj.elapsedSeconds = halfTimeSeconds;
+          matchObj.timerStatus = timerStatus;
+          matchObj.timerStartedAt = null;
+          matchObj.status = status;
+          matchObj.save().catch(() => {});
+        }
+      }
+    }
   }
 
-  const durationMinutes = parseInt(matchObj.durationMinutes) || 90;
+  let leagueObj = matchObj.league || null;
+  if (!leagueObj && matchObj.matchType && matchObj.matchType !== "league") {
+    const virtualName = matchObj.matchType === "cup" ? "Cup Match" : "Friendly Match";
+    leagueObj = {
+      _id: "000000000000000000000000",
+      id: "000000000000000000000000",
+      leagueName: virtualName,
+      season: "N/A",
+    };
+  }
 
   return {
     ...matchObj,
+    league: leagueObj,
     matchType: matchObj.matchType || null,
     formation: matchObj.formation || null,
     venueName: finalVenueString,
@@ -94,9 +137,9 @@ const formatMatchVenue = async (matchItem: any) => {
     currentElapsedSeconds: liveSeconds,
     currentElapsedMinutes: Math.floor(liveSeconds / 60),
     totalDurationMinutes: durationMinutes,
-    timerStatus: matchObj.timerStatus || "stopped",
-    timerStartedAt: matchObj.timerStartedAt || null,
-    elapsedSeconds: matchObj.elapsedSeconds || 0,
+    timerStatus,
+    timerStartedAt,
+    elapsedSeconds: liveSeconds,
   };
 };
 
@@ -904,7 +947,13 @@ const getSingleMatchFromDB = async (id: string) => {
           leagueName: baseMatch.league.leagueName,
           season: baseMatch.league.season,
         }
-      : null,
+      : (baseMatch.matchType && baseMatch.matchType !== "league"
+        ? {
+            _id: "000000000000000000000000",
+            leagueName: baseMatch.matchType === "cup" ? "Cup Match" : "Friendly Match",
+            season: "N/A",
+          }
+        : null),
     matchDate: baseMatch.matchDate,
     venueName: baseMatch.venueName,
     venueCategory: baseMatch.venueCategory || null,
@@ -1399,6 +1448,45 @@ const updateMatchTimerInDB = async (
     if (diffSeconds > 0) {
       elapsed += diffSeconds;
     }
+  }
+
+  const durationMinutes = parseInt(match.durationMinutes) || 90;
+  const halfTimeSeconds = Math.floor((durationMinutes / 2) * 60);
+
+  if (elapsed >= halfTimeSeconds) {
+    elapsed = halfTimeSeconds;
+    match.timerStatus = match.period === "second_half" ? "finished" : "paused";
+    match.timerStartedAt = null;
+    match.elapsedSeconds = elapsed;
+    if (match.period === "second_half") {
+      match.status = "finished";
+    } else {
+      match.status = "half_time";
+    }
+    await match.save();
+    await emitMatchUpdate(matchId);
+
+    const io = (socketService as any).io;
+    if (io) {
+      io.emit(`match_${matchId}_timer`, {
+        matchId,
+        action: match.period === "second_half" ? "FINISH" : "PAUSE",
+        timerStatus: match.timerStatus,
+        elapsedSeconds: match.elapsedSeconds,
+        currentElapsedSeconds: elapsed,
+        currentElapsedMinutes: Math.floor(elapsed / 60),
+        timerStartedAt: match.timerStartedAt,
+        status: match.status,
+        durationMinutes: match.durationMinutes,
+      });
+    }
+
+    const formatted = await formatMatchVenue(match);
+    return {
+      ...formatted,
+      currentElapsedSeconds: elapsed,
+      currentElapsedMinutes: Math.floor(elapsed / 60),
+    };
   }
 
   switch (action) {
