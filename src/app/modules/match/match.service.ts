@@ -134,13 +134,21 @@ const createMatchToDB = async (payload: any) => {
     if (homeTeam === awayTeam) {
       throw new Error("Same team cannot play match");
     }
+    // league validation
+    const finalMatchType = matchData.matchType || "league";
+    if (finalMatchType === "league" && !league) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "League is required for league matches");
+    }
+
     // league team validation
-    const leagueTeams = await LeagueTeam.find({
-      league,
-    });
-    const teamIds = leagueTeams.map((t) => t.team.toString());
-    if (!teamIds.includes(homeTeam) || !teamIds.includes(awayTeam)) {
-      throw new Error("Both teams must belong to this league");
+    if (league) {
+      const leagueTeams = await LeagueTeam.find({
+        league,
+      });
+      const teamIds = leagueTeams.map((t) => t.team.toString());
+      if (!teamIds.includes(homeTeam) || !teamIds.includes(awayTeam)) {
+        throw new Error("Both teams must belong to this league");
+      }
     }
     // referee check
     if (referee) {
@@ -666,6 +674,21 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
         { notes: searchRegex },
       ],
     });
+  }
+
+  // Match Type Filter
+  if (query.matchType) {
+    if (query.matchType === "league") {
+      andConditions.push({
+        $or: [
+          { matchType: "league" },
+          { matchType: null },
+          { matchType: { $exists: false } },
+        ],
+      });
+    } else {
+      andConditions.push({ matchType: query.matchType });
+    }
   }
 
   const initialFilter = andConditions.length > 0 ? { $and: andConditions } : {};
@@ -1541,7 +1564,7 @@ const modifyMatchScoreInDB = async (
         // 1. Create MatchResult
         await MatchResult.create({
           match: match._id,
-          league: match.league,
+          league: match.league || undefined,
           team: scorer.team,
           player: scorer.player,
           eventType: "goal",

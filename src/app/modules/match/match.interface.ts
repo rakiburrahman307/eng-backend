@@ -3,6 +3,10 @@ import { Types } from 'mongoose';
 export interface IMatch {
   league?: Types.ObjectId | string;
 
+  matchType?: 'league' | 'cup' | 'friendly';
+
+  ageGroup?: string;
+
   homeTeam: Types.ObjectId;
 
   awayTeam: Types.ObjectId;

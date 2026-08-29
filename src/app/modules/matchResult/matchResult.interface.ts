@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 
 export interface IMatchResult {
+  league?: Types.ObjectId;
   match: Types.ObjectId;
 
   team: Types.ObjectId;

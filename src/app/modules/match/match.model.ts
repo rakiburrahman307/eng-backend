@@ -5,7 +5,7 @@ const matchSchema = new Schema(
     league: {
       type: Schema.Types.ObjectId,
       ref: 'League',
-      required: true,
+      required: false,
     },
     homeTeam: {
       type: Schema.Types.ObjectId,
@@ -16,6 +16,16 @@ const matchSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Team',
       required: true,
+    },
+    matchType: {
+      type: String,
+      enum: ['league', 'cup', 'friendly'],
+      default: 'league',
+      required: true,
+    },
+    ageGroup: {
+      type: String,
+      default: null,
     },
 
     matchDate: {

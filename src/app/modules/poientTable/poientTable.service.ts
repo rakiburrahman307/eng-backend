@@ -154,6 +154,7 @@ const calculateLeague = async (league: any) => {
     Match.find({
       league: leagueId,
       status: "finished",
+      matchType: { $nin: ["friendly", "cup"] },
     }),
   ]);
 
