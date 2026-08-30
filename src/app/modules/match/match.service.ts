@@ -305,6 +305,8 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     liveOnly,
     hasNotes,
     searchTerm,
+    ageGroup,
+    ageGroupCategory,
     page,
     limit,
     sort,
@@ -733,6 +735,28 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     } else {
       andConditions.push({ matchType: query.matchType });
     }
+  }
+
+  // Age Group Category Filter
+  if (
+    ageGroupCategory &&
+    ageGroupCategory !== "ALL" &&
+    ageGroupCategory !== "null" &&
+    ageGroupCategory !== "undefined"
+  ) {
+    andConditions.push({ ageGroupCategory });
+  }
+
+  // Age Group Filter
+  if (
+    ageGroup &&
+    ageGroup !== "ALL" &&
+    ageGroup !== "null" &&
+    ageGroup !== "undefined"
+  ) {
+    andConditions.push({
+      ageGroup: { $regex: new RegExp(`^${ageGroup.trim()}$`, "i") },
+    });
   }
 
   const initialFilter = andConditions.length > 0 ? { $and: andConditions } : {};

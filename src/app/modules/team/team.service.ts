@@ -24,6 +24,8 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
     manager,
     teamType,
     searchTerm,
+    ageGroup,
+    ageGroupCategory,
     page,
     limit,
     sort,
@@ -76,6 +78,27 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
         { teamType: searchRegex },
       ],
     });
+  }
+
+  // 5. Age Group / Category Filter (queries players first to resolve matching team IDs)
+  if (
+    (ageGroupCategory && ageGroupCategory !== "ALL" && ageGroupCategory !== "null" && ageGroupCategory !== "undefined") ||
+    (ageGroup && ageGroup !== "ALL" && ageGroup !== "null" && ageGroup !== "undefined")
+  ) {
+    const playerFilter: any = { role: "PLAYER" };
+    if (ageGroupCategory && ageGroupCategory !== "ALL" && ageGroupCategory !== "null" && ageGroupCategory !== "undefined") {
+      playerFilter.ageGroupCategory = ageGroupCategory;
+    }
+    if (ageGroup && ageGroup !== "ALL" && ageGroup !== "null" && ageGroup !== "undefined") {
+      playerFilter.ageGroup = { $regex: new RegExp(`^${ageGroup.trim()}$`, "i") };
+    }
+
+    const matchingPlayers = await User.find(playerFilter).select("selectTeam");
+    const matchingTeamIds = matchingPlayers
+      .map((p) => p.selectTeam)
+      .filter(Boolean);
+
+    andConditions.push({ _id: { $in: matchingTeamIds } });
   }
 
   const initialFilter = andConditions.length > 0 ? { $and: andConditions } : {};
