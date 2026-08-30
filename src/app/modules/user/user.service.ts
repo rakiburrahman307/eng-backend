@@ -238,6 +238,12 @@ const updateChieldInfoToDB = async (id: string, payload: any) => {
     unlinkFile(isExistUser.profile);
   }
 
+  // If user status is REJECTED, change back to PENDING and clear rejectionReason
+  if (isExistUser.status === "REJECTED") {
+    payload.status = "PENDING";
+    payload.rejectionReason = "";
+  }
+
   const result = await User.findByIdAndUpdate(
     id,
     { $set: payload },
@@ -331,6 +337,21 @@ const updatePlayerByUserId = async (userId: string, payload: any) => {
     ) {
       payload.selectTeam = null;
     }
+  }
+
+  // If document files were uploaded in this request and existing documents exist, merge them
+  if (
+    Array.isArray(payload.document) &&
+    payload.document.length > 0 &&
+    Array.isArray(isExist.document)
+  ) {
+    payload.document = [...isExist.document, ...payload.document];
+  }
+
+  // If user status is REJECTED, change back to PENDING and clear rejectionReason
+  if (isExist.status === "REJECTED") {
+    payload.status = "PENDING";
+    payload.rejectionReason = "";
   }
 
   const result = await User.findByIdAndUpdate(userId, payload, {
