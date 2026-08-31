@@ -52,6 +52,8 @@ export function configureMiddlewares(app: Express): void {
 
      app.use('/images', imageLimiter);
      app.use(express.static('uploads'));
+     app.use('/images', express.static(path.join(process.cwd(), 'uploads', 'documents')));
+     app.use('/documents', express.static(path.join(process.cwd(), 'uploads', 'images')));
 
      app.use(
           session({

@@ -223,15 +223,19 @@ const updateChieldInfoToDB = async (id: string, payload: any) => {
     }
   }
 
-  // If document files were uploaded in this request and existing documents exist, merge them or update them
-  if (Array.isArray(payload.document) && payload.document.length === 0) {
-    delete payload.document;
-  } else if (
-    Array.isArray(payload.document) &&
-    payload.document.length > 0 &&
-    Array.isArray(isExistUser.document)
-  ) {
-    payload.document = [...isExistUser.document, ...payload.document];
+  // If document files were uploaded in this request:
+  // If payload.document is empty (no new file uploaded), keep existing documents.
+  // If new files were uploaded, replace old documents and unlink old files from disk.
+  if (Array.isArray(payload.document)) {
+    if (payload.document.length === 0) {
+      delete payload.document;
+    } else if (payload.document.length > 0 && Array.isArray(isExistUser.document)) {
+      isExistUser.document.forEach((oldDoc: string) => {
+        if (oldDoc && !payload.document.includes(oldDoc)) {
+          unlinkFile(oldDoc);
+        }
+      });
+    }
   }
 
   if (payload.profile && isExistUser.profile) {
@@ -339,13 +343,19 @@ const updatePlayerByUserId = async (userId: string, payload: any) => {
     }
   }
 
-  // If document files were uploaded in this request and existing documents exist, merge them
-  if (
-    Array.isArray(payload.document) &&
-    payload.document.length > 0 &&
-    Array.isArray(isExist.document)
-  ) {
-    payload.document = [...isExist.document, ...payload.document];
+  // If document files were uploaded in this request:
+  // If payload.document is empty (no new file uploaded), keep existing documents.
+  // If new files were uploaded, replace old documents and unlink old files from disk.
+  if (Array.isArray(payload.document)) {
+    if (payload.document.length === 0) {
+      delete payload.document;
+    } else if (payload.document.length > 0 && Array.isArray(isExist.document)) {
+      isExist.document.forEach((oldDoc: string) => {
+        if (oldDoc && !payload.document.includes(oldDoc)) {
+          unlinkFile(oldDoc);
+        }
+      });
+    }
   }
 
   // If user status is REJECTED, change back to PENDING and clear rejectionReason

@@ -31,7 +31,7 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
       dateOfBirth: { $exists: true, $ne: null },
       document: { $exists: true, $ne: null, $nin: [[], ""] },
     },
-    // Player with active subscription (excluding pure parent accounts)
+    // Player with active subscription (including child players under subscribed parents)
     {
       role: {
         $in: [
@@ -40,15 +40,26 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
           USER_ROLES.TOURNAMENT_PLAYER,
         ],
       },
-      _id: { $in: activeSubUserIds },
-      $or: [
-        { parentId: { $ne: null } },
-        { position: { $exists: true, $ne: null } },
-        { dateOfBirth: { $exists: true, $ne: null } },
-        { ageGroup: { $exists: true, $ne: null } },
-        { selectTeam: { $exists: true, $ne: null } },
-        { email: null },
-        { password: null },
+      $and: [
+        {
+          $or: [
+            { _id: { $in: activeSubUserIds } },
+            { parentId: { $in: activeSubUserIds } },
+            { isSubscribed: true },
+            { hasAccess: true },
+          ],
+        },
+        {
+          $or: [
+            { parentId: { $exists: true, $ne: null } },
+            { position: { $exists: true, $ne: null } },
+            { dateOfBirth: { $exists: true, $ne: null } },
+            { ageGroup: { $exists: true, $ne: null } },
+            { selectTeam: { $exists: true, $ne: null } },
+            { email: null },
+            { password: null },
+          ],
+        },
       ],
     },
   ];
@@ -513,8 +524,8 @@ const getUserAnalyticsFromDB = async () => {
       status: { $in: ["APPROVED", "PENDING"] },
     }),
     User.countDocuments({
-      ...playerEligibilityConditions,
       status: "PENDING",
+      $or: baseEligibilityConditions,
     }),
     User.countDocuments({
       ...playerEligibilityConditions,

@@ -125,12 +125,6 @@ const createPlayer = catchAsync(async (req: Request, res: Response) => {
 
     const documentFiles =
         files?.document?.map((file: any) => {
-            // 🖼 image file
-            if (file.mimetype.startsWith("image/")) {
-                return `/images/${file.filename}`;
-            }
-
-            // 📄 document file (pdf/doc/etc)
             return `/documents/${file.filename}`;
         }) || [];
 
@@ -232,12 +226,6 @@ const updateChieldInfo = catchAsync(async (req: Request, res: Response) => {
 
   if (files?.document?.length) {
     documentFiles = files.document.map((file: any) => {
-      // 🖼 IMAGE
-      if (file.mimetype.startsWith("image/")) {
-        return `/images/${file.filename}`;
-      }
-
-      // 📄 DOCUMENT
       return `/documents/${file.filename}`;
     });
   }
@@ -294,12 +282,6 @@ const updatePlayer = catchAsync(async (req: Request, res: Response) => {
 
   if (files?.document?.length) {
     documentFiles = files.document.map((file: any) => {
-      // 🖼 IMAGE
-      if (file.mimetype.startsWith("image/")) {
-        return `/images/${file.filename}`;
-      }
-
-      // 📄 DOCUMENT
       return `/documents/${file.filename}`;
     });
   }
