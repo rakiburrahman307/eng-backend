@@ -9,6 +9,7 @@ const teamSchema = new Schema(
     stadiumName: { type: String, required: true },
     city: { type: String, required: true },
     country: { type: String, required: true },
+    ageGroup: { type: String, default: null, index: true },
     coin: { type: Number, default: 100000 },
     marketValue: { type: Number, default: 0 },
   },

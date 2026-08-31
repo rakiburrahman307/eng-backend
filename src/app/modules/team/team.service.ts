@@ -4,6 +4,7 @@ import { ManagerTeam } from "../managerTeam/managerTeam.model";
 import { LeagueTeam } from "../leagueTeam/leagueTeam.model";
 import { User } from "../user/user.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
+import { USER_ROLES } from "../../../enums/user";
 
 // CREATE TEAM
 const createTeamToDB = async (payload: any) => {
@@ -80,25 +81,11 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
     });
   }
 
-  // 5. Age Group / Category Filter (queries players first to resolve matching team IDs)
-  if (
-    (ageGroupCategory && ageGroupCategory !== "ALL" && ageGroupCategory !== "null" && ageGroupCategory !== "undefined") ||
-    (ageGroup && ageGroup !== "ALL" && ageGroup !== "null" && ageGroup !== "undefined")
-  ) {
-    const playerFilter: any = { role: "PLAYER" };
-    if (ageGroupCategory && ageGroupCategory !== "ALL" && ageGroupCategory !== "null" && ageGroupCategory !== "undefined") {
-      playerFilter.ageGroupCategory = ageGroupCategory;
-    }
-    if (ageGroup && ageGroup !== "ALL" && ageGroup !== "null" && ageGroup !== "undefined") {
-      playerFilter.ageGroup = { $regex: new RegExp(`^${ageGroup.trim()}$`, "i") };
-    }
-
-    const matchingPlayers = await User.find(playerFilter).select("selectTeam");
-    const matchingTeamIds = matchingPlayers
-      .map((p) => p.selectTeam)
-      .filter(Boolean);
-
-    andConditions.push({ _id: { $in: matchingTeamIds } });
+  // 5. Age Group Filter (Directly on Team collection)
+  if (ageGroup && ageGroup !== "ALL" && ageGroup !== "null" && ageGroup !== "undefined") {
+    andConditions.push({
+      ageGroup: { $regex: new RegExp(`^${ageGroup.trim()}$`, "i") },
+    });
   }
 
   const initialFilter = andConditions.length > 0 ? { $and: andConditions } : {};
