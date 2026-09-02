@@ -90,7 +90,7 @@ const getTeamsByLeagueFromDB = async (leagueId: string) => {
 
   return {
     league: data[0].league, // same for all rows
-    teams: data.map((item) => item.team),
+    teams: data.map((item) => item.team).filter((t) => Boolean(t && (t as any)._id)),
   };
 };
 
@@ -130,8 +130,6 @@ const getAllLeagueWithTeamsFromDB = async (): Promise<IGroupedLeagueWithTeams[]>
     if (!league || !(league as ILeague)._id) return;
 
     const leagueObj = league as ILeague;
-    const teamObj = team as ITeam;
-
     const leagueId = leagueObj._id.toString();
 
     if (!grouped.has(leagueId)) {
@@ -141,7 +139,9 @@ const getAllLeagueWithTeamsFromDB = async (): Promise<IGroupedLeagueWithTeams[]>
       });
     }
 
-    grouped.get(leagueId)!.teams.push(teamObj);
+    if (team && (team as ITeam)._id) {
+      grouped.get(leagueId)!.teams.push(team as ITeam);
+    }
   });
 
   return Array.from(grouped.values());
