@@ -2,7 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiErrors';
 import { League } from '../league/league.model';
 import { Team } from '../team/team.model';
-import { IGroupedLeagueWithTeams, ILeague, ILeagueTeam, ITeam } from './leagueTeam.interface';
+import { IGroupedLeagueWithTeams, ILeague, ITeam } from './leagueTeam.interface';
 import { LeagueTeam } from './leagueTeam.model';
 
 // ADD TEAM
