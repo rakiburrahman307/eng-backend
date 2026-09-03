@@ -194,7 +194,11 @@ export const getPlayerStatsSummary = async (
  * Calculates player statistics in batch for multiple players.
  */
 export const getBatchPlayerStatsSummary = async (
-  playerIds: (string | Types.ObjectId)[]
+  playerIds: (string | Types.ObjectId)[],
+  options?: {
+    matchFilter?: any;
+    matchEvaluationFilter?: any;
+  }
 ): Promise<Map<string, IPlayerStatsDetails>> => {
   const result = new Map<string, IPlayerStatsDetails>();
 
@@ -226,6 +230,7 @@ export const getBatchPlayerStatsSummary = async (
     MatchResult.aggregate([
       {
         $match: {
+          ...(options?.matchFilter || {}),
           $or: [
             { player: { $in: objectIds } },
             { "eventMeta.assist": { $in: objectIds } },

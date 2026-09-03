@@ -418,25 +418,28 @@ const getPlayerByUserId = async (userId: string) => {
 };
 
 const getManagerByUserId = async (userId: string) => {
-  const result = await User.findById(userId)
-    .populate("selectTeam", "teamName")
-    .lean();
+  const [result, managerTeams] = await Promise.all([
+    User.findById(userId)
+      .populate("selectTeam", "teamName shortName teamLogo ageGroup")
+      .lean(),
+    ManagerTeam.find({ manager: userId })
+      .populate("team", "teamName shortName teamLogo ageGroup city")
+      .lean(),
+  ]);
 
   if (!result) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Manager not found");
   }
 
   const isDetailsSubmitted = checkIsProfileCompleted(result);
+  const managedTeams = managerTeams.map((mt: any) => mt.team).filter(Boolean);
 
   return {
     ...result,
     userId: result._id,
-    selectTeam: result.selectTeam
-      ? {
-          id: (result.selectTeam as any)._id,
-          teamName: (result.selectTeam as any).teamName,
-        }
-      : null,
+    managedTeams,
+    totalManagedTeams: managedTeams.length,
+    selectTeam: managedTeams[0] || result.selectTeam || null,
     isDetailsSubmitted,
     isProfileCompleted: isDetailsSubmitted,
     isCompleted: isDetailsSubmitted,

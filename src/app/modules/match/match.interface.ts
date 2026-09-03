@@ -45,8 +45,10 @@ export interface IMatch {
 
   matchReview?: {
     team?: Types.ObjectId;
+    player?: Types.ObjectId;
     rating?: number; // 1-10
     coinImpact?: number;
+    notes?: string;
     createdAt?: Date;
   }[];
 

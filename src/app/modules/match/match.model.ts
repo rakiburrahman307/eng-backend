@@ -166,6 +166,12 @@ const matchSchema = new Schema(
         team: {
           type: Schema.Types.ObjectId,
           ref: 'Team',
+          required: false,
+        },
+        player: {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+          required: false,
         },
         rating: {
           type: Number,
@@ -175,6 +181,10 @@ const matchSchema = new Schema(
         coinImpact: {
           type: Number,
           default: 0,
+        },
+        notes: {
+          type: String,
+          default: null,
         },
         createdAt: {
           type: Date,

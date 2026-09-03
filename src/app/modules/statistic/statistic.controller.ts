@@ -70,11 +70,61 @@ const getSeasonLeaderboard = catchAsync(
   }
 );
 
+// 1. TOP GOAL SCORERS
+const getTopGoalScorers = catchAsync(async (req: Request, res: Response) => {
+  const result = await StatisticService.getTopGoalScorersFromDB(req.query);
 
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Top goal scorers retrieved successfully",
+    data: result,
+  });
+});
+
+// 2. TOP ASSISTS
+const getTopAssists = catchAsync(async (req: Request, res: Response) => {
+  const result = await StatisticService.getTopAssistsFromDB(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Top assist players retrieved successfully",
+    data: result,
+  });
+});
+
+// 3. TOP CLEAN SHEETS
+const getTopCleanSheets = catchAsync(async (req: Request, res: Response) => {
+  const result = await StatisticService.getTopCleanSheetsFromDB(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Top clean sheet players retrieved successfully",
+    data: result,
+  });
+});
+
+// 4. TOP OVERALL PLAYERS
+const getTopOverallPlayers = catchAsync(async (req: Request, res: Response) => {
+  const result = await StatisticService.getTopOverallPlayersFromDB(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Top overall players retrieved successfully",
+    data: result,
+  });
+});
 
 export const StatisticController = {
   getTopPlayer,
   getPlayerSeasonStats,
   getLeagueSummary,
-  getSeasonLeaderboard
+  getSeasonLeaderboard,
+  getTopGoalScorers,
+  getTopAssists,
+  getTopCleanSheets,
+  getTopOverallPlayers,
 };

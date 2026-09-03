@@ -1458,9 +1458,16 @@ const updateMatchStatusInDB = async (
 const addMatchReviewToDB = async (
   matchId: string,
   payload: {
-    reviews: {
-      team: string;
+    reviews?: {
+      team?: string;
+      player?: string;
       rating: number;
+      notes?: string;
+    }[];
+    playerReviews?: {
+      player: string;
+      rating: number;
+      notes?: string;
     }[];
   },
 ) => {
@@ -1472,20 +1479,39 @@ const addMatchReviewToDB = async (
     throw new Error("Only finished matches can be reviewed");
   }
 
-  const reviewsWithCoin = payload.reviews.map((r) => ({
-    team: r.team,
-    rating: r.rating,
-    coinImpact: getRatingCoin(r.rating),
+  const allReviews = [
+    ...(payload.reviews || []),
+    ...(payload.playerReviews || []),
+  ];
+
+  if (!allReviews.length) {
+    throw new Error("No reviews provided");
+  }
+
+  const reviewsWithCoin = allReviews.map((r: any) => ({
+    team: r.team || undefined,
+    player: r.player || undefined,
+    rating: Number(r.rating),
+    notes: r.notes || null,
+    coinImpact: getRatingCoin(Number(r.rating)),
   }));
 
-  match.matchReview.push(...reviewsWithCoin);
+  match.matchReview.push(...(reviewsWithCoin as any));
 
   await match.save();
 
+  // Apply coins and market values for teams and players
   for (const r of reviewsWithCoin) {
-    await Team.findByIdAndUpdate(r.team, {
-      $inc: { coin: r.coinImpact },
-    });
+    if (r.team) {
+      await Team.findByIdAndUpdate(r.team, {
+        $inc: { coin: r.coinImpact, marketValue: r.coinImpact * 100 },
+      });
+    }
+    if (r.player) {
+      await User.findByIdAndUpdate(r.player, {
+        $inc: { engCoine: r.coinImpact, marketValue: r.coinImpact * 10 },
+      });
+    }
   }
 
   return match;

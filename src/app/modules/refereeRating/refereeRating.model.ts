@@ -11,7 +11,7 @@ const matchEvaluationSchema = new Schema(
     referee: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: false,
     },
 
     homeTeam: {

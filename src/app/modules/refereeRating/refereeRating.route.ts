@@ -6,8 +6,12 @@ import { USER_ROLES } from '../../../enums/user';
 
 const router = express.Router();
 
-// CREATE (REFEREE SUBMIT)
-router.post('/',auth(USER_ROLES.REFEREE), MatchEvaluationController.createEvaluation);
+// CREATE (REFEREE / MANAGER SUBMIT)
+router.post(
+  '/',
+  auth(USER_ROLES.MANAGER, USER_ROLES.REFEREE, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  MatchEvaluationController.createEvaluation
+);
 
 // GET ALL
 router.get('/', MatchEvaluationController.getAllEvaluations);

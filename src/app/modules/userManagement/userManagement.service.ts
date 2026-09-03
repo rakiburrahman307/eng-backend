@@ -4,6 +4,7 @@ import { USER_ROLES } from "../../../enums/user";
 import QueryBuilder from "../../../util/queryBuilder";
 import { User } from "../user/user.model";
 import { Subscription } from "../subscription/subscription.model";
+import { ManagerTeam } from "../managerTeam/managerTeam.model";
 
 // GET ALL USERS
 const getAllUsersFromDB = async (query: Record<string, any>) => {
@@ -69,13 +70,13 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
   if (queryObj.role === "PENDING_REQUESTS") {
     filterQuery.status = "PENDING";
     delete queryObj.role;
-  } else if (queryObj.role === "MANAGER") {
+  } else if (queryObj.role === USER_ROLES.MANAGER) {
     filterQuery.role = USER_ROLES.MANAGER;
     delete queryObj.role;
-  } else if (queryObj.role === "REFEREE") {
+  } else if (queryObj.role === USER_ROLES.REFEREE) {
     filterQuery.role = USER_ROLES.REFEREE;
     delete queryObj.role;
-  } else if (queryObj.role === "PLAYER") {
+  } else if (queryObj.role === USER_ROLES.PLAYER) {
     filterQuery.role = USER_ROLES.PLAYER;
     delete queryObj.role;
   } else if (queryObj.role === "ALL") {
@@ -117,13 +118,29 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
     .filter(Boolean);
   const allUserIds = [...new Set([...userIds, ...parentIds])];
 
-  const activeSubs = await Subscription.find({
-    user: { $in: allUserIds },
-    status: "active",
-  }).populate("package");
+  const [activeSubs, managerLinks] = await Promise.all([
+    Subscription.find({
+      user: { $in: allUserIds },
+      status: "active",
+    }).populate("package"),
+    ManagerTeam.find({
+      manager: { $in: userIds },
+    }).populate("team", "teamName shortName teamLogo ageGroup city"),
+  ]);
 
   const subMap = new Map();
   activeSubs.forEach((sub: any) => subMap.set(sub.user.toString(), sub));
+
+  const managerTeamMap = new Map<string, any[]>();
+  managerLinks.forEach((ml: any) => {
+    const mId = ml.manager.toString();
+    if (!managerTeamMap.has(mId)) {
+      managerTeamMap.set(mId, []);
+    }
+    if (ml.team) {
+      managerTeamMap.get(mId)!.push(ml.team);
+    }
+  });
 
   const result = rawResult.map((u: any) => {
     const userObj = u.toObject ? u.toObject() : u;
@@ -139,8 +156,16 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
         : null;
     const activeSub = directSub || parentSub;
 
+    const managedTeams = managerTeamMap.get(userObj._id?.toString()) || [];
+
     return {
       ...userObj,
+      managedTeams,
+      totalManagedTeams: managedTeams.length,
+      selectTeam:
+        userObj.role === USER_ROLES.MANAGER && managedTeams.length > 0
+          ? managedTeams[0]
+          : userObj.selectTeam,
       engCoine: userCoins,
       marketValue: userMV,
       activeSubscription: activeSub || null,

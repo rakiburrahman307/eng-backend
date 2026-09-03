@@ -15,6 +15,15 @@ router.get(
 );
 
 
+// 🏆 TOP 20 LEADERBOARDS
+router.get("/top-goal-scorers", StatisticController.getTopGoalScorers);
+
+router.get("/top-assists", StatisticController.getTopAssists);
+
+router.get("/top-clean-sheets", StatisticController.getTopCleanSheets);
+
+router.get("/top-overall-players", StatisticController.getTopOverallPlayers);
+
 router.get(
   "/top-player/:leagueId",
   StatisticController.getTopPlayer

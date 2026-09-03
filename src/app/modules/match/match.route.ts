@@ -29,7 +29,7 @@ router.get(
 
 router.patch(
   '/review/:id',
-  auth(USER_ROLES.REFEREE),
+  auth(USER_ROLES.MANAGER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.REFEREE),
   MatchController.addMatchReview,
 );
 
