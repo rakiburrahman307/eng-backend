@@ -83,9 +83,9 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
     }
   }
 
-  // 5. Cancel any previous active subscription for targetUser or Parent
+  // 5. Cancel only previous active subscriptions for THIS specific target player (do not cancel parent or other children)
   await Subscription.updateMany(
-    { user: { $in: [targetUser._id, user._id] }, status: 'active' },
+    { user: targetUser._id, status: 'active', subscriptionId: { $ne: subscriptionId } },
     { status: 'cancel' }
   );
 

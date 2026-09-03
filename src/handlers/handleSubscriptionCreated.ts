@@ -77,9 +77,9 @@ export const handleSubscriptionCreated = async (data: any) => {
     }
   }
 
-  // Cancel any old active subscriptions for targetUser or Parent
+  // Cancel any old active subscriptions for THIS specific target player (do not cancel parent or other children)
   await Subscription.updateMany(
-    { user: { $in: [targetUser._id, user._id] }, status: "active" },
+    { user: targetUser._id, status: "active", subscriptionId: { $ne: subscription.id } },
     { status: "cancel" }
   );
 

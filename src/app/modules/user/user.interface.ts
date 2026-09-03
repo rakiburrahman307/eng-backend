@@ -66,6 +66,8 @@ export type IUser = {
     emergencyEmail?: string;
     emergencyPhone?: string;
     jerseyNumber?: string;
+    isSubscribed?: boolean;
+    hasAccess?: boolean;
 }
 
 export type UserModal = {

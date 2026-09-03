@@ -181,6 +181,14 @@ const userSchema = new Schema<IUser, UserModal>(
       type: String,
       default: "",
     },
+    isSubscribed: {
+      type: Boolean,
+      default: false,
+    },
+    hasAccess: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

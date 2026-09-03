@@ -63,21 +63,36 @@ export const handleSubscriptionUpdated = async (data: any) => {
     if (trxId) existingSub.trxId = trxId;
     await existingSub.save();
 
-    await User.findByIdAndUpdate(existingUser._id, {
-      isSubscribed: subscription.status === 'active',
-      hasAccess: subscription.status === 'active',
-    });
+    const targetUserIdToUpdate = existingSub.user || existingUser._id;
+    await User.updateMany(
+      { _id: { $in: [existingUser._id, targetUserIdToUpdate] } },
+      {
+        $set: {
+          isSubscribed: subscription.status === 'active',
+          hasAccess: subscription.status === 'active',
+        },
+      }
+    );
     return existingSub;
   }
 
   // Handle case where user switches or creates new sub
+  const targetUserId = subscription.metadata?.targetUserId || customer?.metadata?.targetUserId || userId;
+  let targetUser = existingUser;
+  if (targetUserId && targetUserId.toString() !== existingUser._id.toString()) {
+    const foundTarget = await User.findById(targetUserId);
+    if (foundTarget) {
+      targetUser = foundTarget;
+    }
+  }
+
   await Subscription.updateMany(
-    { user: existingUser._id, status: 'active' },
+    { user: targetUser._id, status: 'active', subscriptionId: { $ne: subscription.id } },
     { status: 'cancel' }
   );
 
   const newSubscription = new Subscription({
-    user: existingUser._id,
+    user: targetUser._id,
     customerId: customer?.id,
     package: pkg._id,
     price: amountPaid || pkg.price,
