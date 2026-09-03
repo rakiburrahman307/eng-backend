@@ -1119,10 +1119,93 @@ const deleteMatchFromDB = async (id: string) => {
   // 1. Rollback all match events (goals/assists/cards, reducing player stats & reversing user coins)
   await MatchResultService.rollbackAllResultsForMatch(id);
 
-  // 2. Clean up referee ratings/evaluations for this match
+  // 2. Rollback Player of the Day / Man of the Match rewards from referee evaluations
+  const evaluations = await MatchEvaluation.find({ match: id });
+  if (evaluations.length > 0) {
+    const pe = await PlayerEconomy.findOne();
+    const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
+    const potdMV = pe?.playerOfTheDay?.marketValue ?? 0;
+
+    for (const evaluation of evaluations) {
+      if (evaluation.manOfTheMatch) {
+        // Rollback playerOfTheDay count in PlayerStats
+        const currentStats = await PlayerStats.findOne({ player: evaluation.manOfTheMatch });
+        if (currentStats) {
+          const newPOTD = Math.max(0, (currentStats.playerOfTheDay ?? 0) - 1);
+          await PlayerStats.findOneAndUpdate(
+            { player: evaluation.manOfTheMatch },
+            { $set: { playerOfTheDay: newPOTD } }
+          );
+        }
+
+        // Rollback player user coins and market value
+        const playerUser = await User.findById(evaluation.manOfTheMatch);
+        if (playerUser) {
+          const newCoin = Math.max(0, (playerUser.engCoine ?? 0) - potdCoin);
+          const newMV = Math.max(0, (playerUser.marketValue ?? 0) - potdMV);
+          await User.findByIdAndUpdate(evaluation.manOfTheMatch, {
+            $set: { engCoine: newCoin, marketValue: newMV },
+          });
+        }
+      }
+    }
+  }
+
+  // 3. Rollback Team win/draw reward coins if match was finished
+  if (match.status === "finished") {
+    const ce = await ClubEconomy.findOne();
+    const homeTeamId = match.homeTeam;
+    const awayTeamId = match.awayTeam;
+    const homeScore = match.homeScore || 0;
+    const awayScore = match.awayScore || 0;
+
+    if (homeScore === awayScore) {
+      const drawCoin = ce?.drawMatch?.coin ?? 2000;
+      const drawMV = drawCoin * 100;
+      if (homeTeamId) {
+        const hTeam = await Team.findById(homeTeamId);
+        if (hTeam) {
+          await Team.findByIdAndUpdate(homeTeamId, {
+            $set: {
+              coin: Math.max(0, (hTeam.coin ?? 0) - drawCoin),
+              marketValue: Math.max(0, (hTeam.marketValue ?? 0) - drawMV),
+            },
+          });
+        }
+      }
+      if (awayTeamId) {
+        const aTeam = await Team.findById(awayTeamId);
+        if (aTeam) {
+          await Team.findByIdAndUpdate(awayTeamId, {
+            $set: {
+              coin: Math.max(0, (aTeam.coin ?? 0) - drawCoin),
+              marketValue: Math.max(0, (aTeam.marketValue ?? 0) - drawMV),
+            },
+          });
+        }
+      }
+    } else {
+      const winCoin = ce?.winMatch?.coin ?? 5000;
+      const winMV = winCoin * 100;
+      const winnerTeamId = match.winnerTeam || (homeScore > awayScore ? homeTeamId : awayTeamId);
+      if (winnerTeamId) {
+        const wTeam = await Team.findById(winnerTeamId);
+        if (wTeam) {
+          await Team.findByIdAndUpdate(winnerTeamId, {
+            $set: {
+              coin: Math.max(0, (wTeam.coin ?? 0) - winCoin),
+              marketValue: Math.max(0, (wTeam.marketValue ?? 0) - winMV),
+            },
+          });
+        }
+      }
+    }
+  }
+
+  // 4. Clean up referee ratings/evaluations for this match
   await MatchEvaluation.deleteMany({ match: id });
 
-  // 3. Delete the match document itself
+  // 5. Delete the match document itself
   const deleted = await Match.findByIdAndDelete(id);
   if (deleted) {
     if ((global as any).io) {

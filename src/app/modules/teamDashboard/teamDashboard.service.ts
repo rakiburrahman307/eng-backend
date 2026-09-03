@@ -87,11 +87,13 @@ const getTeamDashboardFromDB = async (teamId: string) => {
 
   // 🏟 TEAM INFO
   const team = await Team.findById(teamObjectId).select(
-    "teamName shortName teamLogo city country stadiumName",
+    "teamName shortName teamLogo city country stadiumName coin marketValue ageGroup teamType",
   );
 
   return {
     team,
+    coin: team?.coin ?? 0,
+    marketValue: team?.marketValue ?? 0,
     totalPlayers,
     players,
     upcomingMatches,
