@@ -32,7 +32,7 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
       dateOfBirth: { $exists: true, $ne: null },
       document: { $exists: true, $ne: null, $nin: [[], ""] },
     },
-    // Player with active subscription (including child players under subscribed parents)
+    // Player with active subscription
     {
       role: {
         $in: [
@@ -45,7 +45,6 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
         {
           $or: [
             { _id: { $in: activeSubUserIds } },
-            { parentId: { $in: activeSubUserIds } },
             { isSubscribed: true },
             { hasAccess: true },
           ],
@@ -149,12 +148,7 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
     const userMV = Number(userObj.marketValue) || userCoins * 100;
 
     const directSub = subMap.get(userObj._id?.toString());
-    const parentSub = userObj.parentId?._id
-      ? subMap.get(userObj.parentId._id.toString())
-      : userObj.parentId
-        ? subMap.get(userObj.parentId.toString())
-        : null;
-    const activeSub = directSub || parentSub;
+    const activeSub = directSub || null;
 
     const managedTeams = managerTeamMap.get(userObj._id?.toString()) || [];
 
@@ -479,7 +473,6 @@ const getUserAnalyticsFromDB = async () => {
       {
         $or: [
           { _id: { $in: activeSubUserIds } },
-          { parentId: { $in: activeSubUserIds } },
           { isSubscribed: true },
           { hasAccess: true },
         ],

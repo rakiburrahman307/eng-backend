@@ -2,16 +2,22 @@ import mongoose from "mongoose";
 import { MatchResult } from "../matchResult/matchResult.model";
 import { Match } from "../match/match.model";
 import { League } from "../league/league.model";
+import { LeagueTeam } from "../leagueTeam/leagueTeam.model";
 import { User } from "../user/user.model";
 import { Team } from "../team/team.model";
+
 import { USER_ROLES } from "../../../enums/user";
 import { getBatchPlayerStatsSummary, IPlayerStatsDetails } from "../../../helpers/playerStatsHelper";
+import { getActivePremiumSubUserIds } from "../../../helpers/packageHelper";
 
 
 const getTopPlayerFromDB = async (leagueId: string) => {
-  const parentIds = await User.find({
-    parentId: { $exists: true, $ne: null },
-  }).distinct("parentId");
+  const [parentIds, activePremiumSubUserIds] = await Promise.all([
+    User.find({
+      parentId: { $exists: true, $ne: null },
+    }).distinct("parentId"),
+    getActivePremiumSubUserIds(),
+  ]);
 
   const result = await MatchResult.aggregate([
     {
@@ -90,17 +96,11 @@ const getTopPlayerFromDB = async (leagueId: string) => {
             USER_ROLES.TOURNAMENT_PLAYER,
             USER_ROLES.OTHER_CLUBS,
           ],
-          $ne: "PARENT",
         },
         "player._id": { $nin: parentIds },
         $or: [
-          { "player.parentId": { $exists: true, $ne: null } },
-          { "player.position": { $exists: true, $ne: null } },
-          { "player.dateOfBirth": { $exists: true, $ne: null } },
-          { "player.ageGroup": { $exists: true, $ne: null } },
-          { "player.selectTeam": { $exists: true, $ne: null } },
-          { "player.email": null },
-          { "player.password": null },
+          { "player._id": { $in: activePremiumSubUserIds } },
+          { "player.parentId": { $in: activePremiumSubUserIds } },
         ],
       },
     },
@@ -209,8 +209,7 @@ const getPlayerSeasonStatsFromDB = async (
 
 
 const getLeagueSummaryFromDB = async (query?: Record<string, any>) => {
-  const { leagueName, leagueId, league, season, searchTerm, search } = query || {};
-  const searchKeyword = search || searchTerm || leagueName;
+  const { leagueName, leagueId, league, season } = query || {};
   const directLeagueId = leagueId || (league && mongoose.Types.ObjectId.isValid(league as string) ? league : null);
 
   const matchedLeagueIds: mongoose.Types.ObjectId[] = [];
@@ -218,14 +217,15 @@ const getLeagueSummaryFromDB = async (query?: Record<string, any>) => {
     matchedLeagueIds.push(new mongoose.Types.ObjectId(directLeagueId as string));
   }
 
-  if (searchKeyword || season) {
-    const filterConditions: any = {
-      $or: [
-        { leagueName: { $regex: (searchKeyword || "").trim(), $options: "i" } },
-        { name: { $regex: (searchKeyword || "").trim(), $options: "i" } },
-      ],
-    };
-    if (season) {
+  if (leagueName || season) {
+    const filterConditions: any = {};
+    if (leagueName && leagueName.trim()) {
+      filterConditions.$or = [
+        { leagueName: { $regex: leagueName.trim(), $options: "i" } },
+        { name: { $regex: leagueName.trim(), $options: "i" } },
+      ];
+    }
+    if (season && season.trim()) {
       filterConditions.season = { $regex: season.trim(), $options: "i" };
     }
 
@@ -424,9 +424,12 @@ const getSeasonLeaderboardFromDB = async (season?: string) => {
     };
   }
 
-  const parentIds = await User.find({
-    parentId: { $exists: true, $ne: null },
-  }).distinct("parentId");
+  const [parentIds, activePremiumSubUserIds] = await Promise.all([
+    User.find({
+      parentId: { $exists: true, $ne: null },
+    }).distinct("parentId"),
+    getActivePremiumSubUserIds(),
+  ]);
 
   // ===============================
   // Goal Leaderboard
@@ -470,17 +473,11 @@ const getSeasonLeaderboardFromDB = async (season?: string) => {
             USER_ROLES.TOURNAMENT_PLAYER,
             USER_ROLES.OTHER_CLUBS,
           ],
-          $ne: "PARENT",
         },
         "user._id": { $nin: parentIds },
         $or: [
-          { "user.parentId": { $exists: true, $ne: null } },
-          { "user.position": { $exists: true, $ne: null } },
-          { "user.dateOfBirth": { $exists: true, $ne: null } },
-          { "user.ageGroup": { $exists: true, $ne: null } },
-          { "user.selectTeam": { $exists: true, $ne: null } },
-          { "user.email": null },
-          { "user.password": null },
+          { "user._id": { $in: activePremiumSubUserIds } },
+          { "user.parentId": { $in: activePremiumSubUserIds } },
         ],
       },
     },
@@ -553,17 +550,11 @@ const getSeasonLeaderboardFromDB = async (season?: string) => {
             USER_ROLES.TOURNAMENT_PLAYER,
             USER_ROLES.OTHER_CLUBS,
           ],
-          $ne: "PARENT",
         },
         "user._id": { $nin: parentIds },
         $or: [
-          { "user.parentId": { $exists: true, $ne: null } },
-          { "user.position": { $exists: true, $ne: null } },
-          { "user.dateOfBirth": { $exists: true, $ne: null } },
-          { "user.ageGroup": { $exists: true, $ne: null } },
-          { "user.selectTeam": { $exists: true, $ne: null } },
-          { "user.email": null },
-          { "user.password": null },
+          { "user._id": { $in: activePremiumSubUserIds } },
+          { "user.parentId": { $in: activePremiumSubUserIds } },
         ],
       },
     },
@@ -605,7 +596,7 @@ const getSeasonLeaderboardFromDB = async (season?: string) => {
  */
 const getEnrichedPlayersWithStats = async (query?: Record<string, any>) => {
   const { ageGroup, teamId, search, leagueName, leagueId, league, season, searchTerm } = query || {};
-  const searchKeyword = search || searchTerm || leagueName;
+  const playerSearch = (search || searchTerm) as string;
   const directLeagueId = leagueId || (league && mongoose.Types.ObjectId.isValid(league as string) ? league : null);
 
   const matchedLeagueIds: mongoose.Types.ObjectId[] = [];
@@ -613,14 +604,15 @@ const getEnrichedPlayersWithStats = async (query?: Record<string, any>) => {
     matchedLeagueIds.push(new mongoose.Types.ObjectId(directLeagueId as string));
   }
 
-  if (searchKeyword || season) {
-    const filterConditions: any = {
-      $or: [
-        { leagueName: { $regex: (searchKeyword || "").trim(), $options: "i" } },
-        { name: { $regex: (searchKeyword || "").trim(), $options: "i" } },
-      ],
-    };
-    if (season) {
+  if (leagueName || season) {
+    const filterConditions: any = {};
+    if (leagueName && leagueName.trim()) {
+      filterConditions.$or = [
+        { leagueName: { $regex: leagueName.trim(), $options: "i" } },
+        { name: { $regex: leagueName.trim(), $options: "i" } },
+      ];
+    }
+    if (season && season.trim()) {
       filterConditions.season = { $regex: season.trim(), $options: "i" };
     }
 
@@ -637,11 +629,27 @@ const getEnrichedPlayersWithStats = async (query?: Record<string, any>) => {
   }
 
   let matchFilterOptions: any = undefined;
+  let teamIdsInLeague: mongoose.Types.ObjectId[] = [];
+
   if (matchedLeagueIds.length > 0) {
-    const matchesInLeague = await Match.find({
-      league: { $in: matchedLeagueIds },
-    }).select("_id");
+    const [matchesInLeague, leagueTeamLinks, directTeams] = await Promise.all([
+      Match.find({ league: { $in: matchedLeagueIds } }).select("_id homeTeam awayTeam"),
+      LeagueTeam.find({ league: { $in: matchedLeagueIds } }).select("team"),
+      Team.find({ league: { $in: matchedLeagueIds } }).select("_id"),
+    ]);
+
     const matchIds = matchesInLeague.map((m) => m._id);
+    const leagueTeamIds = leagueTeamLinks.map((lt) => lt.team).filter(Boolean);
+    const directTeamIds = directTeams.map((t) => t._id).filter(Boolean);
+    const matchTeamIds = matchesInLeague.flatMap((m) => [m.homeTeam, m.awayTeam]).filter(Boolean);
+
+    teamIdsInLeague = [
+      ...new Set([...leagueTeamIds, ...directTeamIds, ...matchTeamIds].map((id) => id.toString())),
+    ].map((id) => new mongoose.Types.ObjectId(id));
+
+    if (!teamIdsInLeague.length) {
+      return [];
+    }
 
     matchFilterOptions = {
       matchFilter: {
@@ -656,12 +664,15 @@ const getEnrichedPlayersWithStats = async (query?: Record<string, any>) => {
     };
   }
 
-  const parentIds = await User.find({
-    parentId: { $exists: true, $ne: null },
-  }).distinct("parentId");
+  const [parentIds, activePremiumSubUserIds] = await Promise.all([
+    User.find({
+      parentId: { $exists: true, $ne: null },
+    }).distinct("parentId"),
+    getActivePremiumSubUserIds(),
+  ]);
 
   const userFilter: any = {
-    _id: { $nin: parentIds },
+    _id: { $in: activePremiumSubUserIds, $nin: parentIds },
     role: {
       $in: [
         USER_ROLES.PLAYER,
@@ -670,15 +681,6 @@ const getEnrichedPlayersWithStats = async (query?: Record<string, any>) => {
       ],
     },
     status: "APPROVED",
-    $or: [
-      { parentId: { $exists: true, $ne: null } },
-      { position: { $exists: true, $ne: null } },
-      { dateOfBirth: { $exists: true, $ne: null } },
-      { ageGroup: { $exists: true, $ne: null } },
-      { selectTeam: { $exists: true, $ne: null } },
-      { email: null },
-      { password: null },
-    ],
   };
 
   if (ageGroup) {
@@ -689,14 +691,19 @@ const getEnrichedPlayersWithStats = async (query?: Record<string, any>) => {
     userFilter.selectTeam = mongoose.Types.ObjectId.isValid(teamId as string)
       ? new mongoose.Types.ObjectId(teamId as string)
       : teamId;
+  } else if (teamIdsInLeague.length > 0) {
+    userFilter.selectTeam = { $in: teamIdsInLeague };
   }
 
-  if (search && !searchKeyword) {
-    userFilter.$or = [
-      { firstName: { $regex: search as string, $options: "i" } },
-      { lastName: { $regex: search as string, $options: "i" } },
-      { userName: { $regex: search as string, $options: "i" } },
-    ];
+  if (playerSearch && playerSearch.trim()) {
+    const searchRegex = new RegExp(playerSearch.trim(), "i");
+    userFilter.$and.push({
+      $or: [
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+        { userName: searchRegex },
+      ],
+    });
   }
 
   const players = await User.find(userFilter)
@@ -806,16 +813,25 @@ const getTopAssistsFromDB = async (query?: Record<string, any>) => {
   return sorted;
 };
 
-// 3. 🧤 TOP 20 CLEAN SHEETS
+// 3. 🧤 TOP 20 CLEAN SHEETS (Goalkeepers Only)
 const getTopCleanSheetsFromDB = async (query?: Record<string, any>) => {
   const limit = parseInt(query?.limit as string) || 20;
   const enriched = await getEnrichedPlayersWithStats(query);
 
-  const sorted = enriched
+  // 🧤 Filter ONLY Goalkeepers (position: Goalkeeper / GK / Goal Keeper)
+  const goalkeepers = enriched.filter((p) => {
+    const pos = (p.position || "").toString().trim();
+    return (
+      /^(goalkeeper|gk|goal\s*keeper)$/i.test(pos) ||
+      /gk|goalkeeper/i.test(pos)
+    );
+  });
+
+  const sorted = goalkeepers
     .sort((a, b) => {
       if (b.cleanSheets !== a.cleanSheets) return b.cleanSheets - a.cleanSheets;
       if (b.playerOfTheDay !== a.playerOfTheDay) return b.playerOfTheDay - a.playerOfTheDay;
-      return b.marketValue - a.marketValue;
+      return (b.marketValue || 0) - (a.marketValue || 0);
     })
     .slice(0, limit)
     .map((player, idx) => ({
@@ -826,18 +842,21 @@ const getTopCleanSheetsFromDB = async (query?: Record<string, any>) => {
   return sorted;
 };
 
-// 4. 🌟 TOP 20 OVERALL BEST PLAYERS
+// 4. 🌟 TOP 20 OVERALL BEST PLAYERS (Max Coin / engCoine Wise ONLY)
 const getTopOverallPlayersFromDB = async (query?: Record<string, any>) => {
   const limit = parseInt(query?.limit as string) || 20;
   const enriched = await getEnrichedPlayersWithStats(query);
 
+  // 🌟 Sorted strictly and purely by MAX COINS (engCoine) descending
   const sorted = enriched
     .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (b.goals !== a.goals) return b.goals - a.goals;
-      if (b.playerOfTheDay !== a.playerOfTheDay) return b.playerOfTheDay - a.playerOfTheDay;
-      if (b.marketValue !== a.marketValue) return b.marketValue - a.marketValue;
-      return b.engCoine - a.engCoine;
+      const aCoins = Number(a.engCoine) || 0;
+      const bCoins = Number(b.engCoine) || 0;
+      if (bCoins !== aCoins) return bCoins - aCoins;
+
+      const aMarket = Number(a.marketValue) || 0;
+      const bMarket = Number(b.marketValue) || 0;
+      return bMarket - aMarket;
     })
     .slice(0, limit)
     .map((player, idx) => ({

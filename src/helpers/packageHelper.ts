@@ -86,3 +86,26 @@ export const isPremiumPlayerPackage = async (
 
   return currentPrice === maxPrice;
 };
+
+/**
+ * Returns user IDs (player or parent) that have an active higher / premium package subscription
+ */
+export const getActivePremiumSubUserIds = async (): Promise<mongoose.Types.ObjectId[]> => {
+  const { Subscription } = await import("../app/modules/subscription/subscription.model");
+  const activeSubs = await Subscription.find({
+    status: "active",
+  })
+    .populate("package")
+    .lean();
+
+  const premiumUserIds: mongoose.Types.ObjectId[] = [];
+  for (const sub of activeSubs) {
+    if (sub.user && sub.package) {
+      const isPremium = await isPremiumPlayerPackage(sub.package);
+      if (isPremium) {
+        premiumUserIds.push(sub.user as any);
+      }
+    }
+  }
+  return premiumUserIds;
+};

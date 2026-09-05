@@ -1,3 +1,4 @@
+import mongoose, { Types } from "mongoose";
 import QueryBuilder from "../../../util/queryBuilder";
 import { Team } from "./team.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
@@ -5,6 +6,7 @@ import { LeagueTeam } from "../leagueTeam/leagueTeam.model";
 import { User } from "../user/user.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { USER_ROLES } from "../../../enums/user";
+import { Subscription } from "../subscription/subscription.model";
 
 // CREATE TEAM
 const createTeamToDB = async (payload: any) => {
@@ -114,10 +116,30 @@ const getAllTeamsFromDB = async (query: Record<string, any>) => {
 
   const teamIds = teams.map((t) => t._id);
 
-  // 👥 MEMBERS COUNT
+  // Active subscription user IDs for players
+  const activeSubUserIds = await Subscription.find({
+    status: "active",
+  }).distinct("user");
+
+  // 👥 MEMBERS COUNT (Only genuine, approved, active paid players)
   const memberCounts = await User.aggregate([
     {
-      $match: { selectTeam: { $in: teamIds } },
+      $match: {
+        selectTeam: { $in: teamIds },
+        status: "APPROVED",
+        role: {
+          $in: [
+            USER_ROLES.PLAYER,
+            USER_ROLES.OTHER_CLUBS,
+            USER_ROLES.TOURNAMENT_PLAYER,
+          ],
+        },
+        $or: [
+          { _id: { $in: activeSubUserIds } },
+          { isSubscribed: true },
+          { hasAccess: true },
+        ],
+      },
     },
     {
       $group: {
@@ -203,9 +225,40 @@ const getSingleTeamFromDB = async (id: string) => {
     throw new Error("Team not found");
   }
 
-  const members = await User.find({ selectTeam: id }).select(
-    "firstName lastName userName email phone profile position status engCoine role jerseyNumber"
-  );
+  const teamObjectId = Types.ObjectId.isValid(id)
+    ? new Types.ObjectId(id)
+    : id;
+
+  const activeSubUserIds = await Subscription.find({
+    status: "active",
+  }).distinct("user");
+
+  const playerFilter: any = {
+    selectTeam: { $in: [teamObjectId, id] },
+    status: "APPROVED",
+    role: {
+      $in: [
+        USER_ROLES.PLAYER,
+        USER_ROLES.OTHER_CLUBS,
+        USER_ROLES.TOURNAMENT_PLAYER,
+      ],
+    },
+    $or: [
+      { _id: { $in: activeSubUserIds } },
+      { isSubscribed: true },
+      { hasAccess: true },
+    ],
+  };
+
+  const rawMembers = await User.find(playerFilter).select(
+    "firstName lastName userName email phone profile position status engCoine marketValue role jerseyNumber ageGroup dateOfBirth parentId"
+  ).lean();
+
+  const members = rawMembers.map((m: any) => ({
+    ...m,
+    name: m.userName || `${m.firstName || ""} ${m.lastName || ""}`.trim(),
+    isPaid: true,
+  }));
 
   const managerLinks = await ManagerTeam.find({ team: id });
   const managerUserIds = managerLinks.map((m) => m.manager);

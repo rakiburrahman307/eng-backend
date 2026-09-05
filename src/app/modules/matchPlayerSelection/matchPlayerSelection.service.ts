@@ -86,16 +86,16 @@ const createSelectionIntoDB = async (payload: any, user: any) => {
   await validatePlayersBelongToTeam(players, team.toString());
 
   // 🛑 Validate maxPlayersPerTeam set by Admin
-  const matchData = await Match.findById(match);
-  if (matchData && (matchData as any).maxPlayersPerTeam) {
-    const maxAllowed = (matchData as any).maxPlayersPerTeam;
-    if (players.length > maxAllowed) {
-      throw new ApiError(
-        400,
-        `Maximum ${maxAllowed} players allowed per team for this match as set by Admin`,
-      );
-    }
-  }
+  // const matchData = await Match.findById(match);
+  // if (matchData && (matchData as any).maxPlayersPerTeam) {
+  //   const maxAllowed = (matchData as any).maxPlayersPerTeam;
+  //   if (players.length > maxAllowed) {
+  //     throw new ApiError(
+  //       400,
+  //       `Maximum ${maxAllowed} players allowed per team for this match as set by Admin`,
+  //     );
+  //   }
+  // }
 
   const unique = new Set(players.map((p: any) => p.player.toString()));
   if (unique.size !== players.length) {
@@ -254,16 +254,16 @@ const updateSelectionIntoDB = async (id: string, payload: any, user: any) => {
     // ⚽ Verify all selected players belong to this team
     await validatePlayersBelongToTeam(payload.players, targetTeamId.toString());
 
-    const matchData = await Match.findById(targetMatchId);
-    if (matchData && (matchData as any).maxPlayersPerTeam) {
-      const maxAllowed = (matchData as any).maxPlayersPerTeam;
-      if (payload.players.length > maxAllowed) {
-        throw new ApiError(
-          400,
-          `Maximum ${maxAllowed} players allowed per team for this match as set by Admin`,
-        );
-      }
-    }
+    // const matchData = await Match.findById(targetMatchId);
+  //   if (matchData && (matchData as any).maxPlayersPerTeam) {
+  //     const maxAllowed = (matchData as any).maxPlayersPerTeam;
+  //     if (payload.players.length > maxAllowed) {
+  //       throw new ApiError(
+  //         400,
+  //         `Maximum ${maxAllowed} players allowed per team for this match as set by Admin`,
+  //       );
+  //     }
+  //   }
   }
 
   const updated = await MatchPlayerSelection.findByIdAndUpdate(

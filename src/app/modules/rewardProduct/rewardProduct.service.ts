@@ -266,12 +266,8 @@ const redeemCoffeeRewardInDB = async (
     );
   }
 
-  const subUserIds: any[] = [user._id];
-  if (user.parentId) subUserIds.push(user.parentId);
-  if (userId) subUserIds.push(userId);
-
   const activeSubscription = await Subscription.findOne({
-    user: { $in: subUserIds },
+    user: user._id,
     status: 'active',
   }).populate('package');
 

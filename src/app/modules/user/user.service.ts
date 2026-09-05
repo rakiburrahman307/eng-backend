@@ -640,11 +640,13 @@ const approveOrRejectUser = async (
     );
   }
 
-  // Fetch active subscription for user or parent
+  // Fetch active subscription for user
   const activeSub = await Subscription.findOne({
-    user: { $in: [user._id, ...(user.parentId ? [user.parentId] : [])] },
+    user: user._id,
     status: "active",
-  }).populate("package");
+  } as any)
+    .sort({ createdAt: -1 })
+    .populate("package");
 
   const updatedObj = updated?.toObject ? updated.toObject() : updated;
 

@@ -124,36 +124,47 @@ export const getMyPlayersFromDB = async (parentId: string) => {
       user: { $in: playerIds },
       status: "active",
     })
+      .sort({ createdAt: -1 })
       .populate("package")
       .lean(),
     getBatchPlayerStatsSummary(playerIds),
   ]);
 
-  const subscriptionMap = new Map(
-    subscriptions.map((subscription) => [
-      subscription.user.toString(),
-      subscription,
-    ]),
-  );
-
-  return players.map((player) => {
-    const activeSubscription = subscriptionMap.get(player._id.toString());
-    const playerStats = statsMap.get(player._id.toString()) || {
-      goals: 0,
-      assists: 0,
-      cleanSheets: 0,
-      playerOfTheDay: 0,
-      yellowCards: 0,
-      redCards: 0,
-    };
-
-    return {
-      ...player,
-      activeSubscription: activeSubscription || null,
-      activePackage: activeSubscription?.package || null,
-      stats: playerStats,
-    };
+  const subscriptionMap = new Map();
+  subscriptions.forEach((sub: any) => {
+    const uId = sub.user?.toString();
+    if (uId && !subscriptionMap.has(uId)) {
+      subscriptionMap.set(uId, sub);
+    }
   });
+
+  return Promise.all(
+    players.map(async (player) => {
+      const activeSubscription = subscriptionMap.get(player._id.toString()) || null;
+      const pkg = activeSubscription?.package;
+      const isPremium = await isPremiumPlayerPackage(pkg);
+
+      const playerStats = statsMap.get(player._id.toString()) || {
+        goals: 0,
+        assists: 0,
+        cleanSheets: 0,
+        playerOfTheDay: 0,
+        yellowCards: 0,
+        redCards: 0,
+      };
+
+      return {
+        ...player,
+        isSubscribed: Boolean(activeSubscription || player.isSubscribed),
+        hasAccess: Boolean(activeSubscription || player.hasAccess),
+        isPaid: Boolean(activeSubscription || player.isSubscribed || player.hasAccess),
+        activeSubscription: activeSubscription || null,
+        activePackage: activeSubscription?.package || null,
+        isPremium: Boolean(isPremium),
+        stats: playerStats,
+      };
+    })
+  );
 };
 
 const getPlayerByIdFromDB = async (parentId: string, playerId: string) => {
@@ -189,7 +200,8 @@ const getPlayerByIdFromDB = async (parentId: string, playerId: string) => {
     Subscription.findOne({
       user: player._id,
       status: "active",
-    })
+    } as any)
+      .sort({ createdAt: -1 })
       .populate("package")
       .lean(),
 
@@ -201,6 +213,9 @@ const getPlayerByIdFromDB = async (parentId: string, playerId: string) => {
 
   return {
     ...player,
+    isSubscribed: Boolean(activeSubscription || player.isSubscribed),
+    hasAccess: Boolean(activeSubscription || player.hasAccess),
+    isPaid: Boolean(activeSubscription || player.isSubscribed || player.hasAccess),
     engCoine: isPremium ? player.engCoine || 0 : null,
     marketValue: isPremium ? player.marketValue || 0 : null,
     activeSubscription: activeSubscription || null,
@@ -288,13 +303,9 @@ const getPendingPlayersForAdminFromDB = async (query: Record<string, any>) => {
   const meta = await queryBuilder.getPaginationInfo();
 
   const playerUserIds = rawResult.map((p: any) => p._id);
-  const parentUserIds = rawResult
-    .map((p: any) => p.parentId?._id || p.parentId)
-    .filter(Boolean);
-  const allUserIds = [...new Set([...playerUserIds, ...parentUserIds])];
 
   const activeSubs = await Subscription.find({
-    user: { $in: allUserIds },
+    user: { $in: playerUserIds },
     status: "active",
   }).populate("package");
 
@@ -304,12 +315,7 @@ const getPendingPlayersForAdminFromDB = async (query: Record<string, any>) => {
   const result = rawResult.map((p: any) => {
     const playerObj = p.toObject ? p.toObject() : p;
     const directSub = subMap.get(playerObj._id?.toString());
-    const parentSub = playerObj.parentId?._id
-      ? subMap.get(playerObj.parentId._id.toString())
-      : playerObj.parentId
-        ? subMap.get(playerObj.parentId.toString())
-        : null;
-    const activeSub = directSub || parentSub;
+    const activeSub = directSub || null;
 
     return {
       ...playerObj,
@@ -354,7 +360,7 @@ const approvePlayerByAdminToDB = async (playerId: string) => {
   }
 
   const activeSub = await Subscription.findOne({
-    user: { $in: [player._id, ...(player.parentId ? [player.parentId] : [])] },
+    user: player._id,
     status: "active",
   }).populate("package");
 
@@ -402,9 +408,11 @@ const rejectPlayerByAdminToDB = async (playerId: string, reason?: string) => {
   }
 
   const activeSub = await Subscription.findOne({
-    user: { $in: [player._id, ...(player.parentId ? [player.parentId] : [])] },
+    user: player._id,
     status: "active",
-  }).populate("package");
+  } as any)
+    .sort({ createdAt: -1 })
+    .populate("package");
 
   const playerObj = updatedPlayer?.toObject
     ? updatedPlayer.toObject()
@@ -434,7 +442,7 @@ const getAllPlayersFromDB = async (
 
   // 2. Base Player Filter:
   // - MUST be a player profile belonging to a parent (parentId is NOT null)
-  // - MUST be paid (active subscription on player, active subscription on parent, or isSubscribed/hasAccess is true)
+  // - MUST be paid (active subscription on player, or isSubscribed/hasAccess is true)
   const andConditions: any[] = [
     {
       role: {
@@ -449,7 +457,6 @@ const getAllPlayersFromDB = async (
     {
       $or: [
         { _id: { $in: activeSubUserIds } },
-        { parentId: { $in: activeSubUserIds } },
         { isSubscribed: true },
         { hasAccess: true },
       ],
@@ -592,13 +599,9 @@ const getAllPlayersFromDB = async (
   ]);
 
   const playerUserIds = rawPlayers.map((p: any) => p._id);
-  const parentUserIds = rawPlayers
-    .map((p: any) => p.parentId?._id || p.parentId)
-    .filter(Boolean);
-  const allRelevantUserIds = [...new Set([...playerUserIds, ...parentUserIds])];
 
   const activePlayerSubs = await Subscription.find({
-    user: { $in: allRelevantUserIds },
+    user: { $in: playerUserIds },
     status: "active",
   }).populate("package");
 
@@ -609,12 +612,7 @@ const getAllPlayersFromDB = async (
 
   const players = rawPlayers.map((player: any) => {
     const directSub = subMap.get(player._id?.toString());
-    const parentSub = player.parentId?._id
-      ? subMap.get(player.parentId._id.toString())
-      : player.parentId
-        ? subMap.get(player.parentId.toString())
-        : null;
-    const activeSub = directSub || parentSub;
+    const activeSub = directSub || null;
 
     return {
       _id: player._id,
@@ -720,7 +718,6 @@ const getFilteredPlayersFromDB = async (
     {
       $or: [
         { _id: { $in: activeSubUserIds } },
-        { parentId: { $in: activeSubUserIds } },
         { isSubscribed: true },
         { hasAccess: true },
       ],

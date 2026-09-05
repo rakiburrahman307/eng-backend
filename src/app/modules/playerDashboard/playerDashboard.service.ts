@@ -63,10 +63,17 @@ const getPlayerDashboardFromDB = async (playerId: string) => {
   const activeSub = await Subscription.findOne({
     user: player._id,
     status: "active",
-  }).populate("package").lean();
+  } as any)
+    .sort({ createdAt: -1 })
+    .populate("package")
+    .lean();
 
   const pkg: any = activeSub?.package;
   const isPremium = await isPremiumPlayerPackage(pkg);
+
+  playerData.isSubscribed = Boolean(activeSub || player.isSubscribed);
+  playerData.hasAccess = Boolean(activeSub || player.hasAccess);
+  playerData.isPaid = Boolean(activeSub || player.isSubscribed || player.hasAccess);
 
   if (!isPremium) {
     playerData.engCoine = null;

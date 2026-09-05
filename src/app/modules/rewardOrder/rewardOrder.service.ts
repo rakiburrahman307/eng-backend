@@ -29,12 +29,10 @@ const createRewardOrderToDB = async (payload: any, userId: string) => {
     }
 
     // Check active subscription package permissions for point redemption
-    const subUserIds: any[] = [targetPlayerId, user._id];
-    if (user.parentId) subUserIds.push(user.parentId);
-    if (userId) subUserIds.push(userId);
+    const activeSubUserId = targetPlayerId || user._id;
 
     const subscription = await Subscription.findOne({
-      user: { $in: subUserIds },
+      user: activeSubUserId,
       status: "active",
     }).populate("package");
 

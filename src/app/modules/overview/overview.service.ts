@@ -21,7 +21,6 @@ const getOverviewFromDB = async () => {
       {
         $or: [
           { _id: { $in: activeSubUserIds } },
-          { parentId: { $in: activeSubUserIds } },
           { isSubscribed: true },
           { hasAccess: true },
         ],

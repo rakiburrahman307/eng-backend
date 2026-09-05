@@ -323,14 +323,9 @@ const redeemTournamentRewardInDB = async (
     );
   }
 
-  // 💳 2. Player or Parent must have an active subscription package
-  const subUserIds: any[] = [user._id];
-  if (user.parentId) {
-    subUserIds.push(user.parentId);
-  }
-
+  // 💳 2. Player must have an active subscription package
   const activeSubscription = await Subscription.findOne({
-    user: { $in: subUserIds },
+    user: user._id,
     status: "active",
   });
 
