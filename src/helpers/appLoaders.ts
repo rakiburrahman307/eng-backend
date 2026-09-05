@@ -8,6 +8,7 @@ import config from '../config';
 import handleStripeWebhook from './handleStripeWebhook';
 import router from '../app/routes';
 import { globalLimiter, imageLimiter } from '../app/middlewares/rateLimiter';
+import { maintenanceMiddleware } from '../app/middlewares/maintenanceMiddleware';
 import globalErrorHandler from '../app/middlewares/globalErrorHandler';
 import { welcome } from '../util/welcome';
 export const allowedOrigins =
@@ -66,6 +67,9 @@ export function configureMiddlewares(app: Express): void {
 }
 
 export function configureRoutes(app: Express): void {
+     // Maintenance Mode Check (IP Whitelist / Bypass Key)
+     app.use(maintenanceMiddleware);
+
      // Main API v1 routing under global rate limits
      app.use('/api/v1', globalLimiter, router);
 
