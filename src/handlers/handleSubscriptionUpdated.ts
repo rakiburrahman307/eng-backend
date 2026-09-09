@@ -55,29 +55,13 @@ export const handleSubscriptionUpdated = async (data: any) => {
   // Find sub by subscriptionId or active user sub
   const existingSub = await Subscription.findOne({ subscriptionId: subscription.id });
 
-  if (existingSub) {
-    // Update existing subscription timestamps & status
-    existingSub.currentPeriodStart = currentPeriodStart;
-    existingSub.currentPeriodEnd = currentPeriodEnd;
-    existingSub.status = subscription.status === 'active' ? 'active' : existingSub.status;
-    if (trxId) existingSub.trxId = trxId;
-    await existingSub.save();
+  // Resolve target player
+  const targetUserId =
+    subscription.metadata?.targetUserId ||
+    customer?.metadata?.targetUserId ||
+    existingSub?.user ||
+    userId;
 
-    const targetUserIdToUpdate = existingSub.user || existingUser._id;
-    await User.updateMany(
-      { _id: { $in: [existingUser._id, targetUserIdToUpdate] } },
-      {
-        $set: {
-          isSubscribed: subscription.status === 'active',
-          hasAccess: subscription.status === 'active',
-        },
-      }
-    );
-    return existingSub;
-  }
-
-  // Handle case where user switches or creates new sub
-  const targetUserId = subscription.metadata?.targetUserId || customer?.metadata?.targetUserId || userId;
   let targetUser = existingUser;
   if (targetUserId && targetUserId.toString() !== existingUser._id.toString()) {
     const foundTarget = await User.findById(targetUserId);
@@ -86,6 +70,85 @@ export const handleSubscriptionUpdated = async (data: any) => {
     }
   }
 
+  const isPlayerRole =
+    targetUser.role === USER_ROLES.PLAYER ||
+    targetUser.role === USER_ROLES.TOURNAMENT_PLAYER ||
+    targetUser.role === USER_ROLES.OTHER_CLUBS ||
+    Boolean(targetUser.parentId);
+
+  const creditToAdd = Number(pkg.credit) || 0;
+  const marketValueToAdd = creditToAdd * 100;
+
+  if (existingSub) {
+    const isPackageChanged =
+      existingSub.package &&
+      existingSub.package.toString() !== pkg._id.toString();
+
+    // Update existing subscription timestamps & status
+    existingSub.currentPeriodStart = currentPeriodStart;
+    existingSub.currentPeriodEnd = currentPeriodEnd;
+    existingSub.status =
+      subscription.status === 'active' ? 'active' : existingSub.status;
+    if (trxId) existingSub.trxId = trxId;
+
+    if (isPackageChanged) {
+      existingSub.package = pkg._id;
+      existingSub.price = amountPaid || pkg.price;
+    }
+    await existingSub.save();
+
+    const updateData: any = {
+      isSubscribed: subscription.status === 'active',
+      hasAccess: subscription.status === 'active',
+    };
+
+    if (isPlayerRole && subscription.status === 'active') {
+      updateData.blueTick = true;
+    }
+
+    // When package is updated/switched, add new package's coins and value to player
+    if (isPackageChanged && subscription.status === 'active') {
+      const incData: any = { engCoine: creditToAdd };
+      if (isPlayerRole) {
+        incData.marketValue = marketValueToAdd;
+      }
+      await User.findByIdAndUpdate(targetUser._id, {
+        $set: updateData,
+        $inc: incData,
+      });
+    } else {
+      await User.findByIdAndUpdate(targetUser._id, {
+        $set: updateData,
+      });
+    }
+
+    // Ensure Parent account also has active access
+    if (existingUser._id.toString() !== targetUser._id.toString()) {
+      await User.findByIdAndUpdate(existingUser._id, {
+        $set: {
+          isSubscribed: subscription.status === 'active',
+          hasAccess: subscription.status === 'active',
+        },
+      });
+    }
+
+    if (isPackageChanged) {
+      try {
+        await NotificationQueueHelper.sendNotification(
+          existingUser._id.toString(),
+          `Your subscription has been updated to package "${pkg.title}".`,
+          "Subscription Updated 🚀",
+          NOTIFICATION_TYPE.SUBSCRIPTION_ACTIVATED
+        );
+      } catch (err) {
+        console.error("Failed to send subscription updated notification:", err);
+      }
+    }
+
+    return existingSub;
+  }
+
+  // Handle case where user switches or creates new sub (existingSub not found)
   await Subscription.updateMany(
     { user: targetUser._id, status: 'active', subscriptionId: { $ne: subscription.id } },
     { status: 'cancel' }
@@ -106,23 +169,28 @@ export const handleSubscriptionUpdated = async (data: any) => {
 
   await newSubscription.save();
 
-  const creditToAdd = Number(pkg.credit) || 0;
-  const marketValueToAdd = creditToAdd * 100;
   const updateData: any = {
     isSubscribed: true,
     hasAccess: true,
   };
-  if (existingUser.role === USER_ROLES.PLAYER) {
+  if (isPlayerRole) {
     updateData.blueTick = true;
   }
   const incData: any = { engCoine: creditToAdd };
-  if (existingUser.role === USER_ROLES.PLAYER) {
+  if (isPlayerRole) {
     incData.marketValue = marketValueToAdd;
   }
-  await User.findByIdAndUpdate(existingUser._id, {
+  await User.findByIdAndUpdate(targetUser._id, {
     $set: updateData,
     $inc: incData,
   });
+
+  // Ensure Parent account also has active access
+  if (existingUser._id.toString() !== targetUser._id.toString()) {
+    await User.findByIdAndUpdate(existingUser._id, {
+      $set: { isSubscribed: true, hasAccess: true },
+    });
+  }
 
   try {
     await NotificationQueueHelper.sendNotification(

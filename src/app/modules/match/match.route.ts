@@ -26,6 +26,11 @@ router.get(
   MatchController.getMatchesForReferee,
 );
 
+router.get(
+  "/schedule-dates",
+  MatchController.getMatchScheduleDates,
+);
+
 
 router.patch(
   '/review/:id',

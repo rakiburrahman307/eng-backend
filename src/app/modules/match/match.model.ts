@@ -125,6 +125,11 @@ const matchSchema = new Schema(
       default: false,
     },
 
+    resultCoinAwarded: {
+      type: Boolean,
+      default: false,
+    },
+
     timerStatus: {
       type: String,
       enum: ['stopped', 'running', 'paused', 'finished'],

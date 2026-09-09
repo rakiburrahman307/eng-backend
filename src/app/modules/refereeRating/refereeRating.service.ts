@@ -3,71 +3,110 @@ import { MatchEvaluation } from "./refereeRating.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 
 // Dynamically get coin and market value reward based on rating from ClubEconomy config
+// Rating tiers:
+// - Rating: Elite (9.0 - 10.0)
+// - Rating: Great (8.0 - 8.9)
+// - Rating: Good (7.0 - 7.9)
+// - Below 7.0: 0 coin, 0 budget (Coins are NEVER deducted)
 const getConductReward = async (rating: number): Promise<{ coin: number; budgetValue: number }> => {
+  if (rating == null || isNaN(rating)) {
+    return { coin: 0, budgetValue: 0 };
+  }
+
   const ce = await ClubEconomy.findOne();
 
-  if (rating >= 90) {
+  // Normalize in case rating was passed as percentage (e.g. 85 -> 8.5)
+  const r = rating > 10 ? rating / 10 : rating;
+
+  // 10/10 - Exceptional
+  if (r >= 10) {
     return {
-      coin: ce?.exceptionalConduct?.coin ?? 2500,
-      budgetValue: ce?.exceptionalConduct?.budgetValue ?? 25000,
+      coin: Number(ce?.exceptionalConduct?.coin) || 0,
+      budgetValue: Number(ce?.exceptionalConduct?.budgetValue) || 0,
     };
   }
-  if (rating >= 80) {
+
+  // 8-9/10 - Good
+  if (r >= 8.0) {
     return {
-      coin: ce?.goodConduct?.coin ?? 1500,
-      budgetValue: ce?.goodConduct?.budgetValue ?? 15000,
+      coin: Number(ce?.goodConduct?.coin) || 0,
+      budgetValue: Number(ce?.goodConduct?.budgetValue) || 0,
     };
   }
-  if (rating >= 60) {
+
+  // 6-7/10 - Satisfactory
+  if (r >= 6.0) {
     return {
-      coin: ce?.satisfactoryConduct?.coin ?? 500,
-      budgetValue: ce?.satisfactoryConduct?.budgetValue ?? 5000,
+      coin: Number(ce?.satisfactoryConduct?.coin) || 0,
+      budgetValue: Number(ce?.satisfactoryConduct?.budgetValue) || 0,
     };
   }
-  if (rating >= 50) {
+
+  // 5/10 - Average/Neutral
+  if (r >= 5.0) {
     return {
-      coin: ce?.averageConduct?.coin ?? 0,
-      budgetValue: ce?.averageConduct?.budgetValue ?? 0,
+      coin: Number(ce?.averageConduct?.coin) || 0,
+      budgetValue: Number(ce?.averageConduct?.budgetValue) || 0,
     };
   }
-  if (rating >= 30) {
+
+  // 3-4/10 - Poor
+  if (r >= 3.0) {
     return {
-      coin: -Math.abs(ce?.poorConduct?.coin ?? 1000),
-      budgetValue: -Math.abs(ce?.poorConduct?.budgetValue ?? 10000),
+      coin: Number(ce?.poorConduct?.coin) || 0,
+      budgetValue: Number(ce?.poorConduct?.budgetValue) || 0,
     };
   }
+
+  // 1-2/10 - Unprofessional
   return {
-    coin: -Math.abs(ce?.unprofessionalConduct?.coin ?? 3000),
-    budgetValue: -Math.abs(ce?.unprofessionalConduct?.budgetValue ?? 30000),
+    coin: Number(ce?.unprofessionalConduct?.coin) || 0,
+    budgetValue: Number(ce?.unprofessionalConduct?.budgetValue) || 0,
   };
 };
 
 // CREATE EVALUATION
 const createEvaluationIntoDB = async (payload: any) => {
+  // Support both homeTeamRating and homeTeamConductRating from payload
+  const homeRating =
+    payload.homeTeamRating !== undefined
+      ? payload.homeTeamRating
+      : payload.homeTeamConductRating;
+
+  const awayRating =
+    payload.awayTeamRating !== undefined
+      ? payload.awayTeamRating
+      : payload.awayTeamConductRating;
+
+  payload.homeTeamRating = Number(homeRating);
+  payload.awayTeamRating = Number(awayRating);
+
   const result = await MatchEvaluation.create(payload);
 
   const teams = [
     {
       teamId: payload.homeTeam,
-      rating: Number(payload.homeTeamConductRating),
+      rating: Number(homeRating),
     },
     {
       teamId: payload.awayTeam,
-      rating: Number(payload.awayTeamConductRating),
+      rating: Number(awayRating),
     },
   ];
 
   for (const item of teams) {
-    if (!item.teamId || item.rating == null) continue;
+    if (!item.teamId || item.rating == null || isNaN(item.rating)) continue;
 
     const { coin, budgetValue } = await getConductReward(item.rating);
 
-    await Team.findByIdAndUpdate(item.teamId, {
-      $inc: {
-        coin,
-        marketValue: budgetValue,
-      },
-    });
+    if (coin > 0 || budgetValue > 0) {
+      await Team.findByIdAndUpdate(item.teamId, {
+        $inc: {
+          coin,
+          marketValue: budgetValue,
+        },
+      });
+    }
   }
 
   // 🏆 Reward Man of the Match / Player of the Day

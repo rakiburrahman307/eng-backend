@@ -4,7 +4,6 @@ import { LeagueTeam } from "../leagueTeam/leagueTeam.model";
 import { User } from "../user/user.model";
 import { Team } from "../team/team.model";
 import { League } from "../league/league.model";
-import { getRatingCoin } from "../../../util/getRatingCoin";
 import mongoose from "mongoose";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
 import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
@@ -19,6 +18,7 @@ import { MatchResultService } from "../matchResult/matchResult.service";
 import { MatchEvaluation } from "../refereeRating/refereeRating.model";
 import { PlayerStats } from "../playerStats/playerStats.model";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
+import { MatchPlayerSelection } from "../matchPlayerSelection/matchPlayerSelection.model";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -616,8 +616,8 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     const dateStr =
       typeof matchDate === "string" ? matchDate.split("T")[0] : "";
     if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      const startOfDay = new Date(`${dateStr}T00:00:00.000Z`);
-      const endOfDay = new Date(`${dateStr}T23:59:59.999Z`);
+      const startOfDay = dayjs.tz(dateStr, "Europe/London").startOf("day").toDate();
+      const endOfDay = dayjs.tz(dateStr, "Europe/London").endOf("day").toDate();
       andConditions.push({
         $or: [
           { matchDate: { $gte: startOfDay, $lte: endOfDay } },
@@ -1117,95 +1117,320 @@ const deleteMatchFromDB = async (id: string) => {
   }
 
   // 1. Rollback all match events (goals/assists/cards, reducing player stats & reversing user coins)
-  await MatchResultService.rollbackAllResultsForMatch(id);
+  try {
+    await MatchResultService.rollbackAllResultsForMatch(id);
+  } catch (err) {
+    console.error("Error in rollbackAllResultsForMatch:", err);
+  }
 
-  // 2. Rollback Player of the Day / Man of the Match rewards from referee evaluations
-  const evaluations = await MatchEvaluation.find({ match: id });
-  if (evaluations.length > 0) {
-    const pe = await PlayerEconomy.findOne();
-    const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
-    const potdMV = pe?.playerOfTheDay?.marketValue ?? 0;
+  // 2. Rollback Player of the Day and Team Conduct rewards from referee evaluations
+  try {
+    const evaluations = await MatchEvaluation.find({ match: id });
+    if (evaluations.length > 0) {
+      const pe = await PlayerEconomy.findOne();
+      const ce = await ClubEconomy.findOne();
+      const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
+      const potdMV = pe?.playerOfTheDay?.marketValue ?? 0;
 
-    for (const evaluation of evaluations) {
-      if (evaluation.manOfTheMatch) {
-        // Rollback playerOfTheDay count in PlayerStats
-        const currentStats = await PlayerStats.findOne({ player: evaluation.manOfTheMatch });
-        if (currentStats) {
-          const newPOTD = Math.max(0, (currentStats.playerOfTheDay ?? 0) - 1);
-          await PlayerStats.findOneAndUpdate(
-            { player: evaluation.manOfTheMatch },
-            { $set: { playerOfTheDay: newPOTD } }
-          );
+      for (const evaluation of evaluations) {
+        if (evaluation.manOfTheMatch) {
+          // Rollback playerOfTheDay count in PlayerStats
+          const currentStats = await PlayerStats.findOne({ player: evaluation.manOfTheMatch });
+          if (currentStats) {
+            const newPOTD = Math.max(0, (currentStats.playerOfTheDay ?? 0) - 1);
+            await PlayerStats.findOneAndUpdate(
+              { player: evaluation.manOfTheMatch },
+              { $set: { playerOfTheDay: newPOTD } }
+            );
+          }
+
+          // Rollback player user coins and market value
+          const playerUser = await User.findById(evaluation.manOfTheMatch);
+          if (playerUser) {
+            const newCoin = Math.max(0, (playerUser.engCoine ?? 0) - potdCoin);
+            const newMV = Math.max(0, (playerUser.marketValue ?? 0) - potdMV);
+            await User.findByIdAndUpdate(evaluation.manOfTheMatch, {
+              $set: { engCoine: newCoin, marketValue: newMV },
+            });
+          }
         }
 
-        // Rollback player user coins and market value
-        const playerUser = await User.findById(evaluation.manOfTheMatch);
-        if (playerUser) {
-          const newCoin = Math.max(0, (playerUser.engCoine ?? 0) - potdCoin);
-          const newMV = Math.max(0, (playerUser.marketValue ?? 0) - potdMV);
-          await User.findByIdAndUpdate(evaluation.manOfTheMatch, {
-            $set: { engCoine: newCoin, marketValue: newMV },
-          });
+        // Rollback Home Team Conduct Rating coins and budget
+        if (evaluation.homeTeam && evaluation.homeTeamRating != null) {
+          const r = evaluation.homeTeamRating > 10 ? evaluation.homeTeamRating / 10 : evaluation.homeTeamRating;
+          let hCoin = 0, hBudget = 0;
+          if (r >= 10) {
+            hCoin = Number(ce?.exceptionalConduct?.coin) || 0;
+            hBudget = Number(ce?.exceptionalConduct?.budgetValue) || 0;
+          } else if (r >= 8.0) {
+            hCoin = Number(ce?.goodConduct?.coin) || 0;
+            hBudget = Number(ce?.goodConduct?.budgetValue) || 0;
+          } else if (r >= 6.0) {
+            hCoin = Number(ce?.satisfactoryConduct?.coin) || 0;
+            hBudget = Number(ce?.satisfactoryConduct?.budgetValue) || 0;
+          } else if (r >= 5.0) {
+            hCoin = Number(ce?.averageConduct?.coin) || 0;
+            hBudget = Number(ce?.averageConduct?.budgetValue) || 0;
+          } else if (r >= 3.0) {
+            hCoin = Number(ce?.poorConduct?.coin) || 0;
+            hBudget = Number(ce?.poorConduct?.budgetValue) || 0;
+          } else {
+            hCoin = Number(ce?.unprofessionalConduct?.coin) || 0;
+            hBudget = Number(ce?.unprofessionalConduct?.budgetValue) || 0;
+          }
+
+          if (hCoin > 0 || hBudget > 0) {
+            const hTeam = await Team.findById(evaluation.homeTeam);
+            if (hTeam) {
+              await Team.findByIdAndUpdate(evaluation.homeTeam, {
+                $set: {
+                  coin: Math.max(0, (hTeam.coin ?? 0) - hCoin),
+                  marketValue: Math.max(0, (hTeam.marketValue ?? 0) - hBudget),
+                },
+              });
+            }
+          }
+        }
+
+        // Rollback Away Team Conduct Rating coins and budget
+        if (evaluation.awayTeam && evaluation.awayTeamRating != null) {
+          const r = evaluation.awayTeamRating > 10 ? evaluation.awayTeamRating / 10 : evaluation.awayTeamRating;
+          let aCoin = 0, aBudget = 0;
+          if (r >= 10) {
+            aCoin = Number(ce?.exceptionalConduct?.coin) || 0;
+            aBudget = Number(ce?.exceptionalConduct?.budgetValue) || 0;
+          } else if (r >= 8.0) {
+            aCoin = Number(ce?.goodConduct?.coin) || 0;
+            aBudget = Number(ce?.goodConduct?.budgetValue) || 0;
+          } else if (r >= 6.0) {
+            aCoin = Number(ce?.satisfactoryConduct?.coin) || 0;
+            aBudget = Number(ce?.satisfactoryConduct?.budgetValue) || 0;
+          } else if (r >= 5.0) {
+            aCoin = Number(ce?.averageConduct?.coin) || 0;
+            aBudget = Number(ce?.averageConduct?.budgetValue) || 0;
+          } else if (r >= 3.0) {
+            aCoin = Number(ce?.poorConduct?.coin) || 0;
+            aBudget = Number(ce?.poorConduct?.budgetValue) || 0;
+          } else {
+            aCoin = Number(ce?.unprofessionalConduct?.coin) || 0;
+            aBudget = Number(ce?.unprofessionalConduct?.budgetValue) || 0;
+          }
+
+          if (aCoin > 0 || aBudget > 0) {
+            const aTeam = await Team.findById(evaluation.awayTeam);
+            if (aTeam) {
+              await Team.findByIdAndUpdate(evaluation.awayTeam, {
+                $set: {
+                  coin: Math.max(0, (aTeam.coin ?? 0) - aCoin),
+                  marketValue: Math.max(0, (aTeam.marketValue ?? 0) - aBudget),
+                },
+              });
+            }
+          }
         }
       }
     }
+  } catch (err) {
+    console.error("Error rolling back evaluations:", err);
   }
 
-  // 3. Rollback Team win/draw reward coins if match was finished
-  if (match.status === "finished") {
-    const ce = await ClubEconomy.findOne();
-    const homeTeamId = match.homeTeam;
-    const awayTeamId = match.awayTeam;
-    const homeScore = match.homeScore || 0;
-    const awayScore = match.awayScore || 0;
+  // 3. Rollback Team win/draw reward coins ONLY if resultCoinAwarded was true
+  try {
+    if (match.resultCoinAwarded) {
+      const ce = await ClubEconomy.findOne();
+      const homeTeamId = match.homeTeam;
+      const awayTeamId = match.awayTeam;
+      const homeScore = match.homeScore || 0;
+      const awayScore = match.awayScore || 0;
 
-    if (homeScore === awayScore) {
-      const drawCoin = ce?.drawMatch?.coin ?? 2000;
-      const drawMV = drawCoin * 100;
-      if (homeTeamId) {
-        const hTeam = await Team.findById(homeTeamId);
-        if (hTeam) {
-          await Team.findByIdAndUpdate(homeTeamId, {
-            $set: {
-              coin: Math.max(0, (hTeam.coin ?? 0) - drawCoin),
-              marketValue: Math.max(0, (hTeam.marketValue ?? 0) - drawMV),
-            },
-          });
+      if (homeScore === awayScore) {
+        const drawCoin = Number(ce?.drawMatch?.coin) || 0;
+        const drawBudget = Number(ce?.drawMatch?.budgetValue) || (drawCoin * 10);
+        if (drawCoin > 0 || drawBudget > 0) {
+          if (homeTeamId) {
+            const hTeam = await Team.findById(homeTeamId);
+            if (hTeam) {
+              await Team.findByIdAndUpdate(homeTeamId, {
+                $set: {
+                  coin: Math.max(0, (hTeam.coin ?? 0) - drawCoin),
+                  marketValue: Math.max(0, (hTeam.marketValue ?? 0) - drawBudget),
+                },
+              });
+            }
+          }
+          if (awayTeamId) {
+            const aTeam = await Team.findById(awayTeamId);
+            if (aTeam) {
+              await Team.findByIdAndUpdate(awayTeamId, {
+                $set: {
+                  coin: Math.max(0, (aTeam.coin ?? 0) - drawCoin),
+                  marketValue: Math.max(0, (aTeam.marketValue ?? 0) - drawBudget),
+                },
+              });
+            }
+          }
         }
-      }
-      if (awayTeamId) {
-        const aTeam = await Team.findById(awayTeamId);
-        if (aTeam) {
-          await Team.findByIdAndUpdate(awayTeamId, {
-            $set: {
-              coin: Math.max(0, (aTeam.coin ?? 0) - drawCoin),
-              marketValue: Math.max(0, (aTeam.marketValue ?? 0) - drawMV),
-            },
-          });
-        }
-      }
-    } else {
-      const winCoin = ce?.winMatch?.coin ?? 5000;
-      const winMV = winCoin * 100;
-      const winnerTeamId = match.winnerTeam || (homeScore > awayScore ? homeTeamId : awayTeamId);
-      if (winnerTeamId) {
-        const wTeam = await Team.findById(winnerTeamId);
-        if (wTeam) {
-          await Team.findByIdAndUpdate(winnerTeamId, {
-            $set: {
-              coin: Math.max(0, (wTeam.coin ?? 0) - winCoin),
-              marketValue: Math.max(0, (wTeam.marketValue ?? 0) - winMV),
-            },
-          });
+      } else {
+        const winCoin = Number(ce?.winMatch?.coin) || 0;
+        const winBudget = Number(ce?.winMatch?.budgetValue) || (winCoin * 10);
+        const winnerTeamId = match.winnerTeam || (homeScore > awayScore ? homeTeamId : awayTeamId);
+        if (winnerTeamId && (winCoin > 0 || winBudget > 0)) {
+          const wTeam = await Team.findById(winnerTeamId);
+          if (wTeam) {
+            await Team.findByIdAndUpdate(winnerTeamId, {
+              $set: {
+                coin: Math.max(0, (wTeam.coin ?? 0) - winCoin),
+                marketValue: Math.max(0, (wTeam.marketValue ?? 0) - winBudget),
+              },
+            });
+          }
         }
       }
     }
+  } catch (err) {
+    console.error("Error rolling back win/draw coins:", err);
   }
 
-  // 4. Clean up referee ratings/evaluations for this match
-  await MatchEvaluation.deleteMany({ match: id });
+  // 4. Rollback match start attendance and player coins if awarded
+  if (match.coinAwarded) {
+    try {
+      const ce = await ClubEconomy.findOne();
+      const pe = await PlayerEconomy.findOne();
+      const attendCoin = Number(ce?.attendMatch?.coin) || 0;
+      const attendBudget = Number(ce?.attendMatch?.budgetValue) || (attendCoin * 10);
+      const playCoin = Number(pe?.playingMatch?.coin) || 0;
+      const playMV = Number(pe?.playingMatch?.marketValue) || 0;
 
-  // 5. Delete the match document itself
+      if (attendCoin > 0 || attendBudget > 0) {
+        if (match.homeTeam) {
+          const hTeam = await Team.findById(match.homeTeam);
+          if (hTeam) {
+            await Team.findByIdAndUpdate(match.homeTeam, {
+              $set: {
+                coin: Math.max(0, (hTeam.coin ?? 0) - attendCoin),
+                marketValue: Math.max(0, (hTeam.marketValue ?? 0) - attendBudget),
+              },
+            });
+          }
+        }
+        if (match.awayTeam) {
+          const aTeam = await Team.findById(match.awayTeam);
+          if (aTeam) {
+            await Team.findByIdAndUpdate(match.awayTeam, {
+              $set: {
+                coin: Math.max(0, (aTeam.coin ?? 0) - attendCoin),
+                marketValue: Math.max(0, (aTeam.marketValue ?? 0) - attendBudget),
+              },
+            });
+          }
+        }
+      }
+
+      const registeredPlayers = await User.find({
+        selectTeam: { $in: [match.homeTeam, match.awayTeam] },
+      }).distinct("_id");
+      const matchSelections = await MatchPlayerSelection.find({ match: id }).distinct("player");
+      const allPlayerIds = new Set([
+        ...registeredPlayers.map((p: any) => p.toString()),
+        ...matchSelections.map((p: any) => p.toString()),
+      ]);
+
+      for (const pId of allPlayerIds) {
+        const pUser = await User.findById(pId);
+        if (pUser) {
+          await User.findByIdAndUpdate(pId, {
+            $set: {
+              engCoine: Math.max(0, (pUser.engCoine ?? 0) - playCoin),
+              marketValue: Math.max(0, (pUser.marketValue ?? 0) - playMV),
+            },
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Error rolling back match start coins:", err);
+    }
+  }
+
+  // 4.5. Rollback feedback/reviews given by manager (matchReview)
+  if (match.matchReview && match.matchReview.length > 0) {
+    try {
+      const pe = await PlayerEconomy.findOne();
+      const ce = await ClubEconomy.findOne();
+
+      for (const r of match.matchReview) {
+        if (r.player) {
+          const numRating = Number(r.rating);
+          const rNorm = numRating > 10 ? numRating / 10 : numRating;
+          let coinToDeduct = Number(r.coinImpact) || 0;
+          let mvToDeduct = 0;
+
+          if (rNorm >= 9.0) {
+            mvToDeduct = Number(pe?.eliteRating?.marketValue) || 0;
+            if (!coinToDeduct) coinToDeduct = Number(pe?.eliteRating?.coin) || 0;
+          } else if (rNorm >= 8.0) {
+            mvToDeduct = Number(pe?.greatRating?.marketValue) || 0;
+            if (!coinToDeduct) coinToDeduct = Number(pe?.greatRating?.coin) || 0;
+          } else if (rNorm >= 7.0) {
+            mvToDeduct = Number(pe?.goodRating?.marketValue) || 0;
+            if (!coinToDeduct) coinToDeduct = Number(pe?.goodRating?.coin) || 0;
+          }
+
+          const pUser = await User.findById(r.player);
+          if (pUser) {
+            const newCoin = Math.max(0, (pUser.engCoine ?? 0) - coinToDeduct);
+            const newMV = Math.max(0, (pUser.marketValue ?? 0) - mvToDeduct);
+            await User.findByIdAndUpdate(r.player, {
+              $set: { engCoine: newCoin, marketValue: newMV },
+            });
+          }
+        }
+
+        if (r.team) {
+          const numRating = Number(r.rating);
+          const rNorm = numRating > 10 ? numRating / 10 : numRating;
+          let coinToDeduct = Number(r.coinImpact) || 0;
+          let budgetToDeduct = 0;
+
+          if (rNorm >= 9.0) {
+            budgetToDeduct = Number(ce?.exceptionalConduct?.budgetValue) || 0;
+            if (!coinToDeduct) coinToDeduct = Number(ce?.exceptionalConduct?.coin) || 0;
+          } else if (rNorm >= 8.0) {
+            budgetToDeduct = Number(ce?.goodConduct?.budgetValue) || 0;
+            if (!coinToDeduct) coinToDeduct = Number(ce?.goodConduct?.coin) || 0;
+          } else if (rNorm >= 7.0) {
+            budgetToDeduct = Number(ce?.satisfactoryConduct?.budgetValue) || 0;
+            if (!coinToDeduct) coinToDeduct = Number(ce?.satisfactoryConduct?.coin) || 0;
+          }
+
+          const tTeam = await Team.findById(r.team);
+          if (tTeam) {
+            const newCoin = Math.max(0, (tTeam.coin ?? 0) - coinToDeduct);
+            const newBudget = Math.max(0, (tTeam.marketValue ?? 0) - budgetToDeduct);
+            await Team.findByIdAndUpdate(r.team, {
+              $set: { coin: newCoin, marketValue: newBudget },
+            });
+          }
+        }
+      }
+    } catch (reviewErr) {
+      console.error("Error rolling back matchReview feedback coins:", reviewErr);
+    }
+  }
+
+  // 5. Clean up referee ratings/evaluations and player selections for this match
+  try {
+    await MatchEvaluation.deleteMany({ match: id });
+  } catch (err) {
+    console.error("Error deleting MatchEvaluation:", err);
+  }
+
+  try {
+    await MatchPlayerSelection.deleteMany({ match: id });
+  } catch (err) {
+    console.error("Error deleting MatchPlayerSelection:", err);
+  }
+
+  // 6. Delete the match document itself
   const deleted = await Match.findByIdAndDelete(id);
   if (deleted) {
     if ((global as any).io) {
@@ -1331,12 +1556,61 @@ const updateMatchStatusInDB = async (
     match.timerStatus = "running";
     match.timerStartedAt = ukNow;
 
-    // 🪙 1000 Coin Awarding Logic (Strictly Once)
+    // 🪙 Coin Awarding Logic for Teams & Playing Coins for Players (Strictly Once)
     if (!match.coinAwarded) {
-      await Team.updateMany(
-        { _id: { $in: [match.homeTeam, match.awayTeam] } },
-        { $inc: { coin: 1000 } },
-      );
+      // 1. Award Teams Attend a Match from ClubEconomy
+      try {
+        const ce = await ClubEconomy.findOne();
+        const attendCoin = Number(ce?.attendMatch?.coin) || 0;
+        const attendBudget = Number(ce?.attendMatch?.budgetValue) || (attendCoin * 10);
+
+        if (attendCoin > 0 || attendBudget > 0) {
+          await Team.updateMany(
+            { _id: { $in: [match.homeTeam, match.awayTeam] } },
+            { $inc: { coin: attendCoin, marketValue: attendBudget } },
+          );
+        }
+      } catch (err) {
+        console.error("Failed to award team attend coins:", err);
+      }
+
+      // 2. Award "Playing a Match" Coins & Market Value to all players of both teams
+      try {
+        const pe = await PlayerEconomy.findOne();
+        const playingCoin = Number(pe?.playingMatch?.coin) || 0;
+        const playingMV = Number(pe?.playingMatch?.marketValue) || 0;
+
+        // Find all players registered in both teams
+        const registeredPlayers = await User.find({
+          selectTeam: { $in: [match.homeTeam, match.awayTeam] },
+        }).select("_id");
+
+        // Also include any players from MatchPlayerSelection for this match
+        const matchSelections = await MatchPlayerSelection.find({
+          match: match._id,
+        }).select("players.player");
+
+        const selectedPlayerIds = matchSelections.flatMap((s) =>
+          (s.players || []).map((p: any) => p.player?.toString()).filter(Boolean),
+        );
+
+        const allPlayerIds = Array.from(
+          new Set([
+            ...registeredPlayers.map((u) => u._id.toString()),
+            ...selectedPlayerIds,
+          ]),
+        );
+
+        if (allPlayerIds.length > 0 && (playingCoin > 0 || playingMV > 0)) {
+          await User.updateMany(
+            { _id: { $in: allPlayerIds } },
+            { $inc: { engCoine: playingCoin, marketValue: playingMV } },
+          );
+        }
+      } catch (err) {
+        console.error("Failed to award playing match coins to players:", err);
+      }
+
       match.coinAwarded = true;
     }
   } else if (targetStatus === "half_time") {
@@ -1375,6 +1649,39 @@ const updateMatchStatusInDB = async (
     // Stop/finish timer
     match.timerStatus = "finished";
     match.timerStartedAt = null;
+
+    // 🏆 Award Win / Draw coins according to ClubEconomy if not already awarded
+    if (!match.resultCoinAwarded) {
+      try {
+        const ce = await ClubEconomy.findOne();
+        const homeScore = match.homeScore || 0;
+        const awayScore = match.awayScore || 0;
+
+        if (homeScore === awayScore) {
+          const drawCoin = Number(ce?.drawMatch?.coin) || 0;
+          const drawBudget = Number(ce?.drawMatch?.budgetValue) || (drawCoin * 10);
+          if (drawCoin > 0 || drawBudget > 0) {
+            await Team.updateMany(
+              { _id: { $in: [match.homeTeam, match.awayTeam] } },
+              { $inc: { coin: drawCoin, marketValue: drawBudget } },
+            );
+          }
+        } else {
+          const winnerId = homeScore > awayScore ? match.homeTeam : match.awayTeam;
+          match.winnerTeam = winnerId as any;
+          const winCoin = Number(ce?.winMatch?.coin) || 0;
+          const winBudget = Number(ce?.winMatch?.budgetValue) || (winCoin * 10);
+          if (winCoin > 0 || winBudget > 0) {
+            await Team.findByIdAndUpdate(winnerId, {
+              $inc: { coin: winCoin, marketValue: winBudget },
+            });
+          }
+        }
+        match.resultCoinAwarded = true;
+      } catch (err) {
+        console.error("Failed to award match finish win/draw coins to teams:", err);
+      }
+    }
   } else if (targetStatus === "cancelled") {
     match.status = "cancelled";
     match.timerStatus = "stopped";
@@ -1488,28 +1795,117 @@ const addMatchReviewToDB = async (
     throw new Error("No reviews provided");
   }
 
-  const reviewsWithCoin = allReviews.map((r: any) => ({
-    team: r.team || undefined,
-    player: r.player || undefined,
-    rating: Number(r.rating),
-    notes: r.notes || null,
-    coinImpact: getRatingCoin(Number(r.rating)),
-  }));
+  const pe = await PlayerEconomy.findOne();
+  const ce = await ClubEconomy.findOne();
 
-  match.matchReview.push(...(reviewsWithCoin as any));
+  const getPlayerReward = (rating: number) => {
+    const r = rating > 10 ? rating / 10 : rating;
+    if (r >= 9.0) {
+      return {
+        coin: Number(pe?.eliteRating?.coin) || 0,
+        marketValue: Number(pe?.eliteRating?.marketValue) || 0,
+      };
+    }
+    if (r >= 8.0) {
+      return {
+        coin: Number(pe?.greatRating?.coin) || 0,
+        marketValue: Number(pe?.greatRating?.marketValue) || 0,
+      };
+    }
+    if (r >= 7.0) {
+      return {
+        coin: Number(pe?.goodRating?.coin) || 0,
+        marketValue: Number(pe?.goodRating?.marketValue) || 0,
+      };
+    }
+    return { coin: 0, marketValue: 0 };
+  };
+
+  const getTeamReward = (rating: number) => {
+    const r = rating > 10 ? rating / 10 : rating;
+    if (r >= 10) {
+      return {
+        coin: Number(ce?.exceptionalConduct?.coin) || 0,
+        budgetValue: Number(ce?.exceptionalConduct?.budgetValue) || 0,
+      };
+    }
+    if (r >= 8.0) {
+      return {
+        coin: Number(ce?.goodConduct?.coin) || 0,
+        budgetValue: Number(ce?.goodConduct?.budgetValue) || 0,
+      };
+    }
+    if (r >= 6.0) {
+      return {
+        coin: Number(ce?.satisfactoryConduct?.coin) || 0,
+        budgetValue: Number(ce?.satisfactoryConduct?.budgetValue) || 0,
+      };
+    }
+    if (r >= 5.0) {
+      return {
+        coin: Number(ce?.averageConduct?.coin) || 0,
+        budgetValue: Number(ce?.averageConduct?.budgetValue) || 0,
+      };
+    }
+    if (r >= 3.0) {
+      return {
+        coin: Number(ce?.poorConduct?.coin) || 0,
+        budgetValue: Number(ce?.poorConduct?.budgetValue) || 0,
+      };
+    }
+    return {
+      coin: Number(ce?.unprofessionalConduct?.coin) || 0,
+      budgetValue: Number(ce?.unprofessionalConduct?.budgetValue) || 0,
+    };
+  };
+
+  const reviewsWithCoin = allReviews.map((r: any) => {
+    let coinImpact = 0;
+    let valueImpact = 0;
+    const numRating = Number(r.rating);
+
+    if (r.player) {
+      const reward = getPlayerReward(numRating);
+      coinImpact = reward.coin;
+      valueImpact = reward.marketValue;
+    } else if (r.team) {
+      const reward = getTeamReward(numRating);
+      coinImpact = reward.coin;
+      valueImpact = reward.budgetValue;
+    }
+
+    return {
+      team: r.team || undefined,
+      player: r.player || undefined,
+      rating: numRating,
+      notes: r.notes || null,
+      coinImpact,
+      valueImpact,
+    };
+  });
+
+  match.matchReview.push(
+    ...(reviewsWithCoin.map((r) => ({
+      team: r.team,
+      player: r.player,
+      rating: r.rating,
+      notes: r.notes,
+      coinImpact: r.coinImpact,
+    })) as any)
+  );
 
   await match.save();
 
   // Apply coins and market values for teams and players
   for (const r of reviewsWithCoin) {
-    if (r.team) {
+    if (r.team && (r.coinImpact > 0 || r.valueImpact > 0)) {
       await Team.findByIdAndUpdate(r.team, {
-        $inc: { coin: r.coinImpact, marketValue: r.coinImpact * 100 },
+        $inc: { coin: r.coinImpact, marketValue: r.valueImpact },
       });
     }
-    if (r.player) {
+    if (r.player && (r.coinImpact > 0 || r.valueImpact > 0)) {
       await User.findByIdAndUpdate(r.player, {
-        $inc: { engCoine: r.coinImpact, marketValue: r.coinImpact * 10 },
+        $inc: { engCoine: r.coinImpact, marketValue: r.valueImpact },
       });
     }
   }
@@ -1910,6 +2306,135 @@ export const emitMatchUpdate = async (matchId: string) => {
   }
 };
 
+const getMatchScheduleDatesFromDB = async (query: Record<string, any>) => {
+  const { league, leagueId, status, unplayedOnly, team, teamId } = query;
+  const matchFilter: any = {
+    matchDate: { $exists: true, $ne: null },
+  };
+
+  // League Filter
+  const targetLeague = leagueId || league;
+  if (
+    targetLeague &&
+    targetLeague !== "ALL" &&
+    targetLeague !== "null" &&
+    targetLeague !== "undefined"
+  ) {
+    if (mongoose.Types.ObjectId.isValid(targetLeague)) {
+      const objId = new mongoose.Types.ObjectId(targetLeague);
+      const matchingLeagueTeams = await LeagueTeam.find({
+        $or: [{ league: objId }, { _id: objId }],
+      }).select("_id league team");
+
+      const leagueTeamIds = matchingLeagueTeams.map((lt) => lt._id);
+      const directLeagueIds = matchingLeagueTeams.map((lt) => lt.league);
+      const teamIdsInLeague = matchingLeagueTeams
+        .map((lt) => lt.team)
+        .filter(Boolean);
+
+      const idStrings = Array.from(
+        new Set(
+          [
+            objId.toString(),
+            ...leagueTeamIds.map((id) => id.toString()),
+            ...directLeagueIds.map((id) => id?.toString()),
+          ].filter(Boolean),
+        ),
+      );
+
+      const targetLeagueIds = [
+        ...idStrings.map((idStr) => new mongoose.Types.ObjectId(idStr as string)),
+        ...idStrings,
+      ];
+
+      const allTeamIdRefs = [
+        ...teamIdsInLeague,
+        ...teamIdsInLeague.map((id) => id.toString()),
+      ];
+
+      matchFilter.$or = [
+        { league: { $in: targetLeagueIds } },
+        ...(allTeamIdRefs.length > 0 ? [{ homeTeam: { $in: allTeamIdRefs } }] : []),
+        ...(allTeamIdRefs.length > 0 ? [{ awayTeam: { $in: allTeamIdRefs } }] : []),
+      ];
+    }
+  }
+
+  // Team Filter
+  const targetTeam = teamId || team;
+  if (
+    targetTeam &&
+    targetTeam !== "ALL" &&
+    targetTeam !== "null" &&
+    targetTeam !== "undefined"
+  ) {
+    if (mongoose.Types.ObjectId.isValid(targetTeam)) {
+      const teamObj = new mongoose.Types.ObjectId(targetTeam);
+      const teamFilterCondition = [
+        { homeTeam: teamObj },
+        { awayTeam: teamObj },
+        { homeTeam: targetTeam.toString() },
+        { awayTeam: targetTeam.toString() },
+      ];
+      if (matchFilter.$or) {
+        matchFilter.$and = [
+          { $or: matchFilter.$or },
+          { $or: teamFilterCondition },
+        ];
+        delete matchFilter.$or;
+      } else {
+        matchFilter.$or = teamFilterCondition;
+      }
+    }
+  }
+
+  // Status Filter
+  if (status && status !== "ALL") {
+    const lowerStatus = (status as string).toLowerCase();
+    if (lowerStatus === "upcoming" || lowerStatus === "scheduled") {
+      matchFilter.status = { $ne: "finished" };
+    } else {
+      matchFilter.status = { $regex: new RegExp(`^${lowerStatus}$`, "i") };
+    }
+  }
+
+  if (unplayedOnly === "true" || unplayedOnly === true) {
+    matchFilter.status = { $ne: "finished" };
+  }
+
+  const rawDates = await Match.aggregate([
+    { $match: matchFilter },
+    {
+      $group: {
+        _id: {
+          $dateToString: {
+            format: "%Y-%m-%d",
+            date: "$matchDate",
+            timezone: "Europe/London",
+          },
+        },
+        matchCount: { $sum: 1 },
+        sampleDate: { $first: "$matchDate" },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ]);
+
+  const formattedDates = rawDates
+    .filter((item) => item._id && item._id.trim() !== "")
+    .map((item) => {
+      const ukDate = dayjs(item.sampleDate).tz("Europe/London");
+      const dayLabel = ukDate.format("ddd DD/MM/YY"); // e.g. "Fri 05/09/25"
+      return {
+        date: item._id, // "2025-09-05"
+        label: `${dayLabel} [${item.matchCount}]`,
+        matchCount: item.matchCount,
+      };
+    });
+
+  return formattedDates;
+};
+
 export const MatchService = {
   createMatchToDB,
   getAllMatchesFromDB,
@@ -1923,4 +2448,5 @@ export const MatchService = {
   getUpcomingMatchesForManagerFromDB,
   updateMatchTimerInDB,
   modifyMatchScoreInDB,
+  getMatchScheduleDatesFromDB,
 };

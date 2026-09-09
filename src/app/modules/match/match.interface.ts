@@ -52,5 +52,8 @@ export interface IMatch {
     createdAt?: Date;
   }[];
 
+  coinAwarded?: boolean;
+  resultCoinAwarded?: boolean;
+
   notes?: string | null;
 }

@@ -195,6 +195,17 @@ const updateMatchStatus = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getMatchScheduleDates = catchAsync(async (req: Request, res: Response) => {
+  const result = await MatchService.getMatchScheduleDatesFromDB(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Match schedule dates retrieved successfully",
+    data: result,
+  });
+});
+
 export const MatchController = {
   createMatch,
   getAllMatches,
@@ -208,4 +219,5 @@ export const MatchController = {
   getUpcomingMatchesForManager,
   updateMatchTimer,
   modifyMatchScore,
+  getMatchScheduleDates,
 };
