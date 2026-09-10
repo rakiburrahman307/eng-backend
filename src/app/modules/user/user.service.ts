@@ -18,6 +18,7 @@ import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
 import stripe from "../../../config/stripe";
 import { getPlayerStatsSummary } from "../../../helpers/playerStatsHelper";
+import { isUserPremiumPlayer } from "../../../helpers/packageHelper";
 
 const createAdminToDB = async (payload: any): Promise<IUser> => {
   // check admin is exist or not;
@@ -532,6 +533,8 @@ const updateUserCoinOrMarketValue = async (
   }
 
   const updateData: Record<string, number> = {};
+  const isPlayer = user.role === USER_ROLES.PLAYER || Boolean(user.parentId);
+  const isPro = isPlayer ? await isUserPremiumPlayer(userId) : true;
 
   if (payload.engCoine !== undefined) {
     if (typeof payload.engCoine !== "number" || payload.engCoine < 0) {
@@ -540,9 +543,21 @@ const updateUserCoinOrMarketValue = async (
         "engCoine must be a non-negative number",
       );
     }
-    updateData.engCoine = payload.engCoine;
+
+    if (isPlayer) {
+      if (isPro) {
+        // Professional player floor: minimum 10,000 coins
+        updateData.engCoine = Math.max(10000, payload.engCoine);
+      } else {
+        // Non-professional players have no coin access, force 0
+        updateData.engCoine = 0;
+      }
+    } else {
+      updateData.engCoine = payload.engCoine;
+    }
+
     if (payload.marketValue === undefined) {
-      updateData.marketValue = payload.engCoine * 100;
+      updateData.marketValue = updateData.engCoine * 100;
     }
   }
 
@@ -553,7 +568,16 @@ const updateUserCoinOrMarketValue = async (
         "marketValue must be a non-negative number",
       );
     }
-    updateData.marketValue = payload.marketValue;
+
+    if (isPlayer) {
+      if (isPro) {
+        updateData.marketValue = Math.max(1000000, payload.marketValue);
+      } else {
+        updateData.marketValue = 0;
+      }
+    } else {
+      updateData.marketValue = payload.marketValue;
+    }
   }
 
   if (Object.keys(updateData).length === 0) {

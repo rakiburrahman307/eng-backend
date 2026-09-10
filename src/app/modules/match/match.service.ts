@@ -19,6 +19,7 @@ import { MatchEvaluation } from "../refereeRating/refereeRating.model";
 import { PlayerStats } from "../playerStats/playerStats.model";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 import { MatchPlayerSelection } from "../matchPlayerSelection/matchPlayerSelection.model";
+import { isUserPremiumPlayer } from "../../../helpers/packageHelper";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -1146,9 +1147,11 @@ const deleteMatchFromDB = async (id: string) => {
 
           // Rollback player user coins and market value
           const playerUser = await User.findById(evaluation.manOfTheMatch);
-          if (playerUser) {
-            const newCoin = Math.max(0, (playerUser.engCoine ?? 0) - potdCoin);
-            const newMV = Math.max(0, (playerUser.marketValue ?? 0) - potdMV);
+          if (playerUser && (potdCoin > 0 || potdMV > 0)) {
+            const isPro = await isUserPremiumPlayer(evaluation.manOfTheMatch);
+            const minFloor = isPro ? 10000 : 0;
+            const newCoin = Math.max(minFloor, (playerUser.engCoine ?? 0) - potdCoin);
+            const newMV = Math.max(minFloor * 100, (playerUser.marketValue ?? 0) - potdMV);
             await User.findByIdAndUpdate(evaluation.manOfTheMatch, {
               $set: { engCoine: newCoin, marketValue: newMV },
             });
@@ -1325,27 +1328,6 @@ const deleteMatchFromDB = async (id: string) => {
           }
         }
       }
-
-      const registeredPlayers = await User.find({
-        selectTeam: { $in: [match.homeTeam, match.awayTeam] },
-      }).distinct("_id");
-      const matchSelections = await MatchPlayerSelection.find({ match: id }).distinct("player");
-      const allPlayerIds = new Set([
-        ...registeredPlayers.map((p: any) => p.toString()),
-        ...matchSelections.map((p: any) => p.toString()),
-      ]);
-
-      for (const pId of allPlayerIds) {
-        const pUser = await User.findById(pId);
-        if (pUser) {
-          await User.findByIdAndUpdate(pId, {
-            $set: {
-              engCoine: Math.max(0, (pUser.engCoine ?? 0) - playCoin),
-              marketValue: Math.max(0, (pUser.marketValue ?? 0) - playMV),
-            },
-          });
-        }
-      }
     } catch (err) {
       console.error("Error rolling back match start coins:", err);
     }
@@ -1359,26 +1341,15 @@ const deleteMatchFromDB = async (id: string) => {
 
       for (const r of match.matchReview) {
         if (r.player) {
-          const numRating = Number(r.rating);
-          const rNorm = numRating > 10 ? numRating / 10 : numRating;
-          let coinToDeduct = Number(r.coinImpact) || 0;
-          let mvToDeduct = 0;
-
-          if (rNorm >= 9.0) {
-            mvToDeduct = Number(pe?.eliteRating?.marketValue) || 0;
-            if (!coinToDeduct) coinToDeduct = Number(pe?.eliteRating?.coin) || 0;
-          } else if (rNorm >= 8.0) {
-            mvToDeduct = Number(pe?.greatRating?.marketValue) || 0;
-            if (!coinToDeduct) coinToDeduct = Number(pe?.greatRating?.coin) || 0;
-          } else if (rNorm >= 7.0) {
-            mvToDeduct = Number(pe?.goodRating?.marketValue) || 0;
-            if (!coinToDeduct) coinToDeduct = Number(pe?.goodRating?.coin) || 0;
-          }
+          const coinToDeduct = Number(r.coinImpact) || 0;
+          const mvToDeduct = Number((r as any).valueImpact) || (coinToDeduct * 100);
 
           const pUser = await User.findById(r.player);
-          if (pUser) {
-            const newCoin = Math.max(0, (pUser.engCoine ?? 0) - coinToDeduct);
-            const newMV = Math.max(0, (pUser.marketValue ?? 0) - mvToDeduct);
+          if (pUser && (coinToDeduct > 0 || mvToDeduct > 0)) {
+            const isPro = await isUserPremiumPlayer(r.player);
+            const minFloor = isPro ? 10000 : 0;
+            const newCoin = Math.max(minFloor, (pUser.engCoine ?? 0) - coinToDeduct);
+            const newMV = Math.max(minFloor * 100, (pUser.marketValue ?? 0) - mvToDeduct);
             await User.findByIdAndUpdate(r.player, {
               $set: { engCoine: newCoin, marketValue: newMV },
             });
@@ -1574,43 +1545,7 @@ const updateMatchStatusInDB = async (
         console.error("Failed to award team attend coins:", err);
       }
 
-      // 2. Award "Playing a Match" Coins & Market Value to all players of both teams
-      try {
-        const pe = await PlayerEconomy.findOne();
-        const playingCoin = Number(pe?.playingMatch?.coin) || 0;
-        const playingMV = Number(pe?.playingMatch?.marketValue) || 0;
-
-        // Find all players registered in both teams
-        const registeredPlayers = await User.find({
-          selectTeam: { $in: [match.homeTeam, match.awayTeam] },
-        }).select("_id");
-
-        // Also include any players from MatchPlayerSelection for this match
-        const matchSelections = await MatchPlayerSelection.find({
-          match: match._id,
-        }).select("players.player");
-
-        const selectedPlayerIds = matchSelections.flatMap((s) =>
-          (s.players || []).map((p: any) => p.player?.toString()).filter(Boolean),
-        );
-
-        const allPlayerIds = Array.from(
-          new Set([
-            ...registeredPlayers.map((u) => u._id.toString()),
-            ...selectedPlayerIds,
-          ]),
-        );
-
-        if (allPlayerIds.length > 0 && (playingCoin > 0 || playingMV > 0)) {
-          await User.updateMany(
-            { _id: { $in: allPlayerIds } },
-            { $inc: { engCoine: playingCoin, marketValue: playingMV } },
-          );
-        }
-      } catch (err) {
-        console.error("Failed to award playing match coins to players:", err);
-      }
-
+      // Player "Playing a Match" coins are awarded only when the manager rates the players after the match in addMatchReviewToDB
       match.coinAwarded = true;
     }
   } else if (targetStatus === "half_time") {
@@ -1859,30 +1794,45 @@ const addMatchReviewToDB = async (
     };
   };
 
-  const reviewsWithCoin = allReviews.map((r: any) => {
-    let coinImpact = 0;
-    let valueImpact = 0;
-    const numRating = Number(r.rating);
+  const reviewsWithCoin = await Promise.all(
+    allReviews.map(async (r: any) => {
+      let coinImpact = 0;
+      let valueImpact = 0;
+      const numRating = Number(r.rating);
 
-    if (r.player) {
-      const reward = getPlayerReward(numRating);
-      coinImpact = reward.coin;
-      valueImpact = reward.marketValue;
-    } else if (r.team) {
-      const reward = getTeamReward(numRating);
-      coinImpact = reward.coin;
-      valueImpact = reward.budgetValue;
-    }
+      if (r.player) {
+        const isPro = await isUserPremiumPlayer(r.player);
+        if (isPro) {
+          // 1. Manager Rating Reward from PlayerEconomy (Elite: 300, Great: 200, Good: 100)
+          const ratingReward = getPlayerReward(numRating);
 
-    return {
-      team: r.team || undefined,
-      player: r.player || undefined,
-      rating: numRating,
-      notes: r.notes || null,
-      coinImpact,
-      valueImpact,
-    };
-  });
+          // 2. Playing a Match Reward from PlayerEconomy
+          const playingCoin = Number(pe?.playingMatch?.coin) || 0;
+          const playingMV = Number(pe?.playingMatch?.marketValue) || (playingCoin * 100);
+
+          coinImpact = ratingReward.coin + playingCoin;
+          valueImpact = ratingReward.marketValue + playingMV;
+        } else {
+          // Non-professional / free players receive NO coins
+          coinImpact = 0;
+          valueImpact = 0;
+        }
+      } else if (r.team) {
+        const reward = getTeamReward(numRating);
+        coinImpact = reward.coin;
+        valueImpact = reward.budgetValue;
+      }
+
+      return {
+        team: r.team || undefined,
+        player: r.player || undefined,
+        rating: numRating,
+        notes: r.notes || null,
+        coinImpact,
+        valueImpact,
+      };
+    }),
+  );
 
   match.matchReview.push(
     ...(reviewsWithCoin.map((r) => ({
@@ -1891,7 +1841,8 @@ const addMatchReviewToDB = async (
       rating: r.rating,
       notes: r.notes,
       coinImpact: r.coinImpact,
-    })) as any)
+      valueImpact: r.valueImpact,
+    })) as any),
   );
 
   await match.save();
@@ -2209,12 +2160,15 @@ const modifyMatchScoreInDB = async (
           { upsert: true, new: true },
         );
 
-        // 3. Increment player coins & MV
-        const scorerUser = await User.findById(scorer.player);
-        if (scorerUser) {
-          await User.findByIdAndUpdate(scorer.player, {
-            $inc: { engCoine: goalCoin, marketValue: goalMV },
-          });
+        // 3. Increment player coins & MV ONLY if player is Professional
+        const isProScorer = await isUserPremiumPlayer(scorer.player);
+        if (isProScorer && (goalCoin > 0 || goalMV > 0)) {
+          const scorerUser = await User.findById(scorer.player);
+          if (scorerUser) {
+            await User.findByIdAndUpdate(scorer.player, {
+              $inc: { engCoine: goalCoin, marketValue: goalMV },
+            });
+          }
         }
 
         // 4. Handle assist if provided
@@ -2224,11 +2178,14 @@ const modifyMatchScoreInDB = async (
             { $inc: { assists: 1 } },
             { upsert: true, new: true },
           );
-          const assistUser = await User.findById(scorer.assistPlayer);
-          if (assistUser) {
-            await User.findByIdAndUpdate(scorer.assistPlayer, {
-              $inc: { engCoine: assistCoin, marketValue: assistMV },
-            });
+          const isProAssist = await isUserPremiumPlayer(scorer.assistPlayer);
+          if (isProAssist && (assistCoin > 0 || assistMV > 0)) {
+            const assistUser = await User.findById(scorer.assistPlayer);
+            if (assistUser) {
+              await User.findByIdAndUpdate(scorer.assistPlayer, {
+                $inc: { engCoine: assistCoin, marketValue: assistMV },
+              });
+            }
           }
         }
 

@@ -187,6 +187,10 @@ const matchSchema = new Schema(
           type: Number,
           default: 0,
         },
+        valueImpact: {
+          type: Number,
+          default: 0,
+        },
         notes: {
           type: String,
           default: null,

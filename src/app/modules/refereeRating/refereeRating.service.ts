@@ -122,12 +122,17 @@ const createEvaluationIntoDB = async (payload: any) => {
       const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
       const potdMV = pe?.playerOfTheDay?.marketValue ?? 0;
 
-      await User.findByIdAndUpdate(payload.manOfTheMatch, {
-        $inc: {
-          engCoine: potdCoin,
-          marketValue: potdMV,
-        },
-      });
+      const { isUserPremiumPlayer } = await import("../../../helpers/packageHelper");
+      const isPro = await isUserPremiumPlayer(payload.manOfTheMatch);
+
+      if (isPro && (potdCoin > 0 || potdMV > 0)) {
+        await User.findByIdAndUpdate(payload.manOfTheMatch, {
+          $inc: {
+            engCoine: potdCoin,
+            marketValue: potdMV,
+          },
+        });
+      }
 
       await PlayerStats.findOneAndUpdate(
         { player: payload.manOfTheMatch },

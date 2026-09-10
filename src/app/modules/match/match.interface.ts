@@ -48,6 +48,7 @@ export interface IMatch {
     player?: Types.ObjectId;
     rating?: number; // 1-10
     coinImpact?: number;
+    valueImpact?: number;
     notes?: string;
     createdAt?: Date;
   }[];

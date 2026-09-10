@@ -109,3 +109,54 @@ export const getActivePremiumSubUserIds = async (): Promise<mongoose.Types.Objec
   }
   return premiumUserIds;
 };
+
+/**
+ * Checks if a player has an active Professional/Premium subscription.
+ * Non-professional / free players will return false.
+ */
+export const isUserPremiumPlayer = async (
+  userId: string | mongoose.Types.ObjectId,
+): Promise<boolean> => {
+  if (!userId) return false;
+  const strId = userId.toString();
+  if (!mongoose.Types.ObjectId.isValid(strId)) return false;
+
+  const { Subscription } = await import("../app/modules/subscription/subscription.model");
+  const { User } = await import("../app/modules/user/user.model");
+
+  const user = await User.findById(strId).select("_id parentId role isSubscribed hasAccess").lean();
+  if (!user) return false;
+
+  // 1. Check direct active subscription for user
+  const directSub = await Subscription.findOne({
+    user: user._id,
+    status: "active",
+  })
+    .sort({ createdAt: -1 })
+    .populate("package")
+    .lean();
+
+  if (directSub?.package) {
+    const isPremium = await isPremiumPlayerPackage(directSub.package);
+    if (isPremium) return true;
+  }
+
+  // 2. Check parent's active subscription if player has a parentId
+  if (user.parentId) {
+    const parentSub = await Subscription.findOne({
+      user: user.parentId,
+      status: "active",
+    })
+      .sort({ createdAt: -1 })
+      .populate("package")
+      .lean();
+
+    if (parentSub?.package) {
+      const isPremium = await isPremiumPlayerPackage(parentSub.package);
+      if (isPremium) return true;
+    }
+  }
+
+  return false;
+};
+
