@@ -1,6 +1,15 @@
 import { Team } from "../team/team.model";
 import { MatchEvaluation } from "./refereeRating.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
+import { Match } from "../match/match.model";
+import ApiError from "../../../errors/ApiErrors";
+import { StatusCodes } from "http-status-codes";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // Dynamically get coin and market value reward based on rating from ClubEconomy config
 // Rating tiers:
@@ -67,6 +76,36 @@ const getConductReward = async (rating: number): Promise<{ coin: number; budgetV
 
 // CREATE EVALUATION
 const createEvaluationIntoDB = async (payload: any) => {
+  if (!payload.match) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Match ID is required");
+  }
+
+  const match = await Match.findById(payload.match);
+  if (!match) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Match not found");
+  }
+
+  if (match.status !== "finished") {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Feedback can only be submitted for finished matches",
+    );
+  }
+
+  // ⏰ 24-Hour Feedback Window (Europe/London UK Timezone): Feedback cannot be submitted after 24 hours of match completion
+  const finishTime = match.finishedAt || (match as any).updatedAt;
+  if (finishTime) {
+    const nowUK = dayjs().tz("Europe/London");
+    const finishUK = dayjs(finishTime).tz("Europe/London");
+    const hoursSinceFinish = nowUK.diff(finishUK, "hour", true);
+    if (hoursSinceFinish > 24) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Feedback cannot be submitted after 24 hours of match completion (UK Time)",
+      );
+    }
+  }
+
   // Support both homeTeamRating and homeTeamConductRating from payload
   const homeRating =
     payload.homeTeamRating !== undefined

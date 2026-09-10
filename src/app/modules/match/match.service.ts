@@ -1715,10 +1715,24 @@ const addMatchReviewToDB = async (
 ) => {
   const match = await Match.findById(matchId);
 
-  if (!match) throw new Error("Match not found");
+  if (!match) throw new ApiError(StatusCodes.NOT_FOUND, "Match not found");
 
   if (match.status !== "finished") {
-    throw new Error("Only finished matches can be reviewed");
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Only finished matches can be reviewed");
+  }
+
+  // ⏰ 24-Hour Feedback Window (Europe/London UK Timezone): Feedback cannot be submitted after 24 hours of match completion
+  const finishTime = match.finishedAt || (match as any).updatedAt;
+  if (finishTime) {
+    const nowUK = dayjs().tz("Europe/London");
+    const finishUK = dayjs(finishTime).tz("Europe/London");
+    const hoursSinceFinish = nowUK.diff(finishUK, "hour", true);
+    if (hoursSinceFinish > 24) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Feedback cannot be submitted after 24 hours of match completion (UK Time)",
+      );
+    }
   }
 
   const allReviews = [
