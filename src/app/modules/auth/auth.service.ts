@@ -337,8 +337,14 @@ const newAccessTokenToUser = async(token: string)=>{
       config.jwt.jwt_secret as Secret,
       config.jwt.jwt_expire_in as string
     );
+
+    const refreshToken = jwtHelper.createToken(
+      { id: isExistUser._id, role: isExistUser.role, email: isExistUser.email },
+      config.jwt.jwtRefreshSecret as Secret,
+      config.jwt.jwtRefreshExpiresIn as string
+    );
   
-    return { accessToken }
+    return { accessToken, refreshToken, token: accessToken };
 }
   
 const resendVerificationEmailToDB = async (email:string) => {

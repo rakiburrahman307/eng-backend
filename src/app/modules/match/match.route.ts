@@ -65,17 +65,17 @@ router.patch(
   MatchController.updateMatchTimer
 );
 
-// ⚽ MODIFY SCORE (ADMIN/SUPER ADMIN ONLY)
+// ⚽ MODIFY SCORE (ADMIN/SUPER ADMIN/REFEREE)
 router.patch(
   '/:id/modify-score',
-  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.REFEREE),
   MatchController.modifyMatchScore
 );
 
-// 🔄 DIRECT STATUS UPDATE (ADMIN / SUPER ADMIN ONLY)
+// 🔄 DIRECT STATUS UPDATE (ADMIN / SUPER ADMIN / REFEREE)
 router.patch(
   '/:id/status',
-  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.REFEREE),
   MatchController.updateMatchStatus
 );
 

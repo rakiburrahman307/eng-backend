@@ -74,7 +74,16 @@ const changePassword = catchAsync(async (req: Request, res: Response) => {
 });
 
 const newAccessToken = catchAsync(async (req: Request, res: Response) => {
-  const token = req.headers.refreshtoken;
+  const token =
+    (req.headers.refreshtoken as string) ||
+    (req.headers['refresh-token'] as string) ||
+    (req.headers['refreshtoken'] as string) ||
+    req.body?.refreshToken ||
+    req.body?.token ||
+    (req.headers.authorization?.startsWith('Bearer ')
+      ? req.headers.authorization.split(' ')[1]
+      : (req.headers.authorization as string));
+
   const result = await AuthService.newAccessTokenToUser(token as string);
 
   sendResponse(res, {
