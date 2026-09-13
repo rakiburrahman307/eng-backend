@@ -1029,6 +1029,17 @@ const getSingleMatchFromDB = async (id: string) => {
     goals,
     cards,
     refereeReport,
+    matchReview: match.matchReview || [],
+    isHomeTeamReviewed:
+      Array.isArray(match.matchReview) &&
+      match.matchReview.some(
+        (r: any) => String(r.team) === String(match.homeTeam?._id || match.homeTeam),
+      ),
+    isAwayTeamReviewed:
+      Array.isArray(match.matchReview) &&
+      match.matchReview.some(
+        (r: any) => String(r.team) === String(match.awayTeam?._id || match.awayTeam),
+      ),
     timerStatus: baseMatch.timerStatus,
     timerStartedAt: baseMatch.timerStartedAt,
     elapsedSeconds: baseMatch.elapsedSeconds || 0,
@@ -1813,8 +1824,15 @@ const addMatchReviewToDB = async (
       let coinImpact = 0;
       let valueImpact = 0;
       const numRating = Number(r.rating);
+      let teamId = r.team;
 
       if (r.player) {
+        if (!teamId) {
+          const pUser = await User.findById(r.player).select("selectTeam");
+          if (pUser?.selectTeam) {
+            teamId = pUser.selectTeam;
+          }
+        }
         const isPro = await isUserPremiumPlayer(r.player);
         if (isPro) {
           // 1. Manager Rating Reward from PlayerEconomy (Elite: 300, Great: 200, Good: 100)
@@ -1838,7 +1856,7 @@ const addMatchReviewToDB = async (
       }
 
       return {
-        team: r.team || undefined,
+        team: teamId || undefined,
         player: r.player || undefined,
         rating: numRating,
         notes: r.notes || null,
@@ -1848,16 +1866,40 @@ const addMatchReviewToDB = async (
     }),
   );
 
-  match.matchReview.push(
-    ...(reviewsWithCoin.map((r) => ({
-      team: r.team,
-      player: r.player,
-      rating: r.rating,
-      notes: r.notes,
-      coinImpact: r.coinImpact,
-      valueImpact: r.valueImpact,
-    })) as any),
-  );
+  // Update existing reviews if present, or push new reviews
+  if (!match.matchReview) {
+    match.matchReview = [] as any;
+  }
+
+  for (const newRev of reviewsWithCoin) {
+    const existingIndex = match.matchReview.findIndex((existing: any) => {
+      if (newRev.player && existing.player) {
+        return String(existing.player) === String(newRev.player);
+      }
+      if (newRev.team && existing.team && !newRev.player && !existing.player) {
+        return String(existing.team) === String(newRev.team);
+      }
+      return false;
+    });
+
+    if (existingIndex !== -1) {
+      // Update existing review
+      match.matchReview[existingIndex].rating = newRev.rating;
+      match.matchReview[existingIndex].notes = newRev.notes;
+      if (newRev.team) {
+        match.matchReview[existingIndex].team = newRev.team;
+      }
+    } else {
+      match.matchReview.push({
+        team: newRev.team,
+        player: newRev.player,
+        rating: newRev.rating,
+        notes: newRev.notes,
+        coinImpact: newRev.coinImpact,
+        valueImpact: newRev.valueImpact,
+      } as any);
+    }
+  }
 
   await match.save();
 
