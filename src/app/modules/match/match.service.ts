@@ -2068,6 +2068,7 @@ const modifyMatchScoreInDB = async (
     homeScore: number;
     awayScore: number;
     goalScorers?: Array<{
+      _id?: string;
       team: string;
       player: string;
       assistPlayer?: string;
@@ -2141,18 +2142,177 @@ const modifyMatchScoreInDB = async (
   }
 
   // Handle assigned goal scorers for player stats, coins & notifications
-  if (Array.isArray(payload.goalScorers) && payload.goalScorers.length > 0) {
+  if (Array.isArray(payload.goalScorers)) {
     const pe = await PlayerEconomy.findOne();
     const goalCoin = pe?.goal?.coin ?? 0;
     const goalMV = pe?.goal?.marketValue ?? 0;
     const assistCoin = pe?.assist?.coin ?? 0;
     const assistMV = pe?.assist?.marketValue ?? 0;
 
-    for (const scorer of payload.goalScorers) {
+    // 1. Fetch all existing goal records for this match
+    const existingGoals = await MatchResult.find({
+      match: match._id,
+      eventType: "goal",
+    });
+
+    const unmatchedExisting = [...existingGoals];
+    const newGoalsToAdd: Array<{
+      _id?: string;
+      team: string;
+      player: string;
+      assistPlayer?: string;
+      goalType?: 'normal' | 'penalty' | 'header' | 'own_goal' | 'free_kick';
+      minute?: number;
+    }> = [];
+
+    // 2. Reconcile incoming goals against existing goals
+    for (const incoming of payload.goalScorers) {
+      if (!incoming.player || !incoming.team) continue;
+
+      let matchedIndex = -1;
+
+      // Match by explicit _id if provided
+      if (incoming._id) {
+        matchedIndex = unmatchedExisting.findIndex(
+          (eg) => String(eg._id) === String(incoming._id),
+        );
+      }
+
+      // If not matched by _id, match by content (player + team + minute)
+      if (matchedIndex === -1) {
+        matchedIndex = unmatchedExisting.findIndex(
+          (eg) =>
+            String(eg.player) === String(incoming.player) &&
+            String(eg.team) === String(incoming.team) &&
+            Number(eg.minute) === (Number(incoming.minute) || 1),
+        );
+      }
+
+      if (matchedIndex !== -1) {
+        // Goal already exists in DB! Do NOT recreate or re-credit stats/coins.
+        const [existingMatchGoal] = unmatchedExisting.splice(matchedIndex, 1);
+
+        const targetMin = Number(incoming.minute) || 1;
+        const targetType = incoming.goalType || "normal";
+        const oldAssist = existingMatchGoal.eventMeta?.assist ? String(existingMatchGoal.eventMeta.assist) : "";
+        const newAssist = incoming.assistPlayer ? String(incoming.assistPlayer) : "";
+
+        let needsUpdate = false;
+        if (existingMatchGoal.minute !== targetMin) {
+          existingMatchGoal.minute = targetMin;
+          needsUpdate = true;
+        }
+        if (!existingMatchGoal.eventMeta) {
+          existingMatchGoal.eventMeta = {} as any;
+        }
+        if (existingMatchGoal.eventMeta && existingMatchGoal.eventMeta.goalType !== targetType) {
+          existingMatchGoal.eventMeta.goalType = targetType;
+          needsUpdate = true;
+        }
+
+        // Handle changed assist player if amended
+        if (oldAssist !== newAssist) {
+          if (oldAssist) {
+            await PlayerStats.findOneAndUpdate(
+              { player: oldAssist },
+              { $inc: { assists: -1 } },
+            );
+            const isProOldAssist = await isUserPremiumPlayer(oldAssist);
+            if (isProOldAssist && (assistCoin > 0 || assistMV > 0)) {
+              const oldAssistUser = await User.findById(oldAssist);
+              if (oldAssistUser) {
+                const updatedCoin = Math.max(10000, (oldAssistUser.engCoine ?? 0) - assistCoin);
+                const updatedMV = Math.max(0, (oldAssistUser.marketValue ?? 0) - assistMV);
+                await User.findByIdAndUpdate(oldAssist, {
+                  $set: { engCoine: updatedCoin, marketValue: updatedMV },
+                });
+              }
+            }
+          }
+          if (newAssist) {
+            await PlayerStats.findOneAndUpdate(
+              { player: newAssist },
+              { $inc: { assists: 1 }, $set: { team: incoming.team } },
+              { upsert: true, new: true },
+            );
+            const isProNewAssist = await isUserPremiumPlayer(newAssist);
+            if (isProNewAssist && (assistCoin > 0 || assistMV > 0)) {
+              const newAssistUser = await User.findById(newAssist);
+              if (newAssistUser) {
+                await User.findByIdAndUpdate(newAssist, {
+                  $inc: { engCoine: assistCoin, marketValue: assistMV },
+                });
+              }
+            }
+          }
+          if (!existingMatchGoal.eventMeta) {
+            existingMatchGoal.eventMeta = {} as any;
+          }
+          if (existingMatchGoal.eventMeta) {
+            existingMatchGoal.eventMeta.assist = newAssist ? (new mongoose.Types.ObjectId(newAssist) as any) : undefined;
+          }
+          needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+          await existingMatchGoal.save();
+        }
+      } else {
+        // This is a genuinely new goal added by the user
+        newGoalsToAdd.push(incoming);
+      }
+    }
+
+    // 3. Any goal remaining in unmatchedExisting was REMOVED/DELETED by the admin!
+    for (const removedGoal of unmatchedExisting) {
+      // Rollback goal stats
+      if (removedGoal.player) {
+        await PlayerStats.findOneAndUpdate(
+          { player: removedGoal.player },
+          { $inc: { goals: -1 } },
+        );
+        const isProScorer = await isUserPremiumPlayer(removedGoal.player);
+        if (isProScorer && (goalCoin > 0 || goalMV > 0)) {
+          const scorerUser = await User.findById(removedGoal.player);
+          if (scorerUser) {
+            const updatedCoin = Math.max(10000, (scorerUser.engCoine ?? 0) - goalCoin);
+            const updatedMV = Math.max(0, (scorerUser.marketValue ?? 0) - goalMV);
+            await User.findByIdAndUpdate(removedGoal.player, {
+              $set: { engCoine: updatedCoin, marketValue: updatedMV },
+            });
+          }
+        }
+      }
+
+      // Rollback assist stats if this goal had an assist
+      if (removedGoal.eventMeta?.assist) {
+        const assistPlayerId = String(removedGoal.eventMeta.assist);
+        await PlayerStats.findOneAndUpdate(
+          { player: assistPlayerId },
+          { $inc: { assists: -1 } },
+        );
+        const isProAssist = await isUserPremiumPlayer(assistPlayerId);
+        if (isProAssist && (assistCoin > 0 || assistMV > 0)) {
+          const assistUser = await User.findById(assistPlayerId);
+          if (assistUser) {
+            const updatedCoin = Math.max(10000, (assistUser.engCoine ?? 0) - assistCoin);
+            const updatedMV = Math.max(0, (assistUser.marketValue ?? 0) - assistMV);
+            await User.findByIdAndUpdate(assistPlayerId, {
+              $set: { engCoine: updatedCoin, marketValue: updatedMV },
+            });
+          }
+        }
+      }
+
+      // Permanently remove the MatchResult document
+      await MatchResult.findByIdAndDelete(removedGoal._id);
+    }
+
+    // 4. Create and credit only the genuinely new goals
+    for (const scorer of newGoalsToAdd) {
       if (scorer.player && scorer.team) {
         const min = Number(scorer.minute) || 1;
 
-        // 1. Create MatchResult
         await MatchResult.create({
           match: match._id,
           league: match.league || undefined,
@@ -2167,14 +2327,12 @@ const modifyMatchScoreInDB = async (
           },
         });
 
-        // 2. Increment player stats
         await PlayerStats.findOneAndUpdate(
           { player: scorer.player },
           { $inc: { goals: 1 }, $set: { team: scorer.team } },
           { upsert: true, new: true },
         );
 
-        // 3. Increment player coins & MV ONLY if player is Professional
         const isProScorer = await isUserPremiumPlayer(scorer.player);
         if (isProScorer && (goalCoin > 0 || goalMV > 0)) {
           const scorerUser = await User.findById(scorer.player);
@@ -2185,11 +2343,10 @@ const modifyMatchScoreInDB = async (
           }
         }
 
-        // 4. Handle assist if provided
         if (scorer.assistPlayer) {
           await PlayerStats.findOneAndUpdate(
             { player: scorer.assistPlayer },
-            { $inc: { assists: 1 } },
+            { $inc: { assists: 1 }, $set: { team: scorer.team } },
             { upsert: true, new: true },
           );
           const isProAssist = await isUserPremiumPlayer(scorer.assistPlayer);
@@ -2203,7 +2360,7 @@ const modifyMatchScoreInDB = async (
           }
         }
 
-        // 5. Send notifications
+        // Send notifications only for new goals
         try {
           await NotificationQueueHelper.sendNotification(
             String(scorer.player),

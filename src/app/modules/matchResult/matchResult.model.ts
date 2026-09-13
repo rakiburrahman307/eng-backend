@@ -102,4 +102,8 @@ const matchResultSchema = new Schema(
   }
 );
 
+matchResultSchema.index({ match: 1, eventType: 1 });
+matchResultSchema.index({ player: 1, eventType: 1 });
+matchResultSchema.index({ match: 1, player: 1, eventType: 1, minute: 1 });
+
 export const MatchResult = model('MatchResult', matchResultSchema);

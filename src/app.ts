@@ -6,6 +6,7 @@ import {
 } from "./helpers/appLoaders";
 
 const app = express();
+app.set("trust proxy", 1);
 configureMiddlewares(app);
 configureRoutes(app);
 configureErrorHandlers(app);

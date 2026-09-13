@@ -96,6 +96,20 @@ const createMatchResultToDB = async (payload: any) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid match minute");
   }
 
+  // 6.5️⃣ RAPID DUPLICATE GUARD (prevent accidental double tap / network retry duplicates)
+  if (eventType === "goal" && player) {
+    const recentDuplicate = await MatchResult.findOne({
+      match,
+      player,
+      team,
+      eventType: "goal",
+      createdAt: { $gte: new Date(Date.now() - 15000) },
+    });
+    if (recentDuplicate) {
+      return recentDuplicate;
+    }
+  }
+
   // 7️⃣ CREATE EVENT
   const result = await MatchResult.create(payload);
 

@@ -71,4 +71,7 @@ const playerStatsSchema = new Schema(
   }
 );
 
+playerStatsSchema.index({ player: 1 });
+playerStatsSchema.index({ player: 1, league: 1 });
+
 export const PlayerStats = model('PlayerStats', playerStatsSchema);
