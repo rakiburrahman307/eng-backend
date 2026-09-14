@@ -8,10 +8,10 @@ export default {
   node_env: process.env.NODE_ENV,
   bcrypt_salt_rounds: process.env.BCRYPT_SALT_ROUNDS,
   jwt: {
-    jwt_secret: process.env.JWT_SECRET || "jwt_secret",
-    jwt_expire_in: process.env.JWT_EXPIRE_IN || "1d",
-    jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || "refresh_secret",
-    jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
+    jwt_secret: process.env.JWT_SECRET,
+    jwt_expire_in: process.env.JWT_EXPIRE_IN,
+    jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
+    jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN,
   },
   server: {
     name: process.env.SERVER_NAME || "ENG Backend",
