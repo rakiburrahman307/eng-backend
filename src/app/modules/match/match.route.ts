@@ -28,10 +28,14 @@ router.get(
 router.get("/schedule-dates", MatchController.getMatchScheduleDates);
 
 // ⚙️ DYNAMIC FEEDBACK WINDOW SETTING (GET & ADMIN UPDATE)
-router.get("/feedback-setting", MatchController.getMatchFeedbackSetting);
+router.get(
+  "/feedback-setting",
+  auth(...ROLE_GROUPS.ADMINS),
+  MatchController.getMatchFeedbackSetting,
+);
 router.patch(
   "/feedback-setting",
-  auth(ROLE_GROUPS.ADMINS),
+  auth(...ROLE_GROUPS.ADMINS),
   MatchController.updateMatchFeedbackSetting,
 );
 
