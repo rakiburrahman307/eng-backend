@@ -2,6 +2,7 @@ import { Team } from "../team/team.model";
 import { MatchEvaluation } from "./refereeRating.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { Match } from "../match/match.model";
+import { getEffectiveMatchSetting } from "../match/matchSetting.model";
 import ApiError from "../../../errors/ApiErrors";
 import { StatusCodes } from "http-status-codes";
 import dayjs from "dayjs";
@@ -92,17 +93,21 @@ const createEvaluationIntoDB = async (payload: any) => {
     );
   }
 
-  // ⏰ 24-Hour Feedback Window (Europe/London UK Timezone): Feedback cannot be submitted after 24 hours of match completion
-  const finishTime = match.finishedAt || (match as any).updatedAt;
-  if (finishTime) {
-    const nowUK = dayjs().tz("Europe/London");
-    const finishUK = dayjs(finishTime).tz("Europe/London");
-    const hoursSinceFinish = nowUK.diff(finishUK, "hour", true);
-    if (hoursSinceFinish > 24) {
-      throw new ApiError(
-        StatusCodes.BAD_REQUEST,
-        "Feedback cannot be submitted after 24 hours of match completion (UK Time)",
-      );
+  // ⏰ Dynamic Feedback Window (Admin Configurable)
+  const setting = await getEffectiveMatchSetting();
+  if (setting.isFeedbackWindowRestricted && setting.feedbackWindowHours > 0) {
+    const finishTime = match.finishedAt || (match as any).updatedAt;
+    if (finishTime) {
+      const targetTz = setting.timezone || "Europe/London";
+      const nowUK = dayjs().tz(targetTz);
+      const finishUK = dayjs(finishTime).tz(targetTz);
+      const hoursSinceFinish = nowUK.diff(finishUK, "hour", true);
+      if (hoursSinceFinish > setting.feedbackWindowHours) {
+        throw new ApiError(
+          StatusCodes.BAD_REQUEST,
+          `Feedback cannot be submitted after ${setting.feedbackWindowHours} hours of match completion (${targetTz} Time)`,
+        );
+      }
     }
   }
 
@@ -115,6 +120,7 @@ const createEvaluationIntoDB = async (payload: any) => {
   const awayRating =
     payload.awayTeamRating !== undefined
       ? payload.awayTeamRating
+      
       : payload.awayTeamConductRating;
 
   payload.homeTeamRating = Number(homeRating);

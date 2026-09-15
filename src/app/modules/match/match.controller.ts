@@ -206,6 +206,28 @@ const getMatchScheduleDates = catchAsync(async (req: Request, res: Response) => 
   });
 });
 
+const getMatchFeedbackSetting = catchAsync(async (req: Request, res: Response) => {
+  const result = await MatchService.getMatchFeedbackSettingFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Match feedback setting retrieved successfully",
+    data: result,
+  });
+});
+
+const updateMatchFeedbackSetting = catchAsync(async (req: Request, res: Response) => {
+  const result = await MatchService.updateMatchFeedbackSettingInDB(req.body);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Match feedback setting updated successfully",
+    data: result,
+  });
+});
+
 export const MatchController = {
   createMatch,
   getAllMatches,
@@ -220,4 +242,6 @@ export const MatchController = {
   updateMatchTimer,
   modifyMatchScore,
   getMatchScheduleDates,
+  getMatchFeedbackSetting,
+  updateMatchFeedbackSetting,
 };

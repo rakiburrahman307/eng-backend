@@ -20,6 +20,7 @@ import { PlayerStats } from "../playerStats/playerStats.model";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 import { MatchPlayerSelection } from "../matchPlayerSelection/matchPlayerSelection.model";
 import { isUserPremiumPlayer } from "../../../helpers/packageHelper";
+import { getEffectiveMatchSetting, IMatchSetting } from "./matchSetting.model";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -1732,17 +1733,21 @@ const addMatchReviewToDB = async (
     throw new ApiError(StatusCodes.BAD_REQUEST, "Only finished matches can be reviewed");
   }
 
-  // ⏰ 24-Hour Feedback Window (Europe/London UK Timezone): Feedback cannot be submitted after 24 hours of match completion
-  const finishTime = match.finishedAt || (match as any).updatedAt;
-  if (finishTime) {
-    const nowUK = dayjs().tz("Europe/London");
-    const finishUK = dayjs(finishTime).tz("Europe/London");
-    const hoursSinceFinish = nowUK.diff(finishUK, "hour", true);
-    if (hoursSinceFinish > 24) {
-      throw new ApiError(
-        StatusCodes.BAD_REQUEST,
-        "Feedback cannot be submitted after 24 hours of match completion (UK Time)",
-      );
+  // ⏰ Dynamic Feedback Window (Admin Configurable)
+  const setting = await getEffectiveMatchSetting();
+  if (setting.isFeedbackWindowRestricted && setting.feedbackWindowHours > 0) {
+    const finishTime = match.finishedAt || (match as any).updatedAt;
+    if (finishTime) {
+      const targetTz = setting.timezone || "Europe/London";
+      const nowUK = dayjs().tz(targetTz);
+      const finishUK = dayjs(finishTime).tz(targetTz);
+      const hoursSinceFinish = nowUK.diff(finishUK, "hour", true);
+      if (hoursSinceFinish > setting.feedbackWindowHours) {
+        throw new ApiError(
+          StatusCodes.BAD_REQUEST,
+          `Feedback cannot be submitted after ${setting.feedbackWindowHours} hours of match completion (${targetTz} Time)`,
+        );
+      }
     }
   }
 
@@ -2605,6 +2610,25 @@ const getMatchScheduleDatesFromDB = async (query: Record<string, any>) => {
   return formattedDates;
 };
 
+const getMatchFeedbackSettingFromDB = async () => {
+  return await getEffectiveMatchSetting();
+};
+
+const updateMatchFeedbackSettingInDB = async (payload: Partial<IMatchSetting>) => {
+  const setting = (await getEffectiveMatchSetting()) as any;
+  if (payload.feedbackWindowHours !== undefined) {
+    setting.feedbackWindowHours = Math.max(0, Number(payload.feedbackWindowHours));
+  }
+  if (payload.isFeedbackWindowRestricted !== undefined) {
+    setting.isFeedbackWindowRestricted = Boolean(payload.isFeedbackWindowRestricted);
+  }
+  if (payload.timezone !== undefined) {
+    setting.timezone = String(payload.timezone).trim() || "Europe/London";
+  }
+  await setting.save();
+  return setting;
+};
+
 export const MatchService = {
   createMatchToDB,
   getAllMatchesFromDB,
@@ -2619,4 +2643,6 @@ export const MatchService = {
   updateMatchTimerInDB,
   modifyMatchScoreInDB,
   getMatchScheduleDatesFromDB,
+  getMatchFeedbackSettingFromDB,
+  updateMatchFeedbackSettingInDB,
 };

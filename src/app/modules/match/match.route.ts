@@ -1,22 +1,21 @@
-import express from 'express';
-import auth from '../../middlewares/auth';
-import { USER_ROLES } from '../../../enums/user';
-import { MatchController } from './match.controller';
+import express from "express";
+import auth from "../../middlewares/auth";
+import { ROLE_GROUPS, USER_ROLES } from "../../../enums/user";
+import { MatchController } from "./match.controller";
 
 const router = express.Router();
 
-
 router.get(
-  '/manager-upcoming-matches',
+  "/manager-upcoming-matches",
   auth(USER_ROLES.MANAGER),
   MatchController.getUpcomingMatchesForManager,
 );
 // CREATE + GET ALL
 router
-  .route('/')
+  .route("/")
   .post(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    MatchController.createMatch
+    MatchController.createMatch,
   )
   .get(MatchController.getAllMatches);
 
@@ -26,57 +25,66 @@ router.get(
   MatchController.getMatchesForReferee,
 );
 
-router.get(
-  "/schedule-dates",
-  MatchController.getMatchScheduleDates,
+router.get("/schedule-dates", MatchController.getMatchScheduleDates);
+
+// ⚙️ DYNAMIC FEEDBACK WINDOW SETTING (GET & ADMIN UPDATE)
+router.get("/feedback-setting", MatchController.getMatchFeedbackSetting);
+router.patch(
+  "/feedback-setting",
+  auth(ROLE_GROUPS.ADMINS),
+  MatchController.updateMatchFeedbackSetting,
 );
 
-
 router.patch(
-  '/review/:id',
-  auth(USER_ROLES.MANAGER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.REFEREE),
+  "/review/:id",
+  auth(
+    USER_ROLES.MANAGER,
+    USER_ROLES.ADMIN,
+    USER_ROLES.SUPER_ADMIN,
+    USER_ROLES.REFEREE,
+  ),
   MatchController.addMatchReview,
 );
 
 // SINGLE + UPDATE + DELETE
 router
-  .route('/:id')
+  .route("/:id")
   .get(MatchController.getSingleMatch)
   .patch(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    MatchController.updateMatch
+    MatchController.updateMatch,
   )
   .delete(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    MatchController.deleteMatch
+    MatchController.deleteMatch,
   );
 
 // TOGGLE STATUS
 router.patch(
-  '/toggle-status/:id',
+  "/toggle-status/:id",
   auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.REFEREE),
-  MatchController.toggleMatchStatus
+  MatchController.toggleMatchStatus,
 );
 
 // ⏱️ MATCH TIMER CONTROL (START, PAUSE, RESUME, FINISH)
 router.patch(
-  '/:id/timer',
+  "/:id/timer",
   auth(USER_ROLES.REFEREE, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-  MatchController.updateMatchTimer
+  MatchController.updateMatchTimer,
 );
 
 // ⚽ MODIFY SCORE (ADMIN/SUPER ADMIN/REFEREE)
 router.patch(
-  '/:id/modify-score',
+  "/:id/modify-score",
   auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.REFEREE),
-  MatchController.modifyMatchScore
+  MatchController.modifyMatchScore,
 );
 
 // 🔄 DIRECT STATUS UPDATE (ADMIN / SUPER ADMIN / REFEREE)
 router.patch(
-  '/:id/status',
+  "/:id/status",
   auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.REFEREE),
-  MatchController.updateMatchStatus
+  MatchController.updateMatchStatus,
 );
 
 export default router;
