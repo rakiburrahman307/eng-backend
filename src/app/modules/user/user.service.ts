@@ -9,14 +9,10 @@ import generateOTP from "../../../util/generateOTP";
 import { EmailQueueHelper } from "../../../helpers/bullMQ/bullHelper";
 import unlinkFile from "../../../shared/unlinkFile";
 import { Subscription } from "../subscription/subscription.model";
-import {
-  sendNotificationToAdmins,
-  sendNotification,
-} from "../../../helpers/notificationsHelper";
+import { sendNotificationToAdmins } from "../../../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
-import stripe from "../../../config/stripe";
 import { getPlayerStatsSummary } from "../../../helpers/playerStatsHelper";
 import { isUserPremiumPlayer } from "../../../helpers/packageHelper";
 
@@ -230,7 +226,10 @@ const updateChieldInfoToDB = async (id: string, payload: any) => {
   if (Array.isArray(payload.document)) {
     if (payload.document.length === 0) {
       delete payload.document;
-    } else if (payload.document.length > 0 && Array.isArray(isExistUser.document)) {
+    } else if (
+      payload.document.length > 0 &&
+      Array.isArray(isExistUser.document)
+    ) {
       isExistUser.document.forEach((oldDoc: string) => {
         if (oldDoc && !payload.document.includes(oldDoc)) {
           unlinkFile(oldDoc);
