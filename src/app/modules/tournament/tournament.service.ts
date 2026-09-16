@@ -6,6 +6,7 @@ import { ITournament } from "./tournament.interface";
 import { Tournament } from "./tournament.model";
 import { User } from "../user/user.model";
 import { Subscription } from "../subscription/subscription.model";
+import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 
 const createTournamentToDB = async (
   payload: Partial<ITournament>,
@@ -336,12 +337,14 @@ const redeemTournamentRewardInDB = async (
     );
   }
 
+  const pe = await PlayerEconomy.findOne();
+  const rate = pe?.conversionRate ?? 10;
   const currentCoins = Number(user.engCoine) || 0;
   const newCoins = currentCoins + prizeCoins;
-  const newMarketValue = newCoins * 100;
+  const addedMV = prizeCoins * rate;
 
   user.engCoine = newCoins;
-  user.marketValue = newMarketValue;
+  user.marketValue = (user.marketValue || 0) + addedMV;
   await user.save();
 
   if (!tournament.redeemedPlayers) {

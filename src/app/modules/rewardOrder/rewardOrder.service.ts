@@ -11,6 +11,7 @@ import { sendNotificationToAdmins } from "../../../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 
 import { isPremiumPlayerPackage } from "../../../helpers/packageHelper";
+import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 
 // CREATE ORDER
 const createRewardOrderToDB = async (payload: any, userId: string) => {
@@ -68,19 +69,24 @@ const createRewardOrderToDB = async (payload: any, userId: string) => {
       );
     }
 
-    // User current ENG Coins (Must maintain minimum 10,000 balance)
+    // User current ENG Coins (Must maintain minimum starting coin balance)
     const userCoin = user.engCoine || 0;
 
-    if (userCoin - rewardProduct.point < 10000) {
+    const pe = await PlayerEconomy.findOne().session(session);
+    const rate = pe?.conversionRate ?? 10;
+    const minFloorMV = Number(pe?.startingMarketValue) || 10000000;
+    const minFloorCoin = Number((pe as any)?.startingCoins) || (rate > 0 ? Math.round(minFloorMV / rate) : 10000);
+
+    if (userCoin - rewardProduct.point < minFloorCoin) {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
-        `Insufficient coin balance! A minimum balance of 10,000 coins must be maintained in your account (Current: ${userCoin}, Required item cost: ${rewardProduct.point}).`,
+        `Insufficient coin balance! A minimum balance of ${minFloorCoin.toLocaleString()} coins must be maintained in your account (Current: ${userCoin}, Required item cost: ${rewardProduct.point}).`,
       );
     }
 
-    // Deduct ENG Coins & dynamically update marketValue (1 Coin = £100)
+    // Deduct ENG Coins & dynamically update marketValue
     user.engCoine = userCoin - rewardProduct.point;
-    user.marketValue = (user.engCoine || 0) * 100;
+    user.marketValue = (user.engCoine || 0) * rate;
 
     await user.save({ session });
 

@@ -294,10 +294,16 @@ const createPlayerToDB = async (payload: any) => {
     payload.role === USER_ROLES.OTHER_CLUBS
   ) {
     payload.marketValue = 0;
-  } else if (payload.marketValue === undefined) {
-    // Assign starting market value from PlayerEconomy config in DB
+  } else {
     const pe = await PlayerEconomy.findOne();
-    payload.marketValue = pe ? pe.startingMarketValue : 100000;
+    if (payload.marketValue === undefined) {
+      payload.marketValue = pe ? pe.startingMarketValue : 100000;
+    }
+    if (payload.engCoine === undefined) {
+      const rate = Number(pe?.conversionRate) || 10;
+      const startMV = Number(pe?.startingMarketValue) || 100000;
+      payload.engCoine = Number(pe?.startingCoins) || (rate > 0 ? Math.round(startMV / rate) : 10000);
+    }
   }
 
   const result = await User.findOneAndUpdate({ _id: payload.userId }, payload, {
@@ -535,6 +541,12 @@ const updateUserCoinOrMarketValue = async (
   const isPlayer = user.role === USER_ROLES.PLAYER || Boolean(user.parentId);
   const isPro = isPlayer ? await isUserPremiumPlayer(userId) : true;
 
+  // Dynamic player economy configuration from DB
+  const pe = await PlayerEconomy.findOne();
+  const conversionRate = pe?.conversionRate ?? 10;
+  const minFloorMV = Number(pe?.startingMarketValue) || 10000000;
+  const minFloorCoin = Number(pe?.startingCoins) || (conversionRate > 0 ? Math.round(minFloorMV / conversionRate) : 10000);
+
   if (payload.engCoine !== undefined) {
     if (typeof payload.engCoine !== "number" || payload.engCoine < 0) {
       throw new ApiError(
@@ -545,8 +557,8 @@ const updateUserCoinOrMarketValue = async (
 
     if (isPlayer) {
       if (isPro) {
-        // Professional player floor: minimum 10,000 coins
-        updateData.engCoine = Math.max(10000, payload.engCoine);
+        // Professional player floor: dynamic from PlayerEconomy config
+        updateData.engCoine = Math.max(minFloorCoin, payload.engCoine);
       } else {
         // Non-professional players have no coin access, force 0
         updateData.engCoine = 0;
@@ -556,7 +568,7 @@ const updateUserCoinOrMarketValue = async (
     }
 
     if (payload.marketValue === undefined) {
-      updateData.marketValue = updateData.engCoine * 100;
+      updateData.marketValue = updateData.engCoine * conversionRate;
     }
   }
 
@@ -570,7 +582,7 @@ const updateUserCoinOrMarketValue = async (
 
     if (isPlayer) {
       if (isPro) {
-        updateData.marketValue = Math.max(1000000, payload.marketValue);
+        updateData.marketValue = Math.max(minFloorMV, payload.marketValue);
       } else {
         updateData.marketValue = 0;
       }

@@ -7,6 +7,7 @@ export interface IEconomyValue {
 }
 
 export interface IPlayerEconomy {
+  startingCoins?: number;
   startingMarketValue: number;
   conversionRate: number;
 

@@ -5,6 +5,7 @@ import QueryBuilder from "../../../util/queryBuilder";
 import { User } from "../user/user.model";
 import { Subscription } from "../subscription/subscription.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
+import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 
 // GET ALL USERS
 const getAllUsersFromDB = async (query: Record<string, any>) => {
@@ -141,11 +142,17 @@ const getAllUsersFromDB = async (query: Record<string, any>) => {
     }
   });
 
+  const pe = await PlayerEconomy.findOne();
+  const conversionRate = pe?.conversionRate ?? 10;
+
   const result = rawResult.map((u: any) => {
     const userObj = u.toObject ? u.toObject() : u;
     const userCoins =
       Number(userObj.engCoine ?? userObj.coin ?? userObj.coins) || 0;
-    const userMV = Number(userObj.marketValue) || userCoins * 100;
+    const userMV =
+      userObj.marketValue !== undefined && userObj.marketValue !== null
+        ? Number(userObj.marketValue)
+        : userCoins * conversionRate;
 
     const directSub = subMap.get(userObj._id?.toString());
     const activeSub = directSub || null;

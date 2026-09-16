@@ -3,6 +3,7 @@ import { MatchEvaluation } from "./refereeRating.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { Match } from "../match/match.model";
 import { getEffectiveMatchSetting } from "../match/matchSetting.model";
+import { awardClubCoinsSafely } from "../match/match.service";
 import ApiError from "../../../errors/ApiErrors";
 import { StatusCodes } from "http-status-codes";
 import dayjs from "dayjs";
@@ -123,6 +124,15 @@ const createEvaluationIntoDB = async (payload: any) => {
       
       : payload.awayTeamConductRating;
 
+  // Prevent duplicate evaluations that re-credit coins
+  const existingEval = await MatchEvaluation.findOne({ match: payload.match });
+  if (existingEval) {
+    throw new ApiError(
+      StatusCodes.CONFLICT,
+      "Match evaluation has already been submitted for this match",
+    );
+  }
+
   payload.homeTeamRating = Number(homeRating);
   payload.awayTeamRating = Number(awayRating);
 
@@ -145,12 +155,7 @@ const createEvaluationIntoDB = async (payload: any) => {
     const { coin, budgetValue } = await getConductReward(item.rating);
 
     if (coin > 0 || budgetValue > 0) {
-      await Team.findByIdAndUpdate(item.teamId, {
-        $inc: {
-          coin,
-          marketValue: budgetValue,
-        },
-      });
+      await awardClubCoinsSafely(payload.match, item.teamId, coin, budgetValue);
     }
   }
 
@@ -165,12 +170,9 @@ const createEvaluationIntoDB = async (payload: any) => {
 
       const pe = await PlayerEconomy.findOne();
       const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
-      const potdMV = pe?.playerOfTheDay?.marketValue ?? 0;
+      const potdMV = pe?.playerOfTheDay?.marketValue ? pe.playerOfTheDay.marketValue : (potdCoin * (pe?.conversionRate ?? 10));
 
-      const { isUserPremiumPlayer } = await import("../../../helpers/packageHelper");
-      const isPro = await isUserPremiumPlayer(payload.manOfTheMatch);
-
-      if (isPro && (potdCoin > 0 || potdMV > 0)) {
+      if (potdCoin > 0 || potdMV > 0) {
         await User.findByIdAndUpdate(payload.manOfTheMatch, {
           $inc: {
             engCoine: potdCoin,

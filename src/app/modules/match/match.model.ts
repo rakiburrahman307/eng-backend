@@ -130,6 +130,12 @@ const matchSchema = new Schema(
       default: false,
     },
 
+    clubCoinsAwarded: {
+      type: Map,
+      of: Number,
+      default: {},
+    },
+
     timerStatus: {
       type: String,
       enum: ['stopped', 'running', 'paused', 'finished'],

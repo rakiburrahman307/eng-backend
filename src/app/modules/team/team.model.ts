@@ -1,4 +1,5 @@
 import { Schema, model } from 'mongoose';
+import { ClubEconomy } from '../coinAndBudget/clubEconomySchema.model';
 
 const teamSchema = new Schema(
   {
@@ -16,9 +17,11 @@ const teamSchema = new Schema(
   { timestamps: true }
 );
 
-teamSchema.pre('save', function (this: any) {
+teamSchema.pre('save', async function (this: any) {
   if (this.isModified('coin') && !this.isModified('marketValue')) {
-    this.marketValue = (this.coin || 0) * 100;
+    const ce = await ClubEconomy.findOne();
+    const rate = ce?.conversionRate ?? 10;
+    this.marketValue = (this.coin || 0) * rate;
   }
 });
 

@@ -2,6 +2,11 @@ import { Schema, model } from "mongoose";
 
 const playerEconomySchema = new Schema(
   {
+    startingCoins: {
+      type: Number,
+      default: 10000,
+    },
+
     startingMarketValue: {
       type: Number,
       default: 100000,

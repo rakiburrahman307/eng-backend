@@ -55,6 +55,7 @@ export interface IMatch {
 
   coinAwarded?: boolean;
   resultCoinAwarded?: boolean;
+  clubCoinsAwarded?: Map<string, number> | Record<string, number>;
 
   notes?: string | null;
 }

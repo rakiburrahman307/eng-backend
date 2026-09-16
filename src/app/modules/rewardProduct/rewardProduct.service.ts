@@ -7,6 +7,7 @@ import { RewardProduct } from "./rewardProduct.model";
 import { User } from '../user/user.model';
 import { Subscription } from '../subscription/subscription.model';
 import { isPremiumPlayerPackage } from '../../../helpers/packageHelper';
+import { PlayerEconomy } from '../coinAndBudget/playerEconomySchema.model';
 
 // CREATE
 const createRewardProductToDB = async (
@@ -314,8 +315,10 @@ const redeemCoffeeRewardInDB = async (
   await rewardProduct.save();
 
   // 💰 DEDUCT COINS & UPDATE MARKET VALUE FOR THE PLAYER
-  user.engCoine = currentCoins + requiredPoints;
-  user.marketValue = user.engCoine * 100;
+  const pe = await PlayerEconomy.findOne();
+  const rate = pe?.conversionRate ?? 10;
+  user.engCoine = Math.max(0, currentCoins - requiredPoints);
+  user.marketValue = (user.engCoine || 0) * rate;
   await user.save();
 
   const getValidEmail = (val?: string | null) =>

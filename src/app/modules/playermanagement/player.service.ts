@@ -12,6 +12,7 @@ import { sendNotificationToAdmins } from "../../../helpers/notificationsHelper";
 import { PlayerDashboardService } from "../playerDashboard/playerDashboard.service";
 import { isPremiumPlayerPackage } from "../../../helpers/packageHelper";
 import { getBatchPlayerStatsSummary } from "../../../helpers/playerStatsHelper";
+import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 
 const checkCanViewOtherPlayers = async (
   user?: JwtPayload | null,
@@ -43,9 +44,11 @@ const createPlayerByParentToDB = async (parentId: string, payload: any) => {
     throw new ApiError(StatusCodes.NOT_FOUND, "Parent account not found");
   }
 
-  // Calculate market value based on 1 coin = £100
+  // Calculate market value dynamically based on PlayerEconomy conversionRate
+  const pe = await PlayerEconomy.findOne();
+  const rate = pe?.conversionRate ?? 10;
   const coins = Number(payload.engCoine) || 0;
-  const marketValue = coins * 100;
+  const marketValue = payload.marketValue !== undefined ? Number(payload.marketValue) : coins * rate;
 
   const parseBool = (val: any) =>
     val === true || val === "true" || val === 1 || val === "1";
@@ -244,9 +247,11 @@ const updatePlayerByParentToDB = async (
     );
   }
 
-  // Recalculate market value if engCoine is updated (1 coin = £100)
-  if (payload.engCoine !== undefined) {
-    payload.marketValue = Number(payload.engCoine) * 100;
+  // Recalculate market value if engCoine is updated and marketValue not explicitly provided
+  if (payload.engCoine !== undefined && payload.marketValue === undefined) {
+    const pe = await PlayerEconomy.findOne();
+    const rate = pe?.conversionRate ?? 10;
+    payload.marketValue = Number(payload.engCoine) * rate;
   }
 
   // If player was REJECTED, resubmitting updates resets status to PENDING for admin review
@@ -643,7 +648,7 @@ const getAllPlayersFromDB = async (
       rejectionReason: player.rejectionReason || null,
       engCoine: player.engCoine || 0,
       coin: player.engCoine || 0,
-      marketValue: player.marketValue || (player.engCoine || 0) * 100,
+      marketValue: player.marketValue ?? 0,
       profile: player.profile || null,
       profilePic: player.profile || null,
       status: player.status || "PENDING",
@@ -807,8 +812,10 @@ const updatePlayerByAdminToDB = async (id: string, payload: Partial<any>) => {
     throw new ApiError(StatusCodes.NOT_FOUND, "Player not found");
   }
 
-  if (payload.engCoine !== undefined) {
-    payload.marketValue = Number(payload.engCoine) * 100;
+  if (payload.engCoine !== undefined && payload.marketValue === undefined) {
+    const pe = await PlayerEconomy.findOne();
+    const rate = pe?.conversionRate ?? 10;
+    payload.marketValue = Number(payload.engCoine) * rate;
   }
 
   const result = await User.findByIdAndUpdate(id, payload, {

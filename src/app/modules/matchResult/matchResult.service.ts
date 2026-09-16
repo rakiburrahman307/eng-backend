@@ -388,7 +388,7 @@ const applyPlayerStats = async (payload: any) => {
       // Goal Reward — dynamic from DB (Only for Professional players)
       if (isPro) {
         const goalCoin = pe?.goal?.coin ?? 0;
-        const goalMV = pe?.goal?.marketValue ?? (goalCoin * 100);
+        const goalMV = pe?.goal?.marketValue ?? (goalCoin * (pe?.conversionRate ?? 10));
         await User.findOneAndUpdate(
           { _id: player },
           { $inc: { engCoine: goalCoin, marketValue: goalMV } },
@@ -408,7 +408,7 @@ const applyPlayerStats = async (payload: any) => {
       const isProAssist = await isUserPremiumPlayer(eventMeta.assist);
       if (isProAssist) {
         const assistCoin = pe?.assist?.coin ?? 0;
-        const assistMV = pe?.assist?.marketValue ?? (assistCoin * 100);
+        const assistMV = pe?.assist?.marketValue ?? (assistCoin * (pe?.conversionRate ?? 10));
         await User.findOneAndUpdate(
           { _id: eventMeta.assist },
           { $inc: { engCoine: assistCoin, marketValue: assistMV } },
@@ -422,12 +422,13 @@ const applyPlayerStats = async (payload: any) => {
     inc.yellowCards = 1;
 
     if (isPro) {
-      const yellowCardCoin = -Math.abs(pe?.yellowCard?.coin ?? 0);
+      const yellowCardCoin = pe?.yellowCard?.coin ? pe.yellowCard.coin : -500;
+      const yellowCardMV = pe?.yellowCard?.marketValue ? pe.yellowCard.marketValue : (yellowCardCoin * (pe?.conversionRate ?? 10));
       const user = await User.findById(player);
       if (user) {
-        const newCoins = Math.max(10000, (user.engCoine ?? 0) + yellowCardCoin);
-        const rate = pe?.conversionRate ?? 100;
-        const newMV = newCoins * rate;
+        const floorMV = Number(pe?.startingMarketValue) || 10000000;
+        const newCoins = Math.max(0, (user.engCoine ?? 0) + yellowCardCoin);
+        const newMV = Math.max(floorMV, (user.marketValue ?? floorMV) + yellowCardMV);
         await User.findOneAndUpdate(
           { _id: player },
           { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -441,12 +442,13 @@ const applyPlayerStats = async (payload: any) => {
     inc.redCards = 1;
 
     if (isPro) {
-      const redCardCoin = -Math.abs(pe?.redCard?.coin ?? 0);
+      const redCardCoin = pe?.redCard?.coin ? pe.redCard.coin : -5000;
+      const redCardMV = pe?.redCard?.marketValue ? pe.redCard.marketValue : (redCardCoin * (pe?.conversionRate ?? 10));
       const user = await User.findById(player);
       if (user) {
-        const newCoins = Math.max(10000, (user.engCoine ?? 0) + redCardCoin);
-        const rate = pe?.conversionRate ?? 100;
-        const newMV = newCoins * rate;
+        const floorMV = Number(pe?.startingMarketValue) || 10000000;
+        const newCoins = Math.max(0, (user.engCoine ?? 0) + redCardCoin);
+        const newMV = Math.max(floorMV, (user.marketValue ?? floorMV) + redCardMV);
         await User.findOneAndUpdate(
           { _id: player },
           { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -461,7 +463,7 @@ const applyPlayerStats = async (payload: any) => {
 
     if (isPro) {
       const csCoin = pe?.cleanSheet?.coin ?? 0;
-      const csMV = pe?.cleanSheet?.marketValue ?? (csCoin * 100);
+      const csMV = pe?.cleanSheet?.marketValue ?? (csCoin * (pe?.conversionRate ?? 10));
       await User.findOneAndUpdate(
         { _id: player },
         { $inc: { engCoine: csCoin, marketValue: csMV } },
@@ -473,9 +475,9 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "player_of_the_day") {
     inc.playerOfTheDay = 1;
 
-    if (isPro) {
-      const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
-      const potdMV = pe?.playerOfTheDay?.marketValue ?? (potdCoin * 100);
+    const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
+    const potdMV = pe?.playerOfTheDay?.marketValue ? pe.playerOfTheDay.marketValue : (potdCoin * (pe?.conversionRate ?? 10));
+    if (potdCoin > 0 || potdMV > 0) {
       await User.findOneAndUpdate(
         { _id: player },
         { $inc: { engCoine: potdCoin, marketValue: potdMV } },
@@ -488,12 +490,13 @@ const applyPlayerStats = async (payload: any) => {
     inc.fouls = 1;
 
     if (isPro) {
-      const foulCoin = -Math.abs(pe?.foul?.coin ?? 0);
+      const foulCoin = pe?.foul?.coin ? pe.foul.coin : -100;
+      const foulMV = pe?.foul?.marketValue ? pe.foul.marketValue : (foulCoin * (pe?.conversionRate ?? 10));
       const user = await User.findById(player);
       if (user) {
-        const newCoins = Math.max(10000, (user.engCoine ?? 0) + foulCoin);
-        const rate = pe?.conversionRate ?? 100;
-        const newMV = newCoins * rate;
+        const floorMV = Number(pe?.startingMarketValue) || 10000000;
+        const newCoins = Math.max(0, (user.engCoine ?? 0) + foulCoin);
+        const newMV = Math.max(floorMV, (user.marketValue ?? floorMV) + foulMV);
         await User.findOneAndUpdate(
           { _id: player },
           { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -505,12 +508,13 @@ const applyPlayerStats = async (payload: any) => {
   // ================= SIN BIN =================
   if (eventType === "sin_bin") {
     if (isPro) {
-      const sinBinCoin = -Math.abs(pe?.sinBin?.coin ?? 0);
+      const sinBinCoin = pe?.sinBin?.coin ? pe.sinBin.coin : -2500;
+      const sinBinMV = pe?.sinBin?.marketValue ? pe.sinBin.marketValue : (sinBinCoin * (pe?.conversionRate ?? 10));
       const user = await User.findById(player);
       if (user) {
-        const newCoins = Math.max(10000, (user.engCoine ?? 0) + sinBinCoin);
-        const rate = pe?.conversionRate ?? 100;
-        const newMV = newCoins * rate;
+        const floorMV = Number(pe?.startingMarketValue) || 10000000;
+        const newCoins = Math.max(0, (user.engCoine ?? 0) + sinBinCoin);
+        const newMV = Math.max(floorMV, (user.marketValue ?? floorMV) + sinBinMV);
         await User.findOneAndUpdate(
           { _id: player },
           { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -522,12 +526,13 @@ const applyPlayerStats = async (payload: any) => {
   // ================= DISRESPECT TO REFEREE =================
   if (eventType === "disrespect_to_referee") {
     if (isPro) {
-      const disrespectCoin = -Math.abs(pe?.disrespectToReferee?.coin ?? 0);
+      const disrespectCoin = pe?.disrespectToReferee?.coin ? pe.disrespectToReferee.coin : -7500;
+      const disrespectMV = pe?.disrespectToReferee?.marketValue ? pe.disrespectToReferee.marketValue : (disrespectCoin * (pe?.conversionRate ?? 10));
       const user = await User.findById(player);
       if (user) {
-        const newCoins = Math.max(10000, (user.engCoine ?? 0) + disrespectCoin);
-        const rate = pe?.conversionRate ?? 100;
-        const newMV = newCoins * rate;
+        const floorMV = Number(pe?.startingMarketValue) || 10000000;
+        const newCoins = Math.max(0, (user.engCoine ?? 0) + disrespectCoin);
+        const newMV = Math.max(floorMV, (user.marketValue ?? floorMV) + disrespectMV);
         await User.findOneAndUpdate(
           { _id: player },
           { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -539,12 +544,13 @@ const applyPlayerStats = async (payload: any) => {
   // ================= GROSS MISCONDUCT =================
   if (eventType === "gross_misconduct") {
     if (isPro) {
-      const misconductCoin = -Math.abs(pe?.grossMisconduct?.coin ?? 0);
+      const misconductCoin = pe?.grossMisconduct?.coin ? pe.grossMisconduct.coin : -10000;
+      const misconductMV = pe?.grossMisconduct?.marketValue ? pe.grossMisconduct.marketValue : (misconductCoin * (pe?.conversionRate ?? 10));
       const user = await User.findById(player);
       if (user) {
-        const newCoins = Math.max(10000, (user.engCoine ?? 0) + misconductCoin);
-        const rate = pe?.conversionRate ?? 100;
-        const newMV = newCoins * rate;
+        const floorMV = Number(pe?.startingMarketValue) || 10000000;
+        const newCoins = Math.max(0, (user.engCoine ?? 0) + misconductCoin);
+        const newMV = Math.max(floorMV, (user.marketValue ?? floorMV) + misconductMV);
         await User.findOneAndUpdate(
           { _id: player },
           { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -557,7 +563,7 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "good_rating") {
     if (isPro) {
       const coin = pe?.goodRating?.coin ?? 0;
-      const mv = pe?.goodRating?.marketValue ?? (coin * 100);
+      const mv = pe?.goodRating?.marketValue ?? (coin * (pe?.conversionRate ?? 10));
       await User.findOneAndUpdate(
         { _id: player },
         { $inc: { engCoine: coin, marketValue: mv } },
@@ -569,7 +575,7 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "great_rating") {
     if (isPro) {
       const coin = pe?.greatRating?.coin ?? 0;
-      const mv = pe?.greatRating?.marketValue ?? (coin * 100);
+      const mv = pe?.greatRating?.marketValue ?? (coin * (pe?.conversionRate ?? 10));
       await User.findOneAndUpdate(
         { _id: player },
         { $inc: { engCoine: coin, marketValue: mv } },
@@ -581,7 +587,7 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "elite_rating") {
     if (isPro) {
       const coin = pe?.eliteRating?.coin ?? 0;
-      const mv = pe?.eliteRating?.marketValue ?? (coin * 100);
+      const mv = pe?.eliteRating?.marketValue ?? (coin * (pe?.conversionRate ?? 10));
       await User.findOneAndUpdate(
         { _id: player },
         { $inc: { engCoine: coin, marketValue: mv } },
@@ -593,7 +599,7 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "playing_match") {
     if (isPro) {
       const coin = pe?.playingMatch?.coin ?? 0;
-      const mv = pe?.playingMatch?.marketValue ?? (coin * 100);
+      const mv = pe?.playingMatch?.marketValue ?? (coin * (pe?.conversionRate ?? 10));
       await User.findOneAndUpdate(
         { _id: player },
         { $inc: { engCoine: coin, marketValue: mv } },
@@ -619,6 +625,8 @@ const rollbackPlayerStats = async (payload: any) => {
   const pe = await PlayerEconomy.findOne();
   const isPro = await isUserPremiumPlayer(player);
 
+  const minFloorMV = pe?.startingMarketValue ?? 10000000;
+
   const inc: any = {};
 
   // ================= GOAL =================
@@ -626,19 +634,15 @@ const rollbackPlayerStats = async (payload: any) => {
     if (eventMeta?.goalType !== "own_goal") {
       inc.goals = -1;
 
-      // Rollback goal coins and market value (Only for Professional players)
-      if (isPro) {
-        const goalCoin = pe?.goal?.coin ?? 0;
-        const user = await User.findById(player);
-        if (user) {
-          const newCoins = Math.max(10000, (user.engCoine ?? 0) - goalCoin);
-          const rate = pe?.conversionRate ?? 100;
-          const newMV = newCoins * rate;
-          await User.findOneAndUpdate(
-            { _id: player },
-            { $set: { engCoine: newCoins, marketValue: newMV } },
-          );
-        }
+      const goalCoin = pe?.goal?.coin ?? 0;
+      const goalMV = pe?.goal?.marketValue ? pe.goal.marketValue : (goalCoin * (pe?.conversionRate ?? 10));
+      const user = await User.findById(player);
+      if (user && (goalCoin > 0 || goalMV > 0)) {
+        const newCoins = Math.max(0, (user.engCoine ?? 0) - goalCoin);
+        const newMV = Math.max(minFloorMV, (user.marketValue ?? minFloorMV) - goalMV);
+        await User.findByIdAndUpdate(player, {
+          $set: { engCoine: newCoins, marketValue: newMV },
+        });
       }
     }
 
@@ -649,19 +653,15 @@ const rollbackPlayerStats = async (payload: any) => {
         { $inc: { assists: -1 } },
       );
 
-      const isProAssist = await isUserPremiumPlayer(eventMeta.assist);
-      if (isProAssist) {
-        const assistCoin = pe?.assist?.coin ?? 0;
-        const assistUser = await User.findById(eventMeta.assist);
-        if (assistUser) {
-          const newCoins = Math.max(10000, (assistUser.engCoine ?? 0) - assistCoin);
-          const rate = pe?.conversionRate ?? 100;
-          const newMV = newCoins * rate;
-          await User.findOneAndUpdate(
-            { _id: eventMeta.assist },
-            { $set: { engCoine: newCoins, marketValue: newMV } },
-          );
-        }
+      const assistCoin = pe?.assist?.coin ?? 0;
+      const assistMV = pe?.assist?.marketValue ? pe.assist.marketValue : (assistCoin * (pe?.conversionRate ?? 10));
+      const assistUser = await User.findById(eventMeta.assist);
+      if (assistUser && (assistCoin > 0 || assistMV > 0)) {
+        const newCoins = Math.max(0, (assistUser.engCoine ?? 0) - assistCoin);
+        const newMV = Math.max(minFloorMV, (assistUser.marketValue ?? minFloorMV) - assistMV);
+        await User.findByIdAndUpdate(eventMeta.assist, {
+          $set: { engCoine: newCoins, marketValue: newMV },
+        });
       }
     }
   }
@@ -698,18 +698,15 @@ const rollbackPlayerStats = async (payload: any) => {
   if (eventType === "clean_sheet") {
     inc.cleanSheets = -1;
 
-    if (isPro) {
-      const csCoin = pe?.cleanSheet?.coin ?? 0;
-      const user = await User.findById(player);
-      if (user) {
-        const newCoins = Math.max(10000, (user.engCoine ?? 0) - csCoin);
-        const rate = pe?.conversionRate ?? 100;
-        const newMV = newCoins * rate;
-        await User.findOneAndUpdate(
-          { _id: player },
-          { $set: { engCoine: newCoins, marketValue: newMV } },
-        );
-      }
+    const csCoin = pe?.cleanSheet?.coin ?? 0;
+    const csMV = pe?.cleanSheet?.marketValue ? pe.cleanSheet.marketValue : (csCoin * (pe?.conversionRate ?? 10));
+    const user = await User.findById(player);
+    if (user && (csCoin > 0 || csMV > 0)) {
+      const newCoins = Math.max(0, (user.engCoine ?? 0) - csCoin);
+      const newMV = Math.max(minFloorMV, (user.marketValue ?? minFloorMV) - csMV);
+      await User.findByIdAndUpdate(player, {
+        $set: { engCoine: newCoins, marketValue: newMV },
+      });
     }
   }
 
@@ -717,18 +714,15 @@ const rollbackPlayerStats = async (payload: any) => {
   if (eventType === "player_of_the_day") {
     inc.playerOfTheDay = -1;
 
-    if (isPro) {
-      const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
-      const user = await User.findById(player);
-      if (user) {
-        const newCoins = Math.max(10000, (user.engCoine ?? 0) - potdCoin);
-        const rate = pe?.conversionRate ?? 100;
-        const newMV = newCoins * rate;
-        await User.findOneAndUpdate(
-          { _id: player },
-          { $set: { engCoine: newCoins, marketValue: newMV } },
-        );
-      }
+    const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
+    const potdMV = pe?.playerOfTheDay?.marketValue ? pe.playerOfTheDay.marketValue : (potdCoin * (pe?.conversionRate ?? 10));
+    const user = await User.findById(player);
+    if (user && (potdCoin > 0 || potdMV > 0)) {
+      const newCoins = Math.max(0, (user.engCoine ?? 0) - potdCoin);
+      const newMV = Math.max(minFloorMV, (user.marketValue ?? minFloorMV) - potdMV);
+      await User.findByIdAndUpdate(player, {
+        $set: { engCoine: newCoins, marketValue: newMV },
+      });
     }
   }
 
@@ -786,11 +780,11 @@ const rollbackPlayerStats = async (payload: any) => {
   if (eventType === "good_rating") {
     if (isPro) {
       const coin = pe?.goodRating?.coin ?? 0;
+      const mv = pe?.goodRating?.marketValue ?? (coin * (pe?.conversionRate ?? 10));
       const user = await User.findById(player);
       if (user) {
-        const newCoins = Math.max(10000, (user.engCoine ?? 0) - coin);
-        const rate = pe?.conversionRate ?? 100;
-        const newMV = newCoins * rate;
+        const newCoins = Math.max(0, (user.engCoine ?? 0) - coin);
+        const newMV = Math.max(minFloorMV, (user.marketValue ?? minFloorMV) - mv);
         await User.findOneAndUpdate(
           { _id: player },
           { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -803,11 +797,11 @@ const rollbackPlayerStats = async (payload: any) => {
   if (eventType === "great_rating") {
     if (isPro) {
       const coin = pe?.greatRating?.coin ?? 0;
+      const mv = pe?.greatRating?.marketValue ?? (coin * (pe?.conversionRate ?? 10));
       const user = await User.findById(player);
       if (user) {
-        const newCoins = Math.max(10000, (user.engCoine ?? 0) - coin);
-        const rate = pe?.conversionRate ?? 100;
-        const newMV = newCoins * rate;
+        const newCoins = Math.max(0, (user.engCoine ?? 0) - coin);
+        const newMV = Math.max(minFloorMV, (user.marketValue ?? minFloorMV) - mv);
         await User.findOneAndUpdate(
           { _id: player },
           { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -820,11 +814,11 @@ const rollbackPlayerStats = async (payload: any) => {
   if (eventType === "elite_rating") {
     if (isPro) {
       const coin = pe?.eliteRating?.coin ?? 0;
+      const mv = pe?.eliteRating?.marketValue ?? (coin * (pe?.conversionRate ?? 10));
       const user = await User.findById(player);
       if (user) {
-        const newCoins = Math.max(10000, (user.engCoine ?? 0) - coin);
-        const rate = pe?.conversionRate ?? 100;
-        const newMV = newCoins * rate;
+        const newCoins = Math.max(0, (user.engCoine ?? 0) - coin);
+        const newMV = Math.max(minFloorMV, (user.marketValue ?? minFloorMV) - mv);
         await User.findOneAndUpdate(
           { _id: player },
           { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -837,11 +831,11 @@ const rollbackPlayerStats = async (payload: any) => {
   if (eventType === "playing_match") {
     if (isPro) {
       const coin = pe?.playingMatch?.coin ?? 0;
+      const mv = pe?.playingMatch?.marketValue ?? (coin * (pe?.conversionRate ?? 10));
       const user = await User.findById(player);
       if (user) {
-        const newCoins = Math.max(10000, (user.engCoine ?? 0) - coin);
-        const rate = pe?.conversionRate ?? 100;
-        const newMV = newCoins * rate;
+        const newCoins = Math.max(0, (user.engCoine ?? 0) - coin);
+        const newMV = Math.max(minFloorMV, (user.marketValue ?? minFloorMV) - mv);
         await User.findOneAndUpdate(
           { _id: player },
           { $set: { engCoine: newCoins, marketValue: newMV } },
@@ -949,27 +943,6 @@ const updateMatchWinner = async (matchId: any) => {
 
   // Update match winner
   await Match.findByIdAndUpdate(matchId, { winnerTeam });
-
-  // Fetch ClubEconomy config from DB for coin distribution
-  const ce = await ClubEconomy.findOne();
-
-  // ===============================
-  //  COIN DISTRIBUTION LOGIC
-  // ===============================
-
-  if (homeScore === awayScore) {
-    // 🔵 DRAW — both teams get drawMatch.coin and (drawMatch.coin * 100) market value
-    const drawCoin = ce?.drawMatch?.coin ?? 2000;
-    const drawMV = drawCoin * 100;
-    await Team.findByIdAndUpdate(homeTeamId, { $inc: { coin: drawCoin, marketValue: drawMV } });
-    await Team.findByIdAndUpdate(awayTeamId, { $inc: { coin: drawCoin, marketValue: drawMV } });
-    return;
-  }
-
-  // 🟢 WIN — winner gets winMatch.coin and (winMatch.coin * 100) market value
-  const winCoin = ce?.winMatch?.coin ?? 5000;
-  const winMV = winCoin * 100;
-  await Team.findByIdAndUpdate(winnerTeam, { $inc: { coin: winCoin, marketValue: winMV } });
 };
 
 const rollbackAllResultsForMatch = async (matchId: string) => {

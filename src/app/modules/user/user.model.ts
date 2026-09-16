@@ -3,6 +3,7 @@ import { USER_ROLES } from "../../../enums/user";
 import { IUser, UserModal } from "./user.interface";
 import bcrypt from "bcrypt";
 import config from "../../../config";
+import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 
 const userSchema = new Schema<IUser, UserModal>(
   {
@@ -233,9 +234,11 @@ userSchema.pre("save", async function () {
     );
   }
 
-  // 💰 Dynamic Market Value calculation: 1 Coin = £100 Market Value (only if marketValue not explicitly modified)
+  // 💰 Dynamic Market Value calculation using conversionRate from PlayerEconomy (only if marketValue not explicitly modified)
   if (this.isModified("engCoine") && !this.isModified("marketValue")) {
-    this.marketValue = (this.engCoine || 0) * 100;
+    const pe = await PlayerEconomy.findOne();
+    const rate = pe?.conversionRate ?? 10;
+    this.marketValue = (this.engCoine || 0) * rate;
   }
 });
 

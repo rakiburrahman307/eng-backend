@@ -13,8 +13,9 @@ const createTeamToDB = async (payload: any) => {
   // Always assign starting budget and starting market value from ClubEconomy config in DB
   const clubEconomy = await ClubEconomy.findOne();
   const startingBudget = clubEconomy ? clubEconomy.startingBudget : 100000;
+  const rate = clubEconomy?.conversionRate ?? 10;
   payload.coin = payload.coin !== undefined ? payload.coin : startingBudget;
-  payload.marketValue = payload.marketValue !== undefined ? payload.marketValue : (payload.coin * 100);
+  payload.marketValue = payload.marketValue !== undefined ? payload.marketValue : (payload.coin * rate);
   return await Team.create(payload);
 };
 
@@ -303,9 +304,11 @@ const updateTeamToDB = async (id: string, payload: any) => {
     throw new Error("Team not found");
   }
 
-  // Auto sync marketValue (1 coin = 100 marketValue) when coin is provided
+  // Auto sync marketValue using dynamic conversion rate when coin is provided
   if (payload.coin !== undefined) {
-    payload.marketValue = Number(payload.coin) * 100;
+    const clubEconomy = await ClubEconomy.findOne();
+    const rate = clubEconomy?.conversionRate ?? 10;
+    payload.marketValue = Number(payload.coin) * rate;
   }
 
   return await Team.findByIdAndUpdate(id, payload, {
@@ -336,6 +339,9 @@ const updateTeamCoinOrMarketValue = async (
     throw new Error("Team not found");
   }
 
+  const clubEconomy = await ClubEconomy.findOne();
+  const rate = clubEconomy?.conversionRate ?? 10;
+
   const updateData: Record<string, number> = {};
 
   if (payload.coin !== undefined) {
@@ -343,8 +349,8 @@ const updateTeamCoinOrMarketValue = async (
       throw new Error("coin must be a non-negative number");
     }
     updateData.coin = payload.coin;
-    // Auto sync marketValue to coin (1 coin = 100 marketValue)
-    updateData.marketValue = payload.marketValue !== undefined ? payload.marketValue : (payload.coin * 100);
+    // Auto sync marketValue to coin using dynamic conversion rate
+    updateData.marketValue = payload.marketValue !== undefined ? payload.marketValue : (payload.coin * rate);
   } else if (payload.marketValue !== undefined) {
     if (typeof payload.marketValue !== 'number' || payload.marketValue < 0) {
       throw new Error("marketValue must be a non-negative number");
