@@ -32,7 +32,13 @@ const getUKNowInUTC = (): Date => {
   return dayjs().tz("Europe/London").utc().toDate();
 };
 
-export const MAX_CLUB_COINS_PER_MATCH = 100000;
+export const getDynamicMaxClubCoinsPerMatch = async (): Promise<number> => {
+  const ce = await ClubEconomy.findOne();
+  const attend = Number(ce?.attendMatch?.coin) || 0;
+  const win = Math.max(Number(ce?.winMatch?.coin) || 0, Number(ce?.drawMatch?.coin) || 0);
+  const conduct = Number(ce?.exceptionalConduct?.coin) || 0;
+  return attend + win + conduct;
+};
 
 export const getMinFloorCoin = (pe: any, isPro: boolean): number => {
   if (!isPro) return 0;
@@ -48,11 +54,14 @@ export const awardClubCoinsSafely = async (
   teamId: string | mongoose.Types.ObjectId,
   coinsToAward: number,
   marketValueToAward: number,
-  maxCap: number = MAX_CLUB_COINS_PER_MATCH,
+  customCap?: number,
 ): Promise<number> => {
   if (!teamId || coinsToAward <= 0) return 0;
   const match = await Match.findById(matchId);
   if (!match) return 0;
+
+  const maxCap =
+    customCap !== undefined ? customCap : await getDynamicMaxClubCoinsPerMatch();
 
   const teamKey = String(teamId);
   const currentAwarded =
@@ -60,8 +69,8 @@ export const awardClubCoinsSafely = async (
       ? (match.clubCoinsAwarded as any).get(teamKey) || 0
       : (match as any).clubCoinsAwarded?.[teamKey] || 0;
 
-  const available = Math.max(0, maxCap - currentAwarded);
-  const actualCoins = Math.min(coinsToAward, available);
+  const available = maxCap > 0 ? Math.max(0, maxCap - currentAwarded) : coinsToAward;
+  const actualCoins = maxCap > 0 ? Math.min(coinsToAward, available) : coinsToAward;
   if (actualCoins <= 0) return 0;
 
   const actualMV =
