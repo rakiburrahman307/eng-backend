@@ -92,6 +92,8 @@ const getPlayerDashboardFromDB = async (playerId: string) => {
       playerOfTheDay: stats.playerOfTheDay,
       yellowCards: stats.yellowCards,
       redCards: stats.redCards,
+      totalMatches: stats.totalMatches,
+      matchesPlayed: stats.matchesPlayed,
     },
     recentMatches: isPremium ? recentMatches : [],
   };

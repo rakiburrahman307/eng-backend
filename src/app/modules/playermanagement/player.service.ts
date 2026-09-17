@@ -154,6 +154,8 @@ export const getMyPlayersFromDB = async (parentId: string) => {
         playerOfTheDay: 0,
         yellowCards: 0,
         redCards: 0,
+        totalMatches: 0,
+        matchesPlayed: 0,
       };
 
       return {

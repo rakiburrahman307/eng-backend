@@ -415,6 +415,8 @@ const getPlayerByUserId = async (userId: string) => {
       playerOfTheDay: stats.playerOfTheDay,
       yellowCards: stats.yellowCards,
       redCards: stats.redCards,
+      totalMatches: stats.totalMatches,
+      matchesPlayed: stats.matchesPlayed,
     },
     isDetailsSubmitted,
     isProfileCompleted: isDetailsSubmitted,
@@ -520,6 +522,8 @@ const getPlayerDetailsByUserId = async (userId: string) => {
       playerOfTheDay: stats.playerOfTheDay,
       yellowCards: stats.yellowCards,
       redCards: stats.redCards,
+      totalMatches: stats.totalMatches,
+      matchesPlayed: stats.matchesPlayed,
     },
   };
 };

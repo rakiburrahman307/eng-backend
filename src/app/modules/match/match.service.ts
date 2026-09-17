@@ -1450,7 +1450,46 @@ const deleteMatchFromDB = async (id: string) => {
     }
   }
 
-  // 5. Clean up referee ratings/evaluations and player selections for this match
+  // 5. Clean up referee ratings/evaluations, player selections, and match results for this match
+  try {
+    // Find all players who participated in this match before deleting records
+    const selections = await MatchPlayerSelection.find({ match: id });
+    const matchResults = await MatchResult.find({ match: id });
+    const matchDoc = await Match.findById(id).lean();
+    const playerIdsToUpdate = new Set<string>();
+
+    selections.forEach((sel: any) => {
+      sel.players?.forEach((p: any) => {
+        if (p.player) playerIdsToUpdate.add(p.player.toString());
+      });
+    });
+
+    matchResults.forEach((mr: any) => {
+      if (mr.player) playerIdsToUpdate.add(mr.player.toString());
+      if (mr.eventMeta?.assist) playerIdsToUpdate.add(mr.eventMeta.assist.toString());
+    });
+
+    if (matchDoc?.matchReview) {
+      matchDoc.matchReview.forEach((r: any) => {
+        if (r.player) playerIdsToUpdate.add(r.player.toString());
+      });
+    }
+
+    if (playerIdsToUpdate.size > 0) {
+      const pIdList = Array.from(playerIdsToUpdate);
+      await PlayerStats.updateMany(
+        { player: { $in: pIdList }, totalMatches: { $gt: 0 } },
+        { $inc: { totalMatches: -1 } }
+      );
+      await PlayerStats.updateMany(
+        { player: { $in: pIdList }, matchesPlayed: { $gt: 0 } },
+        { $inc: { matchesPlayed: -1 } }
+      );
+    }
+  } catch (statErr) {
+    console.error("Error decrementing PlayerStats on match deletion:", statErr);
+  }
+
   try {
     await MatchEvaluation.deleteMany({ match: id });
   } catch (err) {
@@ -1461,6 +1500,12 @@ const deleteMatchFromDB = async (id: string) => {
     await MatchPlayerSelection.deleteMany({ match: id });
   } catch (err) {
     console.error("Error deleting MatchPlayerSelection:", err);
+  }
+
+  try {
+    await MatchResult.deleteMany({ match: id });
+  } catch (err) {
+    console.error("Error deleting MatchResult:", err);
   }
 
   // 6. Delete the match document itself

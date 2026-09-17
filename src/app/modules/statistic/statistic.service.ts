@@ -731,6 +731,8 @@ const getEnrichedPlayersWithStats = async (query?: Record<string, any>) => {
       playerOfTheDay: 0,
       yellowCards: 0,
       redCards: 0,
+      totalMatches: 0,
+      matchesPlayed: 0,
     };
 
     const score =

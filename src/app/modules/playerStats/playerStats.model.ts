@@ -45,6 +45,16 @@ const playerStatsSchema = new Schema(
       default: 0,
     },
 
+    totalMatches: {
+      type: Number,
+      default: 0,
+    },
+
+    matchesPlayed: {
+      type: Number,
+      default: 0,
+    },
+
     yellowCards: {
       type: Number,
       default: 0,

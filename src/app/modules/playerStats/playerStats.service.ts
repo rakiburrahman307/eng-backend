@@ -71,6 +71,8 @@ const getSinglePlayerStatsFromDB = async (playerId: string, user?: JwtPayload | 
     playerOfTheDay: stats.playerOfTheDay,
     yellowCards: stats.yellowCards,
     redCards: stats.redCards,
+    totalMatches: stats.totalMatches,
+    matchesPlayed: stats.matchesPlayed,
     stats: {
       goals: stats.goals,
       assists: stats.assists,
@@ -78,6 +80,8 @@ const getSinglePlayerStatsFromDB = async (playerId: string, user?: JwtPayload | 
       playerOfTheDay: stats.playerOfTheDay,
       yellowCards: stats.yellowCards,
       redCards: stats.redCards,
+      totalMatches: stats.totalMatches,
+      matchesPlayed: stats.matchesPlayed,
     },
   };
 };
