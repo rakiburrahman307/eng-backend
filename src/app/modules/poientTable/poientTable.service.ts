@@ -3,9 +3,6 @@ import { LeagueTeam } from "../leagueTeam/leagueTeam.model";
 import { Match } from "../match/match.model";
 import { Team } from "../team/team.model";
 import { User } from "../user/user.model";
-import { USER_ROLES } from "../../../enums/user";
-import { Subscription } from "../subscription/subscription.model";
-import { getBatchPlayerStatsSummary } from "../../../helpers/playerStatsHelper";
 import mongoose from "mongoose";
 
 // Helper to calculate standings synchronously from prefetched teams & matches
@@ -337,75 +334,6 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     }
   }
 
-  // Pre-fetch team players if teamId or playerId is provided
-  let teamPlayers: any[] = [];
-  if (targetTeamId) {
-    const teamObjectId = new mongoose.Types.ObjectId(targetTeamId.toString());
-    const activeSubUserIds = await Subscription.find({
-      status: "active",
-    }).distinct("user");
-
-    const playerFilter: any = {
-      selectTeam: { $in: [teamObjectId, targetTeamId.toString()] },
-      role: {
-        $in: [
-          USER_ROLES.PLAYER,
-          USER_ROLES.OTHER_CLUBS,
-          USER_ROLES.TOURNAMENT_PLAYER,
-        ],
-      },
-      status: { $ne: "REJECTED" },
-    };
-
-    if (targetPlayerId && mongoose.Types.ObjectId.isValid(targetPlayerId)) {
-      playerFilter._id = new mongoose.Types.ObjectId(targetPlayerId.toString());
-    }
-
-    const rawPlayers = await User.find(playerFilter)
-      .select(
-        "_id firstName lastName userName profile position ageGroup dateOfBirth selectTeam status emergencyEmail emergencyPhone role jerseyNumber engCoine marketValue",
-      )
-      .lean();
-
-    const playerIds = rawPlayers.map((p) => p._id);
-    const statsMap = await getBatchPlayerStatsSummary(playerIds);
-
-    teamPlayers = rawPlayers.map((p: any) => {
-      const stats = statsMap.get(p._id.toString()) || {
-        goals: 0,
-        assists: 0,
-        cleanSheets: 0,
-        playerOfTheDay: 0,
-        yellowCards: 0,
-        redCards: 0,
-        totalMatches: 0,
-        matchesPlayed: 0,
-      };
-
-      return {
-        _id: p._id,
-        userId: p._id,
-        firstName: p.firstName || null,
-        lastName: p.lastName || null,
-        userName:
-          p.userName ||
-          (p.firstName
-            ? `${p.firstName} ${p.lastName || ""}`.trim()
-            : "Player"),
-        profile: p.profile || null,
-        position: p.position || "BENCH",
-        ageGroup: p.ageGroup || null,
-        dateOfBirth: p.dateOfBirth || null,
-        status: p.status || "APPROVED",
-        jerseyNumber: p.jerseyNumber || null,
-        engCoine: p.engCoine || 0,
-        marketValue: p.marketValue || 0,
-        role: p.role,
-        stats,
-      };
-    });
-  }
-
   const response = [];
 
   for (const league of leagues) {
@@ -413,38 +341,24 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     const leagueTeams = leagueTeamsMap[lId] || [];
     const matches = matchesMap[lId] || [];
 
-    let standings = computeStandings(leagueTeams, matches);
+    const standings = computeStandings(leagueTeams, matches);
 
+    // If targetTeamId is passed, ensure this league contains the target team
     if (targetTeamId) {
-      standings = standings
-        .filter((item: any) => {
-          const itemTeamId = (item.team?._id || item.team)?.toString();
-          return itemTeamId === targetTeamId.toString();
-        })
-        .map((item: any) => ({
-          ...item,
-          players: teamPlayers,
-          team: {
-            ...(item.team?.toObject ? item.team.toObject() : item.team),
-            players: teamPlayers,
-          },
-        }));
+      const teamInLeague = standings.some((item: any) => {
+        const itemTeamId = (item.team?._id || item.team)?.toString();
+        return itemTeamId === targetTeamId.toString();
+      });
 
-      if (standings.length === 0) {
+      if (!teamInLeague) {
         continue;
       }
-
-      response.push({
-        league,
-        standings,
-        players: teamPlayers,
-      });
-    } else {
-      response.push({
-        league,
-        standings,
-      });
     }
+
+    response.push({
+      league,
+      standings,
+    });
   }
 
   // Handle pagination (page & limit) if passed
