@@ -1,6 +1,11 @@
 import { League } from "../league/league.model";
 import { LeagueTeam } from "../leagueTeam/leagueTeam.model";
 import { Match } from "../match/match.model";
+import { Team } from "../team/team.model";
+import { User } from "../user/user.model";
+import { USER_ROLES } from "../../../enums/user";
+import { Subscription } from "../subscription/subscription.model";
+import { getBatchPlayerStatsSummary } from "../../../helpers/playerStatsHelper";
 import mongoose from "mongoose";
 
 // Helper to calculate standings synchronously from prefetched teams & matches
@@ -165,7 +170,42 @@ const calculateLeague = async (league: any) => {
 // MAIN API (WITH STRICT FILTERING BY QUERY)
 // =========================
 const getPointTable = async (query: Record<string, any> = {}) => {
-  const { leagueId, id, _id, season, leagueName, year, page, limit } = query;
+  const {
+    leagueId,
+    id,
+    _id,
+    season,
+    leagueName,
+    year,
+    page,
+    limit,
+    teamId,
+    team,
+    team_id,
+    selectTeam,
+    playerId,
+    player,
+    player_id,
+  } = query;
+
+  let targetTeamId = teamId || team || team_id || selectTeam;
+  const targetPlayerId = playerId || player || player_id;
+
+  // If playerId is provided instead of teamId, lookup player's team
+  if (targetPlayerId && !targetTeamId) {
+    if (mongoose.Types.ObjectId.isValid(targetPlayerId)) {
+      const playerDoc = await User.findById(targetPlayerId)
+        .select("selectTeam")
+        .lean();
+      if (playerDoc?.selectTeam) {
+        targetTeamId = playerDoc.selectTeam.toString();
+      }
+    }
+  }
+
+  if (targetTeamId && !mongoose.Types.ObjectId.isValid(targetTeamId)) {
+    return [];
+  }
 
   const filter: Record<string, any> = {};
 
@@ -178,8 +218,53 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     }
   }
 
+  if (targetTeamId) {
+    const targetTeamObjId = new mongoose.Types.ObjectId(
+      targetTeamId.toString(),
+    );
+
+    const [ltLeagues, matchLeagues, directTeam] = await Promise.all([
+      LeagueTeam.find({
+        team: { $in: [targetTeamObjId, targetTeamId] },
+      }).distinct("league"),
+      Match.find({
+        $or: [
+          { homeTeam: { $in: [targetTeamObjId, targetTeamId] } },
+          { awayTeam: { $in: [targetTeamObjId, targetTeamId] } },
+        ],
+      }).distinct("league"),
+      Team.findById(targetTeamId).select("league").lean(),
+    ]);
+
+    const candidateLeagues = [
+      ...(ltLeagues || []),
+      ...(matchLeagues || []),
+      ...((directTeam as any)?.league ? [(directTeam as any).league] : []),
+    ]
+      .filter(Boolean)
+      .map((lId: any) => lId.toString());
+
+    const uniqueCandidateLeagues = Array.from(new Set(candidateLeagues));
+
+    if (uniqueCandidateLeagues.length === 0) {
+      return [];
+    }
+
+    if (filter._id) {
+      const existingId = filter._id.toString();
+      if (!uniqueCandidateLeagues.includes(existingId)) {
+        return [];
+      }
+    } else {
+      filter._id = {
+        $in: uniqueCandidateLeagues.map(
+          (lId) => new mongoose.Types.ObjectId(lId),
+        ),
+      };
+    }
+  }
+
   if (season) {
-    console.log(season);
     const escapedSeason = season
       .toString()
       .replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
@@ -210,10 +295,13 @@ const getPointTable = async (query: Record<string, any> = {}) => {
 
   const leagueIds = leagues.map((l) => l._id);
 
-  const [allLeagueTeams, allMatches] = await Promise.all([
+  const [allLeagueTeams, directTeamsInLeague, allMatches] = await Promise.all([
     LeagueTeam.find({ league: { $in: leagueIds } }).populate(
       "team",
       "teamName shortName teamLogo",
+    ),
+    Team.find({ league: { $in: leagueIds } }).select(
+      "teamName shortName teamLogo league",
     ),
     Match.find({ league: { $in: leagueIds }, status: "finished" }),
   ]);
@@ -227,6 +315,19 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     }
   }
 
+  for (const t of directTeamsInLeague) {
+    const lId = (t as any).league?.toString();
+    if (lId) {
+      if (!leagueTeamsMap[lId]) leagueTeamsMap[lId] = [];
+      const alreadyIn = leagueTeamsMap[lId].some(
+        (lt) => (lt.team?._id || lt.team)?.toString() === t._id.toString(),
+      );
+      if (!alreadyIn) {
+        leagueTeamsMap[lId].push({ league: lId, team: t });
+      }
+    }
+  }
+
   const matchesMap: Record<string, any[]> = {};
   for (const match of allMatches) {
     const lId = match.league?.toString();
@@ -236,6 +337,75 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     }
   }
 
+  // Pre-fetch team players if teamId or playerId is provided
+  let teamPlayers: any[] = [];
+  if (targetTeamId) {
+    const teamObjectId = new mongoose.Types.ObjectId(targetTeamId.toString());
+    const activeSubUserIds = await Subscription.find({
+      status: "active",
+    }).distinct("user");
+
+    const playerFilter: any = {
+      selectTeam: { $in: [teamObjectId, targetTeamId.toString()] },
+      role: {
+        $in: [
+          USER_ROLES.PLAYER,
+          USER_ROLES.OTHER_CLUBS,
+          USER_ROLES.TOURNAMENT_PLAYER,
+        ],
+      },
+      status: { $ne: "REJECTED" },
+    };
+
+    if (targetPlayerId && mongoose.Types.ObjectId.isValid(targetPlayerId)) {
+      playerFilter._id = new mongoose.Types.ObjectId(targetPlayerId.toString());
+    }
+
+    const rawPlayers = await User.find(playerFilter)
+      .select(
+        "_id firstName lastName userName profile position ageGroup dateOfBirth selectTeam status emergencyEmail emergencyPhone role jerseyNumber engCoine marketValue",
+      )
+      .lean();
+
+    const playerIds = rawPlayers.map((p) => p._id);
+    const statsMap = await getBatchPlayerStatsSummary(playerIds);
+
+    teamPlayers = rawPlayers.map((p: any) => {
+      const stats = statsMap.get(p._id.toString()) || {
+        goals: 0,
+        assists: 0,
+        cleanSheets: 0,
+        playerOfTheDay: 0,
+        yellowCards: 0,
+        redCards: 0,
+        totalMatches: 0,
+        matchesPlayed: 0,
+      };
+
+      return {
+        _id: p._id,
+        userId: p._id,
+        firstName: p.firstName || null,
+        lastName: p.lastName || null,
+        userName:
+          p.userName ||
+          (p.firstName
+            ? `${p.firstName} ${p.lastName || ""}`.trim()
+            : "Player"),
+        profile: p.profile || null,
+        position: p.position || "BENCH",
+        ageGroup: p.ageGroup || null,
+        dateOfBirth: p.dateOfBirth || null,
+        status: p.status || "APPROVED",
+        jerseyNumber: p.jerseyNumber || null,
+        engCoine: p.engCoine || 0,
+        marketValue: p.marketValue || 0,
+        role: p.role,
+        stats,
+      };
+    });
+  }
+
   const response = [];
 
   for (const league of leagues) {
@@ -243,12 +413,38 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     const leagueTeams = leagueTeamsMap[lId] || [];
     const matches = matchesMap[lId] || [];
 
-    const standings = computeStandings(leagueTeams, matches);
+    let standings = computeStandings(leagueTeams, matches);
 
-    response.push({
-      league,
-      standings,
-    });
+    if (targetTeamId) {
+      standings = standings
+        .filter((item: any) => {
+          const itemTeamId = (item.team?._id || item.team)?.toString();
+          return itemTeamId === targetTeamId.toString();
+        })
+        .map((item: any) => ({
+          ...item,
+          players: teamPlayers,
+          team: {
+            ...(item.team?.toObject ? item.team.toObject() : item.team),
+            players: teamPlayers,
+          },
+        }));
+
+      if (standings.length === 0) {
+        continue;
+      }
+
+      response.push({
+        league,
+        standings,
+        players: teamPlayers,
+      });
+    } else {
+      response.push({
+        league,
+        standings,
+      });
+    }
   }
 
   // Handle pagination (page & limit) if passed

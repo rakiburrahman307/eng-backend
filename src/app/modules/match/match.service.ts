@@ -1634,7 +1634,7 @@ const updateMatchStatusInDB = async (
     match.timerStatus = "running";
     match.timerStartedAt = ukNow;
 
-    // 🪙 Coin Awarding Logic for Teams & Playing Coins for Players (Strictly Once)
+    // Coin Awarding Logic for Teams & Playing Coins for Players (Strictly Once)
     if (!match.coinAwarded) {
       // 1. Award Teams Attend a Match from ClubEconomy
       try {
