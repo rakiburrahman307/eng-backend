@@ -8,6 +8,7 @@ export interface IEvent {
   eventDate: Date;
   publishDateTime?: Date | null;
   status: IEventStatus;
+  order?: number;
   createdBy: string; // user id
   createdAt?: Date;
   updatedAt?: Date;

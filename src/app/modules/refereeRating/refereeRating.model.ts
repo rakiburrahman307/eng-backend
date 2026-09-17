@@ -6,6 +6,7 @@ const matchEvaluationSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Match',
       required: true,
+      unique: true,
     },
 
     referee: {
@@ -17,33 +18,36 @@ const matchEvaluationSchema = new Schema(
     homeTeam: {
       type: Schema.Types.ObjectId,
       ref: 'Team',
-      required: true,
+      required: false,
     },
 
     awayTeam: {
       type: Schema.Types.ObjectId,
       ref: 'Team',
-      required: true,
+      required: false,
     },
 
     homeTeamRating: {
       type: Number,
       min: 0,
       max: 100,
-      required: true,
+      required: false,
+      default: 0,
     },
 
     awayTeamRating: {
       type: Number,
       min: 0,
       max: 100,
-      required: true,
+      required: false,
+      default: 0,
     },
 
     manOfTheMatch: {
       type: Schema.Types.ObjectId,
       ref: 'User', // player
-      required: true,
+      required: false,
+      default: null,
     },
 
     winningTeam: {

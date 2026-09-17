@@ -28,7 +28,7 @@ export const getPlayerStatsSummary = async (
     typeof playerId === "string" ? new mongoose.Types.ObjectId(playerId) : playerId;
 
   // 1. Aggregate from MatchResult (direct events + assists in eventMeta)
-  const [matchResults, evaluationsCount, manualStats] = await Promise.all([
+  const [matchResults, evalMatches, mrPOTDMatches, manualStats] = await Promise.all([
     MatchResult.aggregate([
       {
         $match: {
@@ -148,9 +148,13 @@ export const getPlayerStatsSummary = async (
         },
       },
     ]),
-    MatchEvaluation.countDocuments({
+    MatchEvaluation.find({
       manOfTheMatch: playerObjectId,
-    }),
+    }).distinct("match"),
+    MatchResult.find({
+      player: playerObjectId,
+      eventType: { $in: ["player_of_the_day", "man_of_the_match"] },
+    }).distinct("match"),
     PlayerStats.find({ player: playerObjectId }).lean(),
   ]);
 
@@ -160,7 +164,11 @@ export const getPlayerStatsSummary = async (
   const yellowMR = Number(mr.yellowCards) || 0;
   const redMR = Number(mr.redCards) || 0;
   const cleanMR = Number(mr.cleanSheets) || 0;
-  const potdMR = (Number(mr.playerOfTheDayEvents) || 0) + (evaluationsCount || 0);
+  const uniquePOTDMatchIds = new Set([
+    ...(evalMatches || []).map((m: any) => String(m)),
+    ...(mrPOTDMatches || []).map((m: any) => String(m)),
+  ]);
+  const potdMR = uniquePOTDMatchIds.size;
 
   let psGoals = 0;
   let psAssists = 0;
@@ -226,7 +234,7 @@ export const getBatchPlayerStatsSummary = async (
     });
   });
 
-  const [matchResults, evalCounts, manualStats] = await Promise.all([
+  const [matchResults, evalPOTDMatches, mrPOTDMatches, manualStats] = await Promise.all([
     MatchResult.aggregate([
       {
         $match: {
@@ -269,12 +277,28 @@ export const getBatchPlayerStatsSummary = async (
     ]),
     MatchEvaluation.aggregate([
       {
-        $match: { manOfTheMatch: { $in: objectIds } },
+        $match: {
+          manOfTheMatch: { $in: objectIds },
+          ...(options?.matchEvaluationFilter || {}),
+        },
       },
       {
         $group: {
-          _id: "$manOfTheMatch",
-          count: { $sum: 1 },
+          _id: { player: "$manOfTheMatch", match: "$match" },
+        },
+      },
+    ]),
+    MatchResult.aggregate([
+      {
+        $match: {
+          player: { $in: objectIds },
+          eventType: { $in: ["player_of_the_day", "man_of_the_match"] },
+          ...(options?.matchFilter || {}),
+        },
+      },
+      {
+        $group: {
+          _id: { player: "$player", match: "$match" },
         },
       },
     ]),
@@ -283,7 +307,7 @@ export const getBatchPlayerStatsSummary = async (
 
   const facet = matchResults[0] || { directEvents: [], assistsFromMeta: [] };
 
-  // Map direct events
+  // Map direct events (goals, assists, cards, clean sheets)
   facet.directEvents?.forEach((item: any) => {
     const pId = item._id?.player?.toString();
     const eventType = item._id?.eventType;
@@ -295,9 +319,6 @@ export const getBatchPlayerStatsSummary = async (
     if (eventType === "yellow_card") stats.yellowCards += item.count;
     if (eventType === "red_card") stats.redCards += item.count;
     if (eventType === "clean_sheet") stats.cleanSheets += item.count;
-    if (eventType === "player_of_the_day" || eventType === "man_of_the_match") {
-      stats.playerOfTheDay += item.count;
-    }
   });
 
   // Map assist in eventMeta
@@ -307,11 +328,29 @@ export const getBatchPlayerStatsSummary = async (
     result.get(pId)!.assists += item.count;
   });
 
-  // Map match evaluations
-  evalCounts?.forEach((item: any) => {
-    const pId = item._id?.toString();
-    if (!pId || !result.has(pId)) return;
-    result.get(pId)!.playerOfTheDay += item.count;
+  // Deduplicate Player of the Day by distinct match ID
+  const playerPOTDMatches = new Map<string, Set<string>>();
+  evalPOTDMatches?.forEach((item: any) => {
+    const pId = item._id?.player?.toString();
+    const mId = item._id?.match?.toString();
+    if (pId && mId) {
+      if (!playerPOTDMatches.has(pId)) playerPOTDMatches.set(pId, new Set());
+      playerPOTDMatches.get(pId)!.add(mId);
+    }
+  });
+  mrPOTDMatches?.forEach((item: any) => {
+    const pId = item._id?.player?.toString();
+    const mId = item._id?.match?.toString();
+    if (pId && mId) {
+      if (!playerPOTDMatches.has(pId)) playerPOTDMatches.set(pId, new Set());
+      playerPOTDMatches.get(pId)!.add(mId);
+    }
+  });
+
+  playerPOTDMatches.forEach((matches, pId) => {
+    if (result.has(pId)) {
+      result.get(pId)!.playerOfTheDay = matches.size;
+    }
   });
 
   // Sum manual/upserted stats from PlayerStats for each player

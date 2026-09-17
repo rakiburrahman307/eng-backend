@@ -124,19 +124,29 @@ const createEvaluationIntoDB = async (payload: any) => {
       
       : payload.awayTeamConductRating;
 
-  // Prevent duplicate evaluations that re-credit coins
+  // Prevent duplicate referee evaluations that re-credit coins
   const existingEval = await MatchEvaluation.findOne({ match: payload.match });
-  if (existingEval) {
+  if (existingEval && existingEval.referee) {
     throw new ApiError(
       StatusCodes.CONFLICT,
       "Match evaluation has already been submitted for this match",
     );
   }
 
+  const previousMOTM = existingEval?.manOfTheMatch
+    ? String(existingEval.manOfTheMatch)
+    : null;
+
   payload.homeTeamRating = Number(homeRating);
   payload.awayTeamRating = Number(awayRating);
 
-  const result = await MatchEvaluation.create(payload);
+  let result;
+  if (existingEval) {
+    Object.assign(existingEval, payload);
+    result = await existingEval.save();
+  } else {
+    result = await MatchEvaluation.create(payload);
+  }
 
   const teams = [
     {
@@ -161,41 +171,74 @@ const createEvaluationIntoDB = async (payload: any) => {
 
   // 🏆 Reward Man of the Match / Player of the Day
   if (payload.manOfTheMatch) {
-    try {
-      const { PlayerEconomy } = await import("../coinAndBudget/playerEconomySchema.model");
-      const { User } = await import("../user/user.model");
-      const { PlayerStats } = await import("../playerStats/playerStats.model");
-      const { NotificationQueueHelper } = await import("../../../helpers/bullMQ/bullHelper");
-      const { NOTIFICATION_TYPE } = await import("../notification/notification.interface");
+    const targetMOTM = String(payload.manOfTheMatch);
+    const alreadyHadSameMOTM = previousMOTM === targetMOTM;
 
-      const pe = await PlayerEconomy.findOne();
-      const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
-      const potdMV = pe?.playerOfTheDay?.marketValue ? pe.playerOfTheDay.marketValue : (potdCoin * (pe?.conversionRate ?? 10));
+    if (!alreadyHadSameMOTM) {
+      try {
+        const { PlayerEconomy } = await import("../coinAndBudget/playerEconomySchema.model");
+        const { User } = await import("../user/user.model");
+        const { PlayerStats } = await import("../playerStats/playerStats.model");
+        const { NotificationQueueHelper } = await import("../../../helpers/bullMQ/bullHelper");
+        const { NOTIFICATION_TYPE } = await import("../notification/notification.interface");
+        const { isUserPremiumPlayer } = await import("../../../helpers/packageHelper");
+        const { getMinFloorCoin } = await import("../match/match.service");
 
-      if (potdCoin > 0 || potdMV > 0) {
-        await User.findByIdAndUpdate(payload.manOfTheMatch, {
-          $inc: {
-            engCoine: potdCoin,
-            marketValue: potdMV,
-          },
-        });
+        const pe = await PlayerEconomy.findOne();
+        const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
+        const potdMV = pe?.playerOfTheDay?.marketValue ? pe.playerOfTheDay.marketValue : (potdCoin * (pe?.conversionRate ?? 10));
+        const minFloorMV = Number(pe?.startingMarketValue) || 10000000;
+
+        // Rollback previous MOTM player if different
+        if (previousMOTM && previousMOTM !== targetMOTM) {
+          await PlayerStats.findOneAndUpdate(
+            { player: previousMOTM },
+            { $inc: { playerOfTheDay: -1 } },
+          );
+          if (potdCoin > 0 || potdMV > 0) {
+            const oldUser = await User.findById(previousMOTM);
+            if (oldUser) {
+              const isProOld = await isUserPremiumPlayer(previousMOTM);
+              const minFloorCoin = getMinFloorCoin(pe, isProOld);
+              await User.findByIdAndUpdate(previousMOTM, {
+                $set: {
+                  engCoine: Math.max(minFloorCoin, (oldUser.engCoine ?? 0) - potdCoin),
+                  marketValue: Math.max(minFloorMV, (oldUser.marketValue ?? 0) - potdMV),
+                },
+              });
+            }
+          }
+        }
+
+        if (potdCoin > 0 || potdMV > 0) {
+          await User.findByIdAndUpdate(targetMOTM, {
+            $inc: {
+              engCoine: potdCoin,
+              marketValue: potdMV,
+            },
+          });
+        }
+
+        await PlayerStats.findOneAndUpdate(
+          { player: targetMOTM },
+          { $inc: { playerOfTheDay: 1 } },
+          { upsert: true, new: true }
+        );
+
+        await NotificationQueueHelper.sendNotification(
+          targetMOTM,
+          "Congratulations! You were awarded Player of the Day / Man of the Match!",
+          "Player of the Day!",
+          NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED
+        );
+      } catch (motmErr) {
+        console.error("Failed to process Man of the Match reward:", motmErr);
       }
-
-      await PlayerStats.findOneAndUpdate(
-        { player: payload.manOfTheMatch },
-        { $inc: { playerOfTheDay: 1 } },
-        { upsert: true, new: true }
-      );
-
-      await NotificationQueueHelper.sendNotification(
-        String(payload.manOfTheMatch),
-        "Congratulations! You were awarded Player of the Day / Man of the Match!",
-        "Player of the Day!",
-        NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED
-      );
-    } catch (motmErr) {
-      console.error("Failed to process Man of the Match reward:", motmErr);
     }
+
+    await Match.findByIdAndUpdate(payload.match, {
+      $set: { manOfTheMatch: payload.manOfTheMatch },
+    });
   }
 
   return result;

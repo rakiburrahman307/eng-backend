@@ -171,11 +171,25 @@ const deleteEvent = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// REARRANGE EVENTS
+const rearrangeEvents = catchAsync(async (req: Request, res: Response) => {
+  const { events } = req.body;
+  const result = await EventService.rearrangeEventsInDB(events);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Events order rearranged successfully',
+    data: result,
+  });
+});
+
 export const EventController = {
   createEvent,
   getAllEvents,
   getSingleEvent,
   updateEvent,
   deleteEvent,
-  getPublicEvents
+  getPublicEvents,
+  rearrangeEvents,
 };

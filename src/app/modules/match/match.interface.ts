@@ -42,6 +42,7 @@ export interface IMatch {
   awayScore: number;
 
   winnerTeam?: Types.ObjectId | null;
+  manOfTheMatch?: Types.ObjectId | null;
 
   matchReview?: {
     team?: Types.ObjectId;

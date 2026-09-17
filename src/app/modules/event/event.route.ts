@@ -18,6 +18,13 @@ router
 
   router.get('/public-events', EventController.getPublicEvents);
 
+// REARRANGE
+router.patch(
+  '/reorder',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  EventController.rearrangeEvents
+);
+
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')

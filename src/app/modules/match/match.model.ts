@@ -167,6 +167,11 @@ const matchSchema = new Schema(
       ref: 'Team',
       default: null,
     },
+    manOfTheMatch: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
 
     notes: {
       type: String,

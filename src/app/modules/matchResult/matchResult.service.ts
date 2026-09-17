@@ -11,8 +11,10 @@ import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
-import { emitMatchUpdate } from "../match/match.service";
+import { emitMatchUpdate, getMinFloorCoin } from "../match/match.service";
 import { isUserPremiumPlayer } from "../../../helpers/packageHelper";
+import { MatchEvaluation } from "../refereeRating/refereeRating.model";
+import mongoose from "mongoose";
 
 // ========================== CREATE ==========================
 const createMatchResultToDB = async (payload: any) => {
@@ -108,6 +110,56 @@ const createMatchResultToDB = async (payload: any) => {
     if (recentDuplicate) {
       return recentDuplicate;
     }
+  }
+
+  // 6.6️⃣ STRICT SINGLE MAN OF THE MATCH / PLAYER OF THE DAY GUARD
+  if (eventType === "player_of_the_day" || eventType === "man_of_the_match") {
+    const existingPOTD = await MatchResult.findOne({
+      match,
+      eventType: { $in: ["player_of_the_day", "man_of_the_match"] },
+    });
+
+    if (existingPOTD) {
+      if (String(existingPOTD.player) === String(player)) {
+        return existingPOTD; // Same player already awarded MOTM for this match
+      }
+      // If changing to a new player, rollback previous player first so only 1 player has MOTM
+      await rollbackPlayerStats(existingPOTD);
+      await MatchResult.findByIdAndDelete(existingPOTD._id);
+    }
+
+    const evaluation = await MatchEvaluation.findOne({ match });
+    if (evaluation) {
+      if (evaluation.manOfTheMatch && String(evaluation.manOfTheMatch) !== String(player)) {
+        const oldMOTM = String(evaluation.manOfTheMatch);
+        const peOld = await PlayerEconomy.findOne();
+        const potdCoinOld = peOld?.playerOfTheDay?.coin ?? 0;
+        const potdMVOld = peOld?.playerOfTheDay?.marketValue ?? (potdCoinOld * (peOld?.conversionRate ?? 10));
+        const minFloorMV = Number(peOld?.startingMarketValue) || 10000000;
+        await PlayerStats.findOneAndUpdate(
+          { player: oldMOTM },
+          { $inc: { playerOfTheDay: -1 } },
+        );
+        if (potdCoinOld > 0 || potdMVOld > 0) {
+          const oldUser = await User.findById(oldMOTM);
+          if (oldUser) {
+            const isProOld = await isUserPremiumPlayer(oldMOTM);
+            const minFloorCoin = getMinFloorCoin(peOld, isProOld);
+            await User.findByIdAndUpdate(oldMOTM, {
+              $set: {
+                engCoine: Math.max(minFloorCoin, (oldUser.engCoine ?? 0) - potdCoinOld),
+                marketValue: Math.max(minFloorMV, (oldUser.marketValue ?? 0) - potdMVOld),
+              },
+            });
+          }
+        }
+      }
+      evaluation.manOfTheMatch = (player ? new mongoose.Types.ObjectId(player) : null) as any;
+      await evaluation.save();
+    }
+    await Match.findByIdAndUpdate(match, {
+      $set: { manOfTheMatch: player ? new mongoose.Types.ObjectId(player) : null },
+    });
   }
 
   // 7️⃣ CREATE EVENT

@@ -32,11 +32,16 @@ const eventSchema = new Schema<IEvent>(
       enum: ['draft', 'publish', 'schedule'],
       default: 'draft',
     },
-    
+    order: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
   }
 );
+
+eventSchema.index({ order: 1 });
 
 export const Event = model<IEvent>('Event', eventSchema);

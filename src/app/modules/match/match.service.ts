@@ -958,6 +958,7 @@ const getSingleMatchFromDB = async (id: string) => {
     .populate("awayTeam")
     .populate("referee")
     .populate("winnerTeam")
+    .populate("manOfTheMatch", "firstName lastName profile jerseyNumber")
     .populate("venueCategory", "name")
     .populate("venueSubCategory", "name")
     .populate("ageGroupCategory");
@@ -1038,17 +1039,18 @@ const getSingleMatchFromDB = async (id: string) => {
     }));
 
   // Format Referee Report
-  const refereeReport = evaluation
+  const motmCandidate = (evaluation?.manOfTheMatch as any) || (match.manOfTheMatch as any);
+  const refereeReport = (evaluation || motmCandidate)
     ? {
-        homeTeamRating: evaluation.homeTeamRating,
-        awayTeamRating: evaluation.awayTeamRating,
-        manOfTheMatch: evaluation.manOfTheMatch
+        homeTeamRating: evaluation?.homeTeamRating ?? 0,
+        awayTeamRating: evaluation?.awayTeamRating ?? 0,
+        manOfTheMatch: motmCandidate
           ? {
-              _id: evaluation.manOfTheMatch._id,
-              firstName: (evaluation.manOfTheMatch as any).firstName || "",
-              lastName: (evaluation.manOfTheMatch as any).lastName || "",
-              profile: (evaluation.manOfTheMatch as any).profile || null,
-              jerseyNumber: (evaluation.manOfTheMatch as any).jerseyNumber || null,
+              _id: motmCandidate._id,
+              firstName: motmCandidate.firstName || "",
+              lastName: motmCandidate.lastName || "",
+              profile: motmCandidate.profile || null,
+              jerseyNumber: motmCandidate.jerseyNumber || null,
             }
           : null,
       }
@@ -2499,62 +2501,96 @@ const modifyMatchScoreInDB = async (
     }
   }
 
-  // 5. Player of the Day / Man of the Match handling
+  // 5. Player of the Day / Man of the Match handling (Strictly ONE per match)
   if (payload.manOfTheMatch !== undefined) {
     const targetMOTM = payload.manOfTheMatch ? String(payload.manOfTheMatch) : "";
     const evaluation = await MatchEvaluation.findOne({ match: match._id });
-    const currentMOTM = evaluation?.manOfTheMatch ? String(evaluation.manOfTheMatch) : "";
 
-    if (targetMOTM !== currentMOTM) {
-      const pe = await PlayerEconomy.findOne();
-      const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
-      const potdMV = pe?.playerOfTheDay?.marketValue ?? (potdCoin * (pe?.conversionRate ?? 10));
-      const minFloorMV = Number(pe?.startingMarketValue) || 10000000;
+    // Check existing MOTMs for this match across MatchEvaluation, MatchResult, and match document
+    const currentMOTMIds = new Set<string>();
+    if (evaluation?.manOfTheMatch) {
+      currentMOTMIds.add(String(evaluation.manOfTheMatch));
+    }
+    if (match.manOfTheMatch) {
+      currentMOTMIds.add(String(match.manOfTheMatch));
+    }
 
-      // Rollback old MOTM
-      if (currentMOTM) {
+    const potdMatchResults = await MatchResult.find({
+      match: match._id,
+      eventType: { $in: ["player_of_the_day", "man_of_the_match"] },
+    });
+    for (const mr of potdMatchResults) {
+      if (mr.player) currentMOTMIds.add(String(mr.player));
+    }
+
+    const pe = await PlayerEconomy.findOne();
+    const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
+    const potdMV = pe?.playerOfTheDay?.marketValue ?? (potdCoin * (pe?.conversionRate ?? 10));
+    const minFloorMV = Number(pe?.startingMarketValue) || 10000000;
+
+    // Rollback any previous MOTM player(s) that are NOT the targetMOTM
+    for (const oldMOTM of currentMOTMIds) {
+      if (oldMOTM !== targetMOTM) {
         await PlayerStats.findOneAndUpdate(
-          { player: currentMOTM },
+          { player: oldMOTM },
           { $inc: { playerOfTheDay: -1 } },
         );
         if (potdCoin > 0 || potdMV > 0) {
-          const oldMOTMUser = await User.findById(currentMOTM);
+          const oldMOTMUser = await User.findById(oldMOTM);
           if (oldMOTMUser) {
-            const isProOld = await isUserPremiumPlayer(currentMOTM);
+            const isProOld = await isUserPremiumPlayer(oldMOTM);
             const minFloorCoin = getMinFloorCoin(pe, isProOld);
             const updatedCoin = Math.max(minFloorCoin, (oldMOTMUser.engCoine ?? 0) - potdCoin);
             const updatedMV = Math.max(minFloorMV, (oldMOTMUser.marketValue ?? 0) - potdMV);
-            await User.findByIdAndUpdate(currentMOTM, {
+            await User.findByIdAndUpdate(oldMOTM, {
               $set: { engCoine: updatedCoin, marketValue: updatedMV },
             });
           }
         }
       }
+    }
 
-      // Award new MOTM
-      if (targetMOTM) {
-        await PlayerStats.findOneAndUpdate(
-          { player: targetMOTM },
-          { $inc: { playerOfTheDay: 1 } },
-          { upsert: true, new: true },
-        );
-        if (potdCoin > 0 || potdMV > 0) {
-          await User.findByIdAndUpdate(targetMOTM, {
-            $inc: { engCoine: potdCoin, marketValue: potdMV },
-          });
-        }
-      }
+    // Clean up any rogue MatchResult MOTM events for this match
+    if (potdMatchResults.length > 0) {
+      await MatchResult.deleteMany({
+        match: match._id,
+        eventType: { $in: ["player_of_the_day", "man_of_the_match"] },
+      });
+    }
 
-      if (evaluation) {
-        evaluation.manOfTheMatch = targetMOTM ? (new mongoose.Types.ObjectId(targetMOTM) as any) : null;
-        await evaluation.save();
-      } else if (targetMOTM) {
-        await MatchEvaluation.create({
-          match: match._id,
-          manOfTheMatch: targetMOTM,
+    // Award new MOTM (only if targetMOTM was not already awarded)
+    const wasAlreadyMOTM = currentMOTMIds.has(targetMOTM);
+    if (targetMOTM && !wasAlreadyMOTM) {
+      await PlayerStats.findOneAndUpdate(
+        { player: targetMOTM },
+        { $inc: { playerOfTheDay: 1 } },
+        { upsert: true, new: true },
+      );
+      if (potdCoin > 0 || potdMV > 0) {
+        await User.findByIdAndUpdate(targetMOTM, {
+          $inc: { engCoine: potdCoin, marketValue: potdMV },
         });
       }
     }
+
+    // Update or create MatchEvaluation safely
+    if (evaluation) {
+      evaluation.manOfTheMatch = targetMOTM ? (new mongoose.Types.ObjectId(targetMOTM) as any) : null;
+      if (!evaluation.homeTeam && match.homeTeam) evaluation.homeTeam = match.homeTeam as any;
+      if (!evaluation.awayTeam && match.awayTeam) evaluation.awayTeam = match.awayTeam as any;
+      await evaluation.save();
+    } else if (targetMOTM) {
+      await MatchEvaluation.create({
+        match: match._id,
+        homeTeam: match.homeTeam,
+        awayTeam: match.awayTeam,
+        homeTeamRating: 0,
+        awayTeamRating: 0,
+        manOfTheMatch: new mongoose.Types.ObjectId(targetMOTM),
+      });
+    }
+
+    match.manOfTheMatch = targetMOTM ? (new mongoose.Types.ObjectId(targetMOTM) as any) : null;
   }
 
   match.homeScore = newHomeScore;
