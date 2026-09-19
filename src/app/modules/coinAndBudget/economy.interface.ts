@@ -33,6 +33,7 @@ export interface IPlayerEconomy {
 export interface IClubEconomy {
   startingBudget: number;
   conversionRate: number;
+  minReserveCoins?: number;
 
   attendMatch: IEconomyValue;
   drawMatch: IEconomyValue;

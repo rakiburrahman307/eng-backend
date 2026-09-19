@@ -79,7 +79,8 @@ const rejectTransfer = catchAsync(async (req: Request, res: Response) => {
   const result = await TransferService.rejectTransferToDB(
     req.params.id as string,
     reason,
-    user._id
+    user._id,
+    user.role
   );
 
   sendResponse(res, {

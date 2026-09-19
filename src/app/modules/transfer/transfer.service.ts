@@ -9,6 +9,7 @@ import mongoose from "mongoose";
 import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
 import { sendNotificationToAdmins } from "../../../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
+import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 
 // CREATE
 const createTransferToDB = async (payload: any, userId: string) => {
@@ -38,15 +39,22 @@ const createTransferToDB = async (payload: any, userId: string) => {
     throw new ApiError(StatusCodes.NOT_FOUND, "Target buying team not found");
   }
 
+  // 💰 Fetch dynamic reserve balance from ClubEconomy
+  const clubEconomy = await ClubEconomy.findOne();
+  const minReserveCoins =
+    typeof clubEconomy?.minReserveCoins === "number"
+      ? clubEconomy.minReserveCoins
+      : clubEconomy?.startingBudget || 100000;
+
   const buyingTeamCoin = toTeamData.coin || 0;
   if (
     !isTrialPlayer &&
     playerMarketValue > 0 &&
-    buyingTeamCoin - playerMarketValue < 100000
+    buyingTeamCoin - playerMarketValue < minReserveCoins
   ) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      `Insufficient team coin balance! Your team has ${buyingTeamCoin} coins. A minimum balance of 100,000 coins must be maintained after transferring (Player cost: ${playerMarketValue} coins).`,
+      `Insufficient team coin balance! Your team has ${buyingTeamCoin} coins. A minimum balance of ${minReserveCoins.toLocaleString()} coins must be maintained after transferring (Player cost: ${playerMarketValue.toLocaleString()} coins).`,
     );
   }
 
@@ -90,13 +98,56 @@ const createTransferToDB = async (payload: any, userId: string) => {
     transferType,
   });
 
+  const playerName = `${player.firstName || ""} ${player.lastName || player.userName || "Player"}`.trim();
+  const buyingTeamName = toTeamData.teamName || "New Club";
+
+  // 1.1 🔔 Notify Selling Club Managers (each club needs to receive a notification)
+  if (fromTeam) {
+    const sellingManagers = await ManagerTeam.find({ team: fromTeam });
+    for (const sm of sellingManagers) {
+      await NotificationQueueHelper.sendNotification(
+        sm.manager.toString(),
+        `${buyingTeamName} has submitted a transfer bid for your player ${playerName}. Please review and accept or decline.`,
+        "New Transfer Bid Received",
+        NOTIFICATION_TYPE.TRANSFER_REQUESTED,
+        USER_ROLES.MANAGER,
+        transfer._id.toString(),
+        "Transfer",
+      );
+    }
+  }
+
+  // 1.1 🔔 Notify Parents (plus the parents)
+  if (player.parentId) {
+    await NotificationQueueHelper.sendNotification(
+      player.parentId.toString(),
+      `${buyingTeamName} has placed a transfer bid for your child ${playerName}. Awaiting club and league review.`,
+      "Transfer Bid for Your Child",
+      NOTIFICATION_TYPE.TRANSFER_REQUESTED,
+      undefined,
+      transfer._id.toString(),
+      "Transfer",
+    );
+  }
+
+  // 1.1 🔔 Notify Buying Club Manager (confirmation)
+  await NotificationQueueHelper.sendNotification(
+    userId,
+    `Your transfer bid for ${playerName} has been submitted successfully and is awaiting review.`,
+    "Transfer Bid Submitted",
+    NOTIFICATION_TYPE.TRANSFER_REQUESTED,
+    USER_ROLES.MANAGER,
+    transfer._id.toString(),
+    "Transfer",
+  );
+
   // 🔔 Notify player: transfer request submitted via background queue helper
   await NotificationQueueHelper.sendNotification(
-    payload.player,
-    "A transfer request has been submitted for you. Awaiting approval.",
+    payload.player.toString(),
+    `A transfer request has been submitted for you by ${buyingTeamName}. Awaiting approval.`,
     "Transfer Request Submitted",
     NOTIFICATION_TYPE.TRANSFER_REQUESTED,
-    undefined,
+    USER_ROLES.PLAYER,
     transfer._id.toString(),
     "Transfer",
   );
@@ -104,7 +155,7 @@ const createTransferToDB = async (payload: any, userId: string) => {
   // 🔔 Notify admins: new transfer request
   await sendNotificationToAdmins({
     title: "New Transfer Request",
-    message: `A new transfer request has been submitted (${transferType}). Please review.`,
+    message: `A new transfer request has been submitted for ${playerName} by ${buyingTeamName} (${transferType}). Please review.`,
     type: NOTIFICATION_TYPE.TRANSFER_REQUESTED,
     metadata: { transferId: transfer._id, transferType },
   });
@@ -324,7 +375,17 @@ const approveTransferToDB = async (id: string, user: any) => {
   const userId = user?._id || user?.id;
   const userRole = user?.role;
 
-  // 🛑 PHASE 1: MANAGER APPROVAL
+  // Fetch player details and teams for notification messages
+  const player = await User.findById(transfer.player);
+  const playerName = player
+    ? `${player.firstName || ""} ${player.lastName || player.userName || "Player"}`.trim()
+    : "Player";
+  const toTeamObj = await Team.findById(transfer.toTeam);
+  const fromTeamObj = transfer.fromTeam ? await Team.findById(transfer.fromTeam) : null;
+  const toTeamName = toTeamObj?.teamName || "New Club";
+  const fromTeamName = fromTeamObj?.teamName || "Current Club";
+
+  // 🛑 PHASE 1: MANAGER APPROVAL (Step 1.2: Club needs to accept)
   if (userRole === USER_ROLES.MANAGER) {
     if (transfer.fromTeam) {
       const isFromTeamManager = await ManagerTeam.findOne({
@@ -340,34 +401,89 @@ const approveTransferToDB = async (id: string, user: any) => {
       }
     }
 
+    if (transfer.status === "MANAGER_APPROVED") {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "This transfer has already been accepted by the club manager.",
+      );
+    }
+    if (transfer.status === "APPROVED") {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "This transfer has already been finalized by admin.",
+      );
+    }
+
     transfer.status = "MANAGER_APPROVED";
     await transfer.save();
 
-    // 🔔 Notify Admins for final approval
-    await sendNotificationToAdmins({
-      title: "Transfer Approved by Manager",
-      message:
-        "A team manager has approved a player transfer request. Final Admin approval is required.",
-      type: NOTIFICATION_TYPE.TRANSFER_REQUESTED,
-      metadata: { transferId: transfer._id },
-    });
+    // 🔔 Notify Buying Club Manager
+    await NotificationQueueHelper.sendNotification(
+      transfer.requestedBy.toString(),
+      `${fromTeamName} has accepted your transfer bid for ${playerName}. Awaiting final Admin approval.`,
+      "Transfer Bid Accepted by Club 👍",
+      NOTIFICATION_TYPE.TRANSFER_REQUESTED,
+      USER_ROLES.MANAGER,
+      transfer._id.toString(),
+      "Transfer",
+    );
+
+    // 🔔 Notify Parents
+    if (player?.parentId) {
+      await NotificationQueueHelper.sendNotification(
+        player.parentId.toString(),
+        `${fromTeamName} has accepted the transfer bid for ${playerName}. Awaiting final league approval.`,
+        "Transfer Bid Accepted by Club 👍",
+        NOTIFICATION_TYPE.TRANSFER_REQUESTED,
+        undefined,
+        transfer._id.toString(),
+        "Transfer",
+      );
+    }
 
     // 🔔 Notify player via background queue
     await NotificationQueueHelper.sendNotification(
       transfer.player.toString(),
-      "Your team manager has approved the transfer request. Awaiting final Admin approval.",
+      `Your club manager (${fromTeamName}) has approved the transfer request. Awaiting final Admin approval.`,
       "Manager Approved Transfer 👍",
       NOTIFICATION_TYPE.GENERAL,
-      undefined,
+      USER_ROLES.PLAYER,
       transfer._id.toString(),
       "Transfer",
     );
+
+    // 🔔 Notify Admins for final approval
+    await sendNotificationToAdmins({
+      title: "Transfer Approved by Club Manager",
+      message: `${fromTeamName} manager has accepted the transfer bid for ${playerName}. Final Admin approval is required.`,
+      type: NOTIFICATION_TYPE.TRANSFER_REQUESTED,
+      metadata: { transferId: transfer._id },
+    });
 
     return transfer;
   }
 
   // 🛑 PHASE 2: ADMIN / SUPER_ADMIN FINAL APPROVAL (TEAM SWAP & COIN TRANSFER)
   if (userRole === USER_ROLES.ADMIN || userRole === USER_ROLES.SUPER_ADMIN) {
+    if (transfer.status === "APPROVED") {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "This transfer is already approved.",
+      );
+    }
+
+    // For club-to-club transfers, selling club manager must accept first
+    if (
+      transfer.transferType === "CLUB_TO_CLUB" &&
+      transfer.fromTeam &&
+      transfer.status !== "MANAGER_APPROVED"
+    ) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "The selling club manager must accept the transfer request before final Admin approval.",
+      );
+    }
+
     const userDetails = await User.findById(transfer.player);
 
     if (!userDetails) {
@@ -378,9 +494,15 @@ const approveTransferToDB = async (id: string, user: any) => {
       !transfer.fromTeam || userDetails.role === USER_ROLES.OTHER_CLUBS;
     const playerMarketValue = isTrialPlayer ? 0 : userDetails.marketValue || 0;
 
-    // 1. Regular Player: Deduct coins from buying team (toTeam) enforcing 100,000 minimum balance
+    // 💰 1. Dynamic reserve check from ClubEconomy
+    const clubEconomy = await ClubEconomy.findOne();
+    const minReserveCoins =
+      typeof clubEconomy?.minReserveCoins === "number"
+        ? clubEconomy.minReserveCoins
+        : clubEconomy?.startingBudget || 100000;
+
+    // 2. Regular Player: Deduct coins from buying team (toTeam) enforcing dynamic minimum balance
     if (!isTrialPlayer && playerMarketValue > 0) {
-      const toTeamObj = await Team.findById(transfer.toTeam);
       if (!toTeamObj) {
         throw new ApiError(
           StatusCodes.NOT_FOUND,
@@ -388,27 +510,24 @@ const approveTransferToDB = async (id: string, user: any) => {
         );
       }
 
-      if ((toTeamObj.coin || 0) - playerMarketValue < 100000) {
+      if ((toTeamObj.coin || 0) - playerMarketValue < minReserveCoins) {
         throw new ApiError(
           StatusCodes.BAD_REQUEST,
-          `Cannot complete transfer: Target buying team has insufficient coins (${toTeamObj.coin || 0} available). A minimum balance of 100,000 coins must be maintained (Player cost: ${playerMarketValue} coins).`,
+          `Cannot complete transfer: Target buying team has insufficient coins (${toTeamObj.coin || 0} available). A minimum balance of ${minReserveCoins.toLocaleString()} coins must be maintained (Player cost: ${playerMarketValue.toLocaleString()} coins).`,
         );
       }
 
       toTeamObj.coin = (toTeamObj.coin || 0) - playerMarketValue;
       await toTeamObj.save();
 
-      // 2. Add coins to selling team (fromTeam)
-      if (transfer.fromTeam) {
-        const fromTeamObj = await Team.findById(transfer.fromTeam);
-        if (fromTeamObj) {
-          fromTeamObj.coin = (fromTeamObj.coin || 0) + playerMarketValue;
-          await fromTeamObj.save();
-        }
+      // 3. Add coins to selling team (fromTeam)
+      if (fromTeamObj) {
+        fromTeamObj.coin = (fromTeamObj.coin || 0) + playerMarketValue;
+        await fromTeamObj.save();
       }
     }
 
-    // 3. Swap player's team to new team & promote role if Trial Player
+    // 4. Swap player's team to new team & promote role if Trial Player
     userDetails.selectTeam = transfer.toTeam as any;
     if (userDetails.role === USER_ROLES.OTHER_CLUBS) {
       userDetails.role = USER_ROLES.PLAYER;
@@ -419,13 +538,53 @@ const approveTransferToDB = async (id: string, user: any) => {
     transfer.approvedBy = userId as any;
     await transfer.save();
 
+    // 1.3 🔔 Notify Buying Club Manager
+    await NotificationQueueHelper.sendNotification(
+      transfer.requestedBy.toString(),
+      `Transfer Complete! ${playerName} has officially joined ${toTeamName}.`,
+      "🎉 Transfer Complete!",
+      NOTIFICATION_TYPE.TRANSFER_APPROVED,
+      USER_ROLES.MANAGER,
+      transfer._id.toString(),
+      "Transfer",
+    );
+
+    // 1.3 🔔 Notify Selling Club Manager(s)
+    if (transfer.fromTeam) {
+      const sellingManagers = await ManagerTeam.find({ team: transfer.fromTeam });
+      for (const sm of sellingManagers) {
+        await NotificationQueueHelper.sendNotification(
+          sm.manager.toString(),
+          `Transfer Complete! ${playerName} has moved to ${toTeamName}.${playerMarketValue > 0 ? ` ${playerMarketValue.toLocaleString()} coins have been credited to your club.` : ""}`,
+          "🎉 Transfer Finalized",
+          NOTIFICATION_TYPE.TRANSFER_APPROVED,
+          USER_ROLES.MANAGER,
+          transfer._id.toString(),
+          "Transfer",
+        );
+      }
+    }
+
+    // 1.3 🔔 Notify Parents
+    if (userDetails.parentId) {
+      await NotificationQueueHelper.sendNotification(
+        userDetails.parentId.toString(),
+        `Transfer Complete! ${playerName} is now officially registered with ${toTeamName}.`,
+        "🎉 Transfer Complete!",
+        NOTIFICATION_TYPE.TRANSFER_APPROVED,
+        undefined,
+        transfer._id.toString(),
+        "Transfer",
+      );
+    }
+
     // 🔔 Notify player: transfer approved via background queue
     await NotificationQueueHelper.sendNotification(
       transfer.player.toString(),
-      "Congratulations! Your transfer request has been fully approved by Admin. You are now part of the new team.",
+      `Congratulations! Your transfer request to ${toTeamName} has been fully approved by Admin. You are now part of the new team.`,
       "🎉 Transfer Approved!",
       NOTIFICATION_TYPE.TRANSFER_APPROVED,
-      undefined,
+      USER_ROLES.PLAYER,
       transfer._id.toString(),
       "Transfer",
     );
@@ -443,7 +602,8 @@ const approveTransferToDB = async (id: string, user: any) => {
 const rejectTransferToDB = async (
   id: string,
   reason: string,
-  adminId: string,
+  userId: string,
+  userRole?: string,
 ) => {
   const transfer = await Transfer.findById(id);
 
@@ -451,11 +611,56 @@ const rejectTransferToDB = async (
     throw new ApiError(StatusCodes.NOT_FOUND, "Transfer not found");
   }
 
+  if (userRole === USER_ROLES.MANAGER) {
+    if (transfer.fromTeam) {
+      const isFromTeamManager = await ManagerTeam.findOne({
+        manager: userId,
+        team: transfer.fromTeam,
+      });
+
+      if (!isFromTeamManager) {
+        throw new ApiError(
+          StatusCodes.FORBIDDEN,
+          "Access Denied: Only the manager of the player's current team can reject this transfer.",
+        );
+      }
+    }
+  }
+
   transfer.status = "REJECTED";
   transfer.rejectReason = reason;
-  transfer.approvedBy = adminId as any;
+  transfer.approvedBy = userId as any;
 
   await transfer.save();
+
+  const player = await User.findById(transfer.player);
+  const playerName = player
+    ? `${player.firstName || ""} ${player.lastName || player.userName || "Player"}`.trim()
+    : "Player";
+
+  // 🔔 Notify Buying Club Manager
+  await NotificationQueueHelper.sendNotification(
+    transfer.requestedBy.toString(),
+    `The transfer bid for ${playerName} was declined. Reason: ${reason || "No reason provided."}`,
+    "Transfer Request Declined",
+    NOTIFICATION_TYPE.TRANSFER_REJECTED,
+    USER_ROLES.MANAGER,
+    transfer._id.toString(),
+    "Transfer",
+  );
+
+  // 🔔 Notify Parents
+  if (player?.parentId) {
+    await NotificationQueueHelper.sendNotification(
+      player.parentId.toString(),
+      `The transfer bid for ${playerName} was declined. Reason: ${reason || "No reason provided."}`,
+      "Transfer Request Declined",
+      NOTIFICATION_TYPE.TRANSFER_REJECTED,
+      undefined,
+      transfer._id.toString(),
+      "Transfer",
+    );
+  }
 
   // 🔔 Notify player: transfer rejected via background queue
   await NotificationQueueHelper.sendNotification(
@@ -463,7 +668,7 @@ const rejectTransferToDB = async (
     `Your transfer request has been rejected. Reason: ${reason || "No reason provided."}`,
     "Transfer Request Rejected",
     NOTIFICATION_TYPE.TRANSFER_REJECTED,
-    undefined,
+    USER_ROLES.PLAYER,
     transfer._id.toString(),
     "Transfer",
   );

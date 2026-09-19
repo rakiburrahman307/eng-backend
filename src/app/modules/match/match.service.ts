@@ -915,8 +915,14 @@ const getMatchesByRefereeFromDB = async (
   query: Record<string, any>,
 ) => {
   const pageNumber = Math.max(1, parseInt(query.page as string, 10) || 1);
-  const limitNumber = Math.max(1, parseInt(query.limit as string, 10) || 10);
-  const skip = (pageNumber - 1) * limitNumber;
+
+  // Standard limit commented out for now to allow unlimited data (can be re-enabled later for dynamic pagination):
+  // const limitNumber = Math.max(1, parseInt(query.limit as string, 10) || 10);
+  // const skip = (pageNumber - 1) * limitNumber;
+
+  // Temporarily increased limit to return all/unlimited data:
+  const limitNumber = Math.max(1, parseInt(query.limit as string, 10) || 100000);
+  const skip = 0;
 
   const filter = { referee: refereeId };
   const total = await Match.countDocuments(filter);
@@ -924,7 +930,8 @@ const getMatchesByRefereeFromDB = async (
 
   const matches = await Match.find(filter)
     .sort(query.sort || "matchDate")
-    .skip(skip)
+    // .skip(skip)
+    // .limit(limitNumber)
     .limit(limitNumber)
     .populate("league")
     .populate("homeTeam")

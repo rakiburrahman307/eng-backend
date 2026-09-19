@@ -7,6 +7,11 @@ const clubEconomySchema = new Schema(
       default: 100000,
     },
 
+    minReserveCoins: {
+      type: Number,
+      default: 100000,
+    },
+
     conversionRate: {
       type: Number,
       default: 10,
