@@ -3,7 +3,7 @@ import { MatchEvaluation } from "./refereeRating.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { Match } from "../match/match.model";
 import { getEffectiveMatchSetting } from "../match/matchSetting.model";
-import { awardClubCoinsSafely } from "../match/match.service";
+import { awardClubCoinsSafely, rollbackClubCoinsSafely } from "../match/match.service";
 import ApiError from "../../../errors/ApiErrors";
 import { StatusCodes } from "http-status-codes";
 import dayjs from "dayjs";
@@ -87,17 +87,22 @@ const createEvaluationIntoDB = async (payload: any) => {
     throw new ApiError(StatusCodes.NOT_FOUND, "Match not found");
   }
 
-  if (match.status !== "finished") {
-    throw new ApiError(
-      StatusCodes.BAD_REQUEST,
-      "Feedback can only be submitted for finished matches",
-    );
-  }
-
   // ⏰ Dynamic Feedback Window (Admin Configurable)
   const setting = await getEffectiveMatchSetting();
+
+  // If match is not marked finished, mark it finished upon review submission so evaluation succeeds smoothly
+  if (match.status !== "finished") {
+    match.status = "finished";
+    if (!match.finishedAt) {
+      match.finishedAt = new Date();
+    }
+    match.timerStatus = "finished";
+    match.timerStartedAt = null;
+    await match.save();
+  }
+
   if (setting.isFeedbackWindowRestricted && setting.feedbackWindowHours > 0) {
-    const finishTime = match.finishedAt || (match as any).updatedAt;
+    const finishTime = match.finishedAt || (match as any).updatedAt || match.matchDate;
     if (finishTime) {
       const targetTz = setting.timezone || "Europe/London";
       const nowUK = dayjs().tz(targetTz);
@@ -106,7 +111,7 @@ const createEvaluationIntoDB = async (payload: any) => {
       if (hoursSinceFinish > setting.feedbackWindowHours) {
         throw new ApiError(
           StatusCodes.BAD_REQUEST,
-          `Feedback cannot be submitted after ${setting.feedbackWindowHours} hours of match completion (${targetTz} Time)`,
+          `Feedback window expired. Ratings cannot be submitted after ${setting.feedbackWindowHours} hours of match completion (${targetTz} Time)`,
         );
       }
     }
@@ -121,21 +126,21 @@ const createEvaluationIntoDB = async (payload: any) => {
   const awayRating =
     payload.awayTeamRating !== undefined
       ? payload.awayTeamRating
-      
       : payload.awayTeamConductRating;
 
-  // Prevent duplicate referee evaluations that re-credit coins
+  // Find existing evaluation if any (allow editing old games)
   const existingEval = await MatchEvaluation.findOne({ match: payload.match });
-  if (existingEval && existingEval.referee) {
-    throw new ApiError(
-      StatusCodes.CONFLICT,
-      "Match evaluation has already been submitted for this match",
-    );
+
+  // Preserve existing referee if current submission is from manager without referee field
+  if (existingEval && !payload.referee && existingEval.referee) {
+    payload.referee = existingEval.referee;
   }
 
   const previousMOTM = existingEval?.manOfTheMatch
     ? String(existingEval.manOfTheMatch)
     : null;
+  const previousHomeRating = existingEval?.homeTeamRating;
+  const previousAwayRating = existingEval?.awayTeamRating;
 
   payload.homeTeamRating = Number(homeRating);
   payload.awayTeamRating = Number(awayRating);
@@ -148,24 +153,47 @@ const createEvaluationIntoDB = async (payload: any) => {
     result = await MatchEvaluation.create(payload);
   }
 
+  // Adjust conduct coins safely (only if new or rating changed)
   const teams = [
     {
       teamId: payload.homeTeam,
       rating: Number(homeRating),
+      prevRating: previousHomeRating,
     },
     {
       teamId: payload.awayTeam,
       rating: Number(awayRating),
+      prevRating: previousAwayRating,
     },
   ];
 
   for (const item of teams) {
     if (!item.teamId || item.rating == null || isNaN(item.rating)) continue;
 
-    const { coin, budgetValue } = await getConductReward(item.rating);
+    const ratingChanged = !existingEval || item.prevRating !== item.rating;
+    if (ratingChanged) {
+      // Rollback previous conduct coins if already awarded
+      if (
+        item.prevRating !== undefined &&
+        item.prevRating !== null &&
+        !isNaN(item.prevRating)
+      ) {
+        const prevConduct = await getConductReward(item.prevRating);
+        if (prevConduct.coin > 0 || prevConduct.budgetValue > 0) {
+          await rollbackClubCoinsSafely(
+            payload.match,
+            item.teamId,
+            prevConduct.coin,
+            prevConduct.budgetValue,
+          );
+        }
+      }
 
-    if (coin > 0 || budgetValue > 0) {
-      await awardClubCoinsSafely(payload.match, item.teamId, coin, budgetValue);
+      // Award new conduct coins
+      const { coin, budgetValue } = await getConductReward(item.rating);
+      if (coin > 0 || budgetValue > 0) {
+        await awardClubCoinsSafely(payload.match, item.teamId, coin, budgetValue);
+      }
     }
   }
 

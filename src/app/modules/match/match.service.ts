@@ -1833,14 +1833,22 @@ const addMatchReviewToDB = async (
 
   if (!match) throw new ApiError(StatusCodes.NOT_FOUND, "Match not found");
 
+  // Dynamic Feedback Window (Admin Configurable)
+  const setting = await getEffectiveMatchSetting();
+
+  // If match is not marked finished, mark it finished upon review submission so reviews succeed smoothly
   if (match.status !== "finished") {
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Only finished matches can be reviewed");
+    match.status = "finished";
+    if (!match.finishedAt) {
+      match.finishedAt = new Date();
+    }
+    match.timerStatus = "finished";
+    match.timerStartedAt = null;
+    await match.save();
   }
 
-  // ⏰ Dynamic Feedback Window (Admin Configurable)
-  const setting = await getEffectiveMatchSetting();
   if (setting.isFeedbackWindowRestricted && setting.feedbackWindowHours > 0) {
-    const finishTime = match.finishedAt || (match as any).updatedAt;
+    const finishTime = match.finishedAt || (match as any).updatedAt || match.matchDate;
     if (finishTime) {
       const targetTz = setting.timezone || "Europe/London";
       const nowUK = dayjs().tz(targetTz);
@@ -1849,7 +1857,7 @@ const addMatchReviewToDB = async (
       if (hoursSinceFinish > setting.feedbackWindowHours) {
         throw new ApiError(
           StatusCodes.BAD_REQUEST,
-          `Feedback cannot be submitted after ${setting.feedbackWindowHours} hours of match completion (${targetTz} Time)`,
+          `Feedback window expired. Reviews cannot be submitted after ${setting.feedbackWindowHours} hours of match completion (${targetTz} Time)`,
         );
       }
     }
@@ -1992,13 +2000,23 @@ const addMatchReviewToDB = async (
     });
 
     if (existingIndex !== -1) {
+      const oldCoin = match.matchReview[existingIndex].coinImpact || 0;
+      const oldMV = match.matchReview[existingIndex].valueImpact || 0;
+
+      (newRev as any).coinDelta = newRev.coinImpact - oldCoin;
+      (newRev as any).valueDelta = newRev.valueImpact - oldMV;
+
       // Update existing review
       match.matchReview[existingIndex].rating = newRev.rating;
       match.matchReview[existingIndex].notes = newRev.notes;
+      match.matchReview[existingIndex].coinImpact = newRev.coinImpact;
+      match.matchReview[existingIndex].valueImpact = newRev.valueImpact;
       if (newRev.team) {
         match.matchReview[existingIndex].team = newRev.team;
       }
     } else {
+      (newRev as any).coinDelta = newRev.coinImpact;
+      (newRev as any).valueDelta = newRev.valueImpact;
       match.matchReview.push({
         team: newRev.team,
         player: newRev.player,
@@ -2014,14 +2032,17 @@ const addMatchReviewToDB = async (
 
   // Apply coins and market values for teams and players
   for (const r of reviewsWithCoin) {
-    if (r.team && (r.coinImpact > 0 || r.valueImpact > 0)) {
+    const coinDelta = (r as any).coinDelta || 0;
+    const valueDelta = (r as any).valueDelta || 0;
+
+    if (r.team && (coinDelta !== 0 || valueDelta !== 0)) {
       await Team.findByIdAndUpdate(r.team, {
-        $inc: { coin: r.coinImpact, marketValue: r.valueImpact },
+        $inc: { coin: coinDelta, marketValue: valueDelta },
       });
     }
-    if (r.player && (r.coinImpact > 0 || r.valueImpact > 0)) {
+    if (r.player && (coinDelta !== 0 || valueDelta !== 0)) {
       await User.findByIdAndUpdate(r.player, {
-        $inc: { engCoine: r.coinImpact, marketValue: r.valueImpact },
+        $inc: { engCoine: coinDelta, marketValue: valueDelta },
       });
     }
   }
@@ -2039,9 +2060,15 @@ const getUpcomingMatchesForManagerFromDB = async (
 
   const teamIds = managerTeams.map((item) => item.team);
 
+  const statusCondition: any = query.status
+    ? query.status === "ALL"
+      ? {}
+      : { status: query.status }
+    : { status: "upcoming" };
+
   const matchQuery = new QueryBuilder(
     Match.find({
-      status: "upcoming",
+      ...statusCondition,
       $or: [{ homeTeam: { $in: teamIds } }, { awayTeam: { $in: teamIds } }],
     }),
     query,

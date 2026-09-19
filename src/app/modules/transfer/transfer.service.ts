@@ -10,6 +10,7 @@ import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
 import { sendNotificationToAdmins } from "../../../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
+import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 
 // CREATE
 const createTransferToDB = async (payload: any, userId: string) => {
@@ -30,31 +31,40 @@ const createTransferToDB = async (payload: any, userId: string) => {
     );
   }
 
+  // 💰 Fetch dynamic economy settings
+  const [clubEconomy, playerEconomy] = await Promise.all([
+    ClubEconomy.findOne(),
+    PlayerEconomy.findOne(),
+  ]);
+
+  const conversionRate = Number(playerEconomy?.conversionRate) || 10;
+  const minReserveCoins =
+    typeof clubEconomy?.minReserveCoins === "number"
+      ? clubEconomy.minReserveCoins
+      : clubEconomy?.startingBudget || 100000;
+
   // 💰 CHECK BUYING TEAM COIN BALANCE (ONLY FOR REGULAR PLAYERS WITH A FROM-TEAM)
   const isTrialPlayer = !fromTeam || player.role === USER_ROLES.OTHER_CLUBS;
-  const playerMarketValue = isTrialPlayer ? 0 : player.marketValue || 0;
+  const playerCost = isTrialPlayer
+    ? 0
+    : player.engCoine !== undefined && player.engCoine !== null
+    ? player.engCoine
+    : Math.round((player.marketValue || 0) / conversionRate);
   const toTeamData = await Team.findById(payload.toTeam);
 
   if (!toTeamData) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Target buying team not found");
   }
 
-  // 💰 Fetch dynamic reserve balance from ClubEconomy
-  const clubEconomy = await ClubEconomy.findOne();
-  const minReserveCoins =
-    typeof clubEconomy?.minReserveCoins === "number"
-      ? clubEconomy.minReserveCoins
-      : clubEconomy?.startingBudget || 100000;
-
   const buyingTeamCoin = toTeamData.coin || 0;
   if (
     !isTrialPlayer &&
-    playerMarketValue > 0 &&
-    buyingTeamCoin - playerMarketValue < minReserveCoins
+    playerCost > 0 &&
+    buyingTeamCoin - playerCost < minReserveCoins
   ) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      `Insufficient team coin balance! Your team has ${buyingTeamCoin} coins. A minimum balance of ${minReserveCoins.toLocaleString()} coins must be maintained after transferring (Player cost: ${playerMarketValue.toLocaleString()} coins).`,
+      `Insufficient team coin balance! Your team has ${buyingTeamCoin.toLocaleString()} coins. A minimum balance of ${minReserveCoins.toLocaleString()} coins must be maintained after transferring (Player cost: ${playerCost.toLocaleString()} coins).`,
     );
   }
 
@@ -492,17 +502,26 @@ const approveTransferToDB = async (id: string, user: any) => {
 
     const isTrialPlayer =
       !transfer.fromTeam || userDetails.role === USER_ROLES.OTHER_CLUBS;
-    const playerMarketValue = isTrialPlayer ? 0 : userDetails.marketValue || 0;
+    // 💰 1. Dynamic economy check from ClubEconomy and PlayerEconomy
+    const [clubEconomy, playerEconomy] = await Promise.all([
+      ClubEconomy.findOne(),
+      PlayerEconomy.findOne(),
+    ]);
 
-    // 💰 1. Dynamic reserve check from ClubEconomy
-    const clubEconomy = await ClubEconomy.findOne();
+    const conversionRate = Number(playerEconomy?.conversionRate) || 10;
     const minReserveCoins =
       typeof clubEconomy?.minReserveCoins === "number"
         ? clubEconomy.minReserveCoins
         : clubEconomy?.startingBudget || 100000;
 
+    const playerCost = isTrialPlayer
+      ? 0
+      : userDetails.engCoine !== undefined && userDetails.engCoine !== null
+      ? userDetails.engCoine
+      : Math.round((userDetails.marketValue || 0) / conversionRate);
+
     // 2. Regular Player: Deduct coins from buying team (toTeam) enforcing dynamic minimum balance
-    if (!isTrialPlayer && playerMarketValue > 0) {
+    if (!isTrialPlayer && playerCost > 0) {
       if (!toTeamObj) {
         throw new ApiError(
           StatusCodes.NOT_FOUND,
@@ -510,19 +529,19 @@ const approveTransferToDB = async (id: string, user: any) => {
         );
       }
 
-      if ((toTeamObj.coin || 0) - playerMarketValue < minReserveCoins) {
+      if ((toTeamObj.coin || 0) - playerCost < minReserveCoins) {
         throw new ApiError(
           StatusCodes.BAD_REQUEST,
-          `Cannot complete transfer: Target buying team has insufficient coins (${toTeamObj.coin || 0} available). A minimum balance of ${minReserveCoins.toLocaleString()} coins must be maintained (Player cost: ${playerMarketValue.toLocaleString()} coins).`,
+          `Cannot complete transfer: Target buying team has insufficient coins (${toTeamObj.coin || 0} available). A minimum balance of ${minReserveCoins.toLocaleString()} coins must be maintained (Player cost: ${playerCost.toLocaleString()} coins).`,
         );
       }
 
-      toTeamObj.coin = (toTeamObj.coin || 0) - playerMarketValue;
+      toTeamObj.coin = (toTeamObj.coin || 0) - playerCost;
       await toTeamObj.save();
 
       // 3. Add coins to selling team (fromTeam)
       if (fromTeamObj) {
-        fromTeamObj.coin = (fromTeamObj.coin || 0) + playerMarketValue;
+        fromTeamObj.coin = (fromTeamObj.coin || 0) + playerCost;
         await fromTeamObj.save();
       }
     }
@@ -555,7 +574,7 @@ const approveTransferToDB = async (id: string, user: any) => {
       for (const sm of sellingManagers) {
         await NotificationQueueHelper.sendNotification(
           sm.manager.toString(),
-          `Transfer Complete! ${playerName} has moved to ${toTeamName}.${playerMarketValue > 0 ? ` ${playerMarketValue.toLocaleString()} coins have been credited to your club.` : ""}`,
+          `Transfer Complete! ${playerName} has moved to ${toTeamName}.${playerCost > 0 ? ` ${playerCost.toLocaleString()} coins have been credited to your club.` : ""}`,
           "🎉 Transfer Finalized",
           NOTIFICATION_TYPE.TRANSFER_APPROVED,
           USER_ROLES.MANAGER,
