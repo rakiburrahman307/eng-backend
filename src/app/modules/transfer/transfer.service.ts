@@ -536,12 +536,15 @@ const approveTransferToDB = async (id: string, user: any) => {
         );
       }
 
+      const clubRate = Number(clubEconomy?.conversionRate) || 10;
       toTeamObj.coin = (toTeamObj.coin || 0) - playerCost;
+      toTeamObj.marketValue = (toTeamObj.coin || 0) * clubRate;
       await toTeamObj.save();
 
       // 3. Add coins to selling team (fromTeam)
       if (fromTeamObj) {
         fromTeamObj.coin = (fromTeamObj.coin || 0) + playerCost;
+        fromTeamObj.marketValue = (fromTeamObj.coin || 0) * clubRate;
         await fromTeamObj.save();
       }
     }
@@ -550,6 +553,23 @@ const approveTransferToDB = async (id: string, user: any) => {
     userDetails.selectTeam = transfer.toTeam as any;
     if (userDetails.role === USER_ROLES.OTHER_CLUBS) {
       userDetails.role = USER_ROLES.PLAYER;
+      const startCoins = Number(playerEconomy?.startingCoins) || 10000;
+      const startMV =
+        Number(playerEconomy?.startingMarketValue) || startCoins * conversionRate;
+      if (!userDetails.engCoine || userDetails.engCoine <= 0) {
+        userDetails.engCoine = startCoins;
+      }
+      if (!userDetails.marketValue || userDetails.marketValue <= 0) {
+        userDetails.marketValue = startMV;
+      }
+    } else {
+      // Ensure regular player's market value is aligned with their coins
+      if (
+        userDetails.engCoine &&
+        (!userDetails.marketValue || userDetails.marketValue <= 0)
+      ) {
+        userDetails.marketValue = userDetails.engCoine * conversionRate;
+      }
     }
     await userDetails.save();
 
