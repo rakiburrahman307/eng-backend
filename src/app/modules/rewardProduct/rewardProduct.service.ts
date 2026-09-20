@@ -289,15 +289,8 @@ const redeemCoffeeRewardInDB = async (
     );
   }
 
-  const requiredPoints = Number(rewardProduct.point) || 0;
+  const awardPoints = Number(rewardProduct.point) || 0;
   const currentCoins = Number(user.engCoine) || 0;
-
-  if (currentCoins < requiredPoints) {
-    throw new ApiError(
-      StatusCodes.BAD_REQUEST,
-      `Insufficient ENG Coins! You have ${currentCoins} coins, but this Coffee reward costs ${requiredPoints} coins.`
-    );
-  }
 
   // ♾️ NO USER LIMITATION! Unlimited redemptions permitted!
   if (!rewardProduct.redeemedUsers) {
@@ -309,15 +302,15 @@ const redeemCoffeeRewardInDB = async (
   rewardProduct.redeemedUsers.push({
     user: playerObjectId,
     redeemedAt: new Date(),
-    points: requiredPoints,
+    points: awardPoints,
   });
 
   await rewardProduct.save();
 
-  // 💰 DEDUCT COINS & UPDATE MARKET VALUE FOR THE PLAYER
+  // 💰 ADD (+) COINS & UPDATE MARKET VALUE FOR THE PLAYER (Coffee reward awards coins)
   const pe = await PlayerEconomy.findOne();
   const rate = pe?.conversionRate ?? 10;
-  user.engCoine = Math.max(0, currentCoins - requiredPoints);
+  user.engCoine = currentCoins + awardPoints;
   user.marketValue = (user.engCoine || 0) * rate;
   await user.save();
 
@@ -351,7 +344,8 @@ const redeemCoffeeRewardInDB = async (
     productId: rewardProduct._id,
     brand: rewardProduct.brand,
     productType: rewardProduct.productType,
-    pointCost: requiredPoints,
+    pointCost: awardPoints,
+    coinsEarned: awardPoints,
     playerId: user._id,
     playerName: computedName,
     email: userEmail,
