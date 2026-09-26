@@ -6,8 +6,8 @@ import { USER_ROLES } from "../../../enums/user";
 
 const getOverviewFromDB = async () => {
   const activeSubUserIds = await Subscription.find({
-    status: 'active',
-  }).distinct('user');
+    status: "active",
+  }).distinct("user");
 
   const playerRoles = [
     USER_ROLES.PLAYER,
@@ -53,12 +53,12 @@ const getOverviewFromDB = async () => {
   ] = await Promise.all([
     User.countDocuments({
       ...playerEligibility,
-      status: { $in: ['APPROVED', 'PENDING'] },
+      status: { $in: ["APPROVED", "PENDING"] },
     }),
 
     User.countDocuments({
       ...playerEligibility,
-      status: 'PENDING',
+      status: "PENDING",
     }),
 
     User.countDocuments({
@@ -72,7 +72,7 @@ const getOverviewFromDB = async () => {
     User.countDocuments({
       ...playerEligibility,
       role: USER_ROLES.OTHER_CLUBS,
-      status: { $in: ['APPROVED', 'PENDING'] },
+      status: { $in: ["APPROVED", "PENDING"] },
     }),
 
     User.countDocuments({
@@ -93,10 +93,10 @@ const getOverviewFromDB = async () => {
     Match.countDocuments(),
 
     Match.countDocuments({
-      status: 'upcoming',
+      status: "upcoming",
     }),
 
-    Subscription.countDocuments({
+  Subscription.countDocuments({
       status: 'active',
     }),
   ]);
