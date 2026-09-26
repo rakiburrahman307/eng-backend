@@ -100,28 +100,18 @@ export const notificationWorker = new Worker<NotificationJobData>(
                          return { success: false, reason: 'CANCELLED' };
                     }
 
-                    if (notifDoc.user) {
-                         // Send to single user
-                         await NotificationHelper.sendToUser(notifDoc.user.toString(), {
+                    const { resolveNotificationRecipients } = require('../../app/modules/pushNotification/pushNotification.service');
+                    const { userIds } = await resolveNotificationRecipients(
+                         notifDoc.user ? notifDoc.user.toString() : null,
+                         notifDoc.targetRole
+                    );
+
+                    if (userIds.length > 0) {
+                         await NotificationHelper.sendToBatch(userIds, {
                               title: notifDoc.title,
                               body: notifDoc.message,
                               type: 'SYSTEM',
                          });
-                    } else {
-                         // Send to target role or all verified users
-                         const userFilter: any = { verified: true };
-                         if (notifDoc.targetRole && notifDoc.targetRole !== 'ALL') {
-                              userFilter.role = notifDoc.targetRole;
-                         }
-                         const targetUsers = await User.find(userFilter).select('_id').lean();
-                         const userIds = targetUsers.map((u) => u._id);
-                         if (userIds.length > 0) {
-                              await NotificationHelper.sendToBatch(userIds, {
-                                   title: notifDoc.title,
-                                   body: notifDoc.message,
-                                   type: 'SYSTEM',
-                              });
-                         }
                     }
 
                     notifDoc.status = 'SENT';

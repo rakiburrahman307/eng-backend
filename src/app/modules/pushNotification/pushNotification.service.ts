@@ -25,6 +25,64 @@ interface SendNotificationPayload {
   adminId?: string;
 }
 
+
+// HELPER: Resolve real device account holders (Parents vs Child Players)
+export const resolveNotificationRecipients = async (
+  userId?: string | null,
+  targetRole?: string | null
+): Promise<{ userIds: any[]; isChild: boolean; parentId?: any }> => {
+  // Case 1: Specific User selected
+  if (userId) {
+    const userDoc: any = await User.findById(userId).select("_id parentId role firstName lastName userName").lean();
+    if (!userDoc) return { userIds: [], isChild: false };
+
+    // If this is a child player (has parentId), the device recipient is the parent!
+    if (userDoc.parentId) {
+      return {
+        userIds: [userDoc.parentId],
+        isChild: true,
+        parentId: userDoc.parentId,
+      };
+    }
+    return { userIds: [userDoc._id], isChild: false };
+  }
+
+  // Case 2: Target Role / Audience
+  const role = (targetRole || "ALL").toUpperCase();
+
+  if (role === "REFEREE") {
+    const refs = await User.find({ verified: true, role: "REFEREE" }).select("_id").lean();
+    return { userIds: refs.map((u) => u._id), isChild: false };
+  }
+
+  if (role === "COACH" || role === "MANAGER") {
+    const coaches = await User.find({ verified: true, role: "MANAGER" }).select("_id").lean();
+    return { userIds: coaches.map((u) => u._id), isChild: false };
+  }
+
+  if (role === "PARENT" || role === "PLAYER") {
+    // Both "PLAYER" and "PARENT" target the parents who hold the device & app login
+    const childParentIds = await User.distinct("parentId", { parentId: { $ne: null } });
+    const parents = await User.find({
+      verified: true,
+      $or: [
+        { role: "PLAYER", parentId: null },
+        { _id: { $in: childParentIds } },
+      ],
+    }).select("_id").lean();
+    return { userIds: parents.map((u) => u._id), isChild: false };
+  }
+
+  // Case 3: "ALL" broadcast
+  // Broadcast to all verified account holders (parentId: null) so child sub-profiles don't get empty duplicate hits
+  const allAccountOwners = await User.find({
+    verified: true,
+    parentId: null,
+  }).select("_id").lean();
+
+  return { userIds: allAccountOwners.map((u) => u._id), isChild: false };
+};
+
 const sendNotificationToUsers = async (payload: SendNotificationPayload) => {
   const { title, message, user, targetRole = "ALL", isScheduled, scheduledAt, adminId } = payload;
 
@@ -113,29 +171,15 @@ const sendNotificationToUsers = async (payload: SendNotificationPayload) => {
     createdBy: adminId || null,
   });
 
-  if (user) {
-    // Send to single user immediately
-    await NotificationHelper.sendToUser(user, {
+  // Resolve real recipients (handling Child Player -> Parent mapping)
+  const { userIds } = await resolveNotificationRecipients(user, targetRole);
+
+  if (userIds.length > 0) {
+    await NotificationHelper.sendToBatch(userIds, {
       title: title.trim(),
       body: message.trim(),
       type: "SYSTEM",
     });
-  } else {
-    // Role-filtered or All Verified users
-    const userFilter: any = { verified: true };
-    if (targetRole && targetRole !== "ALL") {
-      userFilter.role = targetRole;
-    }
-    const verifiedUsers = await User.find(userFilter).select("_id").lean();
-    const userIds = verifiedUsers.map((u) => u._id);
-
-    if (userIds.length > 0) {
-      await NotificationHelper.sendToBatch(userIds, {
-        title: title.trim(),
-        body: message.trim(),
-        type: "SYSTEM",
-      });
-    }
   }
 
   return notification;
@@ -196,27 +240,18 @@ const sendScheduledNowFromDB = async (id: string) => {
     }
   }
 
-  // Dispatch immediately
-  if (notification.user) {
-    await NotificationHelper.sendToUser(notification.user.toString(), {
+  // Resolve real recipients (handling Child Player -> Parent mapping)
+  const { userIds } = await resolveNotificationRecipients(
+    notification.user ? notification.user.toString() : null,
+    notification.targetRole
+  );
+
+  if (userIds.length > 0) {
+    await NotificationHelper.sendToBatch(userIds, {
       title: notification.title,
       body: notification.message,
       type: "SYSTEM",
     });
-  } else {
-    const userFilter: any = { verified: true };
-    if (notification.targetRole && notification.targetRole !== "ALL") {
-      userFilter.role = notification.targetRole;
-    }
-    const targetUsers = await User.find(userFilter).select("_id").lean();
-    const userIds = targetUsers.map((u) => u._id);
-    if (userIds.length > 0) {
-      await NotificationHelper.sendToBatch(userIds, {
-        title: notification.title,
-        body: notification.message,
-        type: "SYSTEM",
-      });
-    }
   }
 
   notification.status = "SENT";
