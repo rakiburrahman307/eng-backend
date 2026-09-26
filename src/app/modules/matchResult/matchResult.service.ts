@@ -14,6 +14,8 @@ import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 import { emitMatchUpdate, getMinFloorCoin } from "../match/match.service";
 import { isUserPremiumPlayer } from "../../../helpers/packageHelper";
 import { MatchEvaluation } from "../refereeRating/refereeRating.model";
+import { recordCoinTransaction } from "../../../helpers/coinLedgerHelper";
+import { COIN_TRANSACTION_CATEGORY } from "../coinTransaction/coinTransaction.interface";
 import mongoose from "mongoose";
 
 // ========================== CREATE ==========================
@@ -422,7 +424,7 @@ const getMatchWiseResultsFromDB = async (matchId: string) => {
 // 🔥 PLAYER STATS
 // ============================================================
 const applyPlayerStats = async (payload: any) => {
-  const { player, team, eventType, eventMeta } = payload;
+  const { player, team, eventType, eventMeta, match, minute } = payload;
 
   if (!player) return;
 
@@ -431,6 +433,8 @@ const applyPlayerStats = async (payload: any) => {
   const isPro = await isUserPremiumPlayer(player);
 
   const inc: any = {};
+  const matchRefId = match ? (match._id || match).toString() : undefined;
+  const eventMin = Number(minute) || 1;
 
   // ================= GOAL =================
   if (eventType === "goal") {
@@ -440,11 +444,17 @@ const applyPlayerStats = async (payload: any) => {
       // Goal Reward — dynamic from DB (Only for Professional players)
       if (isPro) {
         const goalCoin = pe?.goal?.coin ?? 0;
-        const goalMV = pe?.goal?.marketValue ?? (goalCoin * (pe?.conversionRate ?? 10));
-        await User.findOneAndUpdate(
-          { _id: player },
-          { $inc: { engCoine: goalCoin, marketValue: goalMV } },
-        );
+        if (goalCoin > 0) {
+          await recordCoinTransaction({
+            userId: player,
+            amount: goalCoin,
+            category: COIN_TRANSACTION_CATEGORY.GOAL,
+            title: "Goal Reward",
+            description: `Scored a goal at minute ${eventMin}`,
+            matchId: matchRefId,
+            referenceId: matchRefId,
+          });
+        }
       }
     }
 
@@ -460,11 +470,17 @@ const applyPlayerStats = async (payload: any) => {
       const isProAssist = await isUserPremiumPlayer(eventMeta.assist);
       if (isProAssist) {
         const assistCoin = pe?.assist?.coin ?? 0;
-        const assistMV = pe?.assist?.marketValue ?? (assistCoin * (pe?.conversionRate ?? 10));
-        await User.findOneAndUpdate(
-          { _id: eventMeta.assist },
-          { $inc: { engCoine: assistCoin, marketValue: assistMV } },
-        );
+        if (assistCoin > 0) {
+          await recordCoinTransaction({
+            userId: eventMeta.assist,
+            amount: assistCoin,
+            category: COIN_TRANSACTION_CATEGORY.ASSIST,
+            title: "Assist Reward",
+            description: `Assisted a goal at minute ${eventMin}`,
+            matchId: matchRefId,
+            referenceId: matchRefId,
+          });
+        }
       }
     }
   }
@@ -475,16 +491,16 @@ const applyPlayerStats = async (payload: any) => {
 
     if (isPro) {
       const yellowCardCoin = pe?.yellowCard?.coin ? pe.yellowCard.coin : -500;
-      const yellowCardMV = pe?.yellowCard?.marketValue ? pe.yellowCard.marketValue : (yellowCardCoin * (pe?.conversionRate ?? 10));
-      const user = await User.findById(player);
-      if (user) {
-        const floorMV = Number(pe?.startingMarketValue) || 10000000;
-        const newCoins = Math.max(0, (user.engCoine ?? 0) + yellowCardCoin);
-        const newMV = Math.max(floorMV, (user.marketValue ?? floorMV) + yellowCardMV);
-        await User.findOneAndUpdate(
-          { _id: player },
-          { $set: { engCoine: newCoins, marketValue: newMV } },
-        );
+      if (yellowCardCoin !== 0) {
+        await recordCoinTransaction({
+          userId: player,
+          amount: yellowCardCoin,
+          category: COIN_TRANSACTION_CATEGORY.RED_CARD_PENALTY,
+          title: "Yellow Card Penalty",
+          description: `Yellow card penalty at minute ${eventMin}`,
+          matchId: matchRefId,
+          referenceId: matchRefId,
+        });
       }
     }
   }
@@ -495,16 +511,16 @@ const applyPlayerStats = async (payload: any) => {
 
     if (isPro) {
       const redCardCoin = pe?.redCard?.coin ? pe.redCard.coin : -5000;
-      const redCardMV = pe?.redCard?.marketValue ? pe.redCard.marketValue : (redCardCoin * (pe?.conversionRate ?? 10));
-      const user = await User.findById(player);
-      if (user) {
-        const floorMV = Number(pe?.startingMarketValue) || 10000000;
-        const newCoins = Math.max(0, (user.engCoine ?? 0) + redCardCoin);
-        const newMV = Math.max(floorMV, (user.marketValue ?? floorMV) + redCardMV);
-        await User.findOneAndUpdate(
-          { _id: player },
-          { $set: { engCoine: newCoins, marketValue: newMV } },
-        );
+      if (redCardCoin !== 0) {
+        await recordCoinTransaction({
+          userId: player,
+          amount: redCardCoin,
+          category: COIN_TRANSACTION_CATEGORY.RED_CARD_PENALTY,
+          title: "Red Card Penalty",
+          description: `Red card penalty at minute ${eventMin}`,
+          matchId: matchRefId,
+          referenceId: matchRefId,
+        });
       }
     }
   }
@@ -515,11 +531,17 @@ const applyPlayerStats = async (payload: any) => {
 
     if (isPro) {
       const csCoin = pe?.cleanSheet?.coin ?? 0;
-      const csMV = pe?.cleanSheet?.marketValue ?? (csCoin * (pe?.conversionRate ?? 10));
-      await User.findOneAndUpdate(
-        { _id: player },
-        { $inc: { engCoine: csCoin, marketValue: csMV } },
-      );
+      if (csCoin > 0) {
+        await recordCoinTransaction({
+          userId: player,
+          amount: csCoin,
+          category: COIN_TRANSACTION_CATEGORY.CLEAN_SHEET,
+          title: "Clean Sheet Reward",
+          description: `Clean sheet awarded in match`,
+          matchId: matchRefId,
+          referenceId: matchRefId,
+        });
+      }
     }
   }
 
@@ -528,12 +550,16 @@ const applyPlayerStats = async (payload: any) => {
     inc.playerOfTheDay = 1;
 
     const potdCoin = pe?.playerOfTheDay?.coin ?? 0;
-    const potdMV = pe?.playerOfTheDay?.marketValue ? pe.playerOfTheDay.marketValue : (potdCoin * (pe?.conversionRate ?? 10));
-    if (potdCoin > 0 || potdMV > 0) {
-      await User.findOneAndUpdate(
-        { _id: player },
-        { $inc: { engCoine: potdCoin, marketValue: potdMV } },
-      );
+    if (potdCoin > 0) {
+      await recordCoinTransaction({
+        userId: player,
+        amount: potdCoin,
+        category: COIN_TRANSACTION_CATEGORY.PLAYER_OF_THE_DAY,
+        title: "Player of the Day Bonus",
+        description: `Player of the Day reward in match`,
+        matchId: matchRefId,
+        referenceId: matchRefId,
+      });
     }
   }
 

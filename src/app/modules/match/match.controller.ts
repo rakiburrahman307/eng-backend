@@ -228,6 +228,59 @@ const updateMatchFeedbackSetting = catchAsync(async (req: Request, res: Response
   });
 });
 
+const getMatchCleanSheets = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const result = await MatchService.getMatchCleanSheetsFromDB(id);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Match clean sheets retrieved successfully",
+    data: result,
+  });
+});
+
+const manualAwardCleanSheet = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const { playerId, reason } = req.body;
+  const adminId = (req.user as any)?._id || (req.user as any)?.id;
+
+  const result = await MatchService.manualAwardCleanSheetInDB(
+    id,
+    playerId,
+    adminId,
+    reason
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: result.message,
+    data: result,
+  });
+});
+
+const manualRevokeCleanSheet = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const playerId = req.params.playerId as string;
+  const { reason } = req.body || {};
+  const adminId = (req.user as any)?._id || (req.user as any)?.id;
+
+  const result = await MatchService.manualRevokeCleanSheetInDB(
+    id,
+    playerId,
+    adminId,
+    reason
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: result.message,
+    data: result,
+  });
+});
+
 export const MatchController = {
   createMatch,
   getAllMatches,
@@ -244,4 +297,7 @@ export const MatchController = {
   getMatchScheduleDates,
   getMatchFeedbackSetting,
   updateMatchFeedbackSetting,
+  getMatchCleanSheets,
+  manualAwardCleanSheet,
+  manualRevokeCleanSheet,
 };

@@ -40,6 +40,8 @@ import GalleryCategoryRoutes from "../modules/galleryCategory/galleryCategory.ro
 import NewsCategoryRoutes from "../modules/newsCategory/newsCategory.route";
 import TournamentRoutes from "../modules/tournament/tournament.route";
 import TournamentClaimRoutes from "../modules/tournamentClaim/tournamentClaim.route";
+import CoinTransactionRoute from "../modules/coinTransaction/coinTransaction.route";
+import StatsAuditRoute from "../modules/statsAudit/statsAudit.route";
 
 const router = express.Router();
 
@@ -86,6 +88,8 @@ const apiRoutes = [
     { path: "/news-category", route: NewsCategoryRoutes },
     { path: "/tournament", route: TournamentRoutes },
     { path: "/tournament-claim", route: TournamentClaimRoutes },
+    { path: "/coins", route: CoinTransactionRoute },
+    { path: "/stats-audit", route: StatsAuditRoute },
 ]
 
 apiRoutes.forEach(route => router.use(route.path, route.route));

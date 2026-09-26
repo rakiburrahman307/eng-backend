@@ -8,6 +8,8 @@ import { NOTIFICATION_TYPE } from "../app/modules/notification/notification.inte
 import { USER_ROLES } from "../enums/user";
 import { NotificationQueueHelper } from "../helpers/bullMQ/bullHelper";
 import { isPremiumPlayerPackage } from "../helpers/packageHelper";
+import { recordCoinTransaction } from "../helpers/coinLedgerHelper";
+import { COIN_TRANSACTION_CATEGORY } from "../app/modules/coinTransaction/coinTransaction.interface";
 
 export const handleSubscriptionCreated = async (data: any) => {
   const subscription = await stripe.subscriptions.retrieve(data.id);
@@ -117,15 +119,27 @@ export const handleSubscriptionCreated = async (data: any) => {
     updateData.blueTick = true;
   }
 
-  const incData: any = {
-    engCoine: creditToAdd,
-    marketValue: marketValueToAdd,
-  };
-
   await User.findByIdAndUpdate(targetUser._id, {
     $set: updateData,
-    $inc: incData,
   });
+
+  if (creditToAdd > 0) {
+    try {
+      await recordCoinTransaction({
+        userId: targetUser._id,
+        amount: creditToAdd,
+        category: COIN_TRANSACTION_CATEGORY.SUBSCRIPTION_BONUS,
+        title: "Subscription Bonus",
+        description: `Credited ${creditToAdd.toLocaleString()} ENG Coins from "${pkg.title}" package upgrade`,
+        referenceId: subscription.id,
+      });
+    } catch (coinErr) {
+      console.error("Error recording subscription coin transaction:", coinErr);
+      await User.findByIdAndUpdate(targetUser._id, {
+        $inc: { engCoine: creditToAdd, marketValue: marketValueToAdd },
+      });
+    }
+  }
 
   if (user._id.toString() !== targetUser._id.toString()) {
     await User.findByIdAndUpdate(user._id, {

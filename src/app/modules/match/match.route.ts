@@ -91,4 +91,23 @@ router.patch(
   MatchController.updateMatchStatus,
 );
 
+// 🧤 CLEAN SHEET MANAGEMENT (AUTO + MANUAL OVERRIDE)
+router.get(
+  "/:id/clean-sheets",
+  auth(...ROLE_GROUPS.All),
+  MatchController.getMatchCleanSheets,
+);
+
+router.post(
+  "/:id/clean-sheets",
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  MatchController.manualAwardCleanSheet,
+);
+
+router.delete(
+  "/:id/clean-sheets/:playerId",
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  MatchController.manualRevokeCleanSheet,
+);
+
 export default router;

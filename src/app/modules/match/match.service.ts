@@ -21,6 +21,14 @@ import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 import { MatchPlayerSelection } from "../matchPlayerSelection/matchPlayerSelection.model";
 import { isUserPremiumPlayer } from "../../../helpers/packageHelper";
 import { getEffectiveMatchSetting, IMatchSetting } from "./matchSetting.model";
+import {
+  awardMatchCleanSheets,
+  revokeMatchCleanSheets,
+  manualAwardCleanSheet,
+  manualRevokeCleanSheet,
+} from "../../../helpers/matchCleanSheetHelper";
+import { recordCoinTransaction } from "../../../helpers/coinLedgerHelper";
+import { COIN_TRANSACTION_CATEGORY } from "../coinTransaction/coinTransaction.interface";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -1248,8 +1256,9 @@ const deleteMatchFromDB = async (id: string) => {
   // 1. Rollback all match events (goals/assists/cards, reducing player stats & reversing user coins)
   try {
     await MatchResultService.rollbackAllResultsForMatch(id);
+    await revokeMatchCleanSheets(id);
   } catch (err) {
-    console.error("Error in rollbackAllResultsForMatch:", err);
+    console.error("Error in rollbackAllResultsForMatch/revokeMatchCleanSheets:", err);
   }
 
   // 2. Rollback Player of the Day and Team Conduct rewards from referee evaluations
@@ -1733,10 +1742,35 @@ const updateMatchStatusInDB = async (
         console.error("Failed to award match finish win/draw coins to teams:", err);
       }
     }
+
+    // 🧤 Auto-award Clean Sheets to GK and Defenders if opponent conceded 0
+    try {
+      await awardMatchCleanSheets(match._id);
+    } catch (csErr) {
+      console.error("Failed to auto-award clean sheets on match finish:", csErr);
+    }
   } else if (targetStatus === "cancelled") {
     match.status = "cancelled";
     match.timerStatus = "stopped";
     match.timerStartedAt = null;
+
+    // Rollback clean sheets if match was cancelled
+    if (oldStatus === "finished") {
+      try {
+        await revokeMatchCleanSheets(match._id);
+      } catch (csErr) {
+        console.error("Failed to revoke clean sheets on match cancel:", csErr);
+      }
+    }
+  }
+
+  // If transitioning away from finished back to live/half_time, revoke clean sheets
+  if (oldStatus === "finished" && targetStatus !== "finished" && targetStatus !== "cancelled") {
+    try {
+      await revokeMatchCleanSheets(match._id);
+    } catch (csErr) {
+      console.error("Failed to revoke clean sheets on match status reversion:", csErr);
+    }
   }
 
   // 2️⃣ Allow Admin to manually overwrite timestamps & state
@@ -2041,9 +2075,22 @@ const addMatchReviewToDB = async (
       });
     }
     if (r.player && (coinDelta !== 0 || valueDelta !== 0)) {
-      await User.findByIdAndUpdate(r.player, {
-        $inc: { engCoine: coinDelta, marketValue: valueDelta },
-      });
+      try {
+        await recordCoinTransaction({
+          userId: r.player,
+          amount: coinDelta,
+          category: COIN_TRANSACTION_CATEGORY.MATCH_RATING,
+          title: "Match Rating Reward",
+          description: `Manager match evaluation rating: ${r.rating}/10`,
+          matchId: match._id,
+          referenceId: match._id.toString(),
+        });
+      } catch (coinErr) {
+        console.error("Error recording match review coin transaction:", coinErr);
+        await User.findByIdAndUpdate(r.player, {
+          $inc: { engCoine: coinDelta, marketValue: valueDelta },
+        });
+      }
     }
   }
 
@@ -2204,6 +2251,14 @@ const updateMatchTimerInDB = async (
   }
 
   await match.save();
+
+  if (action === "FINISH") {
+    try {
+      await awardMatchCleanSheets(matchId);
+    } catch (csErr) {
+      console.error("Failed to auto-award clean sheets on timer FINISH:", csErr);
+    }
+  }
 
   // Calculate live current elapsed for instant response & socket emit
   let liveSeconds = match.elapsedSeconds || 0;
@@ -2678,6 +2733,23 @@ const modifyMatchScoreInDB = async (
 
   await match.save();
 
+  // If match was already finished, re-evaluate clean sheets based on score change
+  if (match.status === "finished") {
+    try {
+      if (oldAwayScore === 0 && newAwayScore > 0 && match.homeTeam) {
+        await revokeMatchCleanSheets(match._id, match.homeTeam);
+      }
+      if (oldHomeScore === 0 && newHomeScore > 0 && match.awayTeam) {
+        await revokeMatchCleanSheets(match._id, match.awayTeam);
+      }
+      if (newAwayScore === 0 || newHomeScore === 0) {
+        await awardMatchCleanSheets(match._id);
+      }
+    } catch (csErr) {
+      console.error("Failed to re-evaluate clean sheets on score change:", csErr);
+    }
+  }
+
   await emitMatchUpdate(match._id.toString());
 
   return await formatMatchVenue(match);
@@ -2871,6 +2943,35 @@ const updateMatchFeedbackSettingInDB = async (payload: Partial<IMatchSetting>) =
   return setting;
 };
 
+const getMatchCleanSheetsFromDB = async (matchId: string) => {
+  const cleanSheets = await MatchResult.find({
+    match: matchId,
+    eventType: "clean_sheet",
+  })
+    .populate("player", "_id firstName lastName position profile image userName")
+    .populate("team", "_id teamName shortName teamLogo")
+    .lean();
+  return cleanSheets;
+};
+
+const manualAwardCleanSheetInDB = async (
+  matchId: string,
+  playerId: string,
+  adminId: string,
+  reason?: string
+) => {
+  return await manualAwardCleanSheet(matchId, playerId, adminId, reason);
+};
+
+const manualRevokeCleanSheetInDB = async (
+  matchId: string,
+  playerId: string,
+  adminId: string,
+  reason?: string
+) => {
+  return await manualRevokeCleanSheet(matchId, playerId, adminId, reason);
+};
+
 export const MatchService = {
   createMatchToDB,
   getAllMatchesFromDB,
@@ -2887,4 +2988,7 @@ export const MatchService = {
   getMatchScheduleDatesFromDB,
   getMatchFeedbackSettingFromDB,
   updateMatchFeedbackSettingInDB,
+  getMatchCleanSheetsFromDB,
+  manualAwardCleanSheetInDB,
+  manualRevokeCleanSheetInDB,
 };

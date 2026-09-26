@@ -12,6 +12,8 @@ import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 
 import { isPremiumPlayerPackage } from "../../../helpers/packageHelper";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
+import { CoinTransaction } from "../coinTransaction/coinTransaction.model";
+import { COIN_TRANSACTION_CATEGORY } from "../coinTransaction/coinTransaction.interface";
 
 // CREATE ORDER
 const createRewardOrderToDB = async (payload: any, userId: string) => {
@@ -97,6 +99,24 @@ const createRewardOrderToDB = async (payload: any, userId: string) => {
           user: user._id,
           rewardProduct: rewardProduct._id,
           pointUsed: rewardProduct.point,
+        },
+      ],
+      { session },
+    );
+
+    // Record Coin Transaction Ledger
+    await CoinTransaction.create(
+      [
+        {
+          user: user._id,
+          type: "DEBIT",
+          amount: rewardProduct.point,
+          balanceBefore: userCoin,
+          balanceAfter: user.engCoine,
+          category: COIN_TRANSACTION_CATEGORY.PRODUCT_PURCHASE,
+          title: "Product Redemption",
+          description: `Redeemed item: "${rewardProduct.brand}" for ${rewardProduct.point.toLocaleString()} ENG Coins`,
+          referenceId: rewardProduct._id.toString(),
         },
       ],
       { session },
