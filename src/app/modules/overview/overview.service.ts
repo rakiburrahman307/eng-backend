@@ -96,8 +96,8 @@ const getOverviewFromDB = async () => {
       status: "upcoming",
     }),
 
-  Subscription.countDocuments({
-      status: 'active',
+    Subscription.countDocuments({
+      status: "active",
     }),
   ]);
 
