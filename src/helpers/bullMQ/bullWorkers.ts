@@ -82,7 +82,55 @@ export const notificationWorker = new Worker<NotificationJobData>(
                     screen,
                     receiverRole,
                } = job.data;
-               logger.info(colors.blue(`🔔 Processing notification job ${job.id}`));
+               logger.info(colors.blue(`🔔 Processing notification job ${job.id} (${job.name})`));
+
+               // Handle scheduled push notifications
+               if (job.name === 'scheduled-push-notification' || job.data.pushNotificationId) {
+                    const { PushNotification } = require('../../app/modules/pushNotification/pushNotification.model');
+                    const pushNotificationId = job.data.pushNotificationId;
+                    const notifDoc = await PushNotification.findById(pushNotificationId);
+
+                    if (!notifDoc) {
+                         logger.info(colors.yellow(`⚠️ Scheduled push notification ${pushNotificationId} not found`));
+                         return { success: false, reason: 'NOT_FOUND' };
+                    }
+
+                    if (notifDoc.status === 'CANCELLED') {
+                         logger.info(colors.yellow(`⚠️ Scheduled push notification ${pushNotificationId} was cancelled`));
+                         return { success: false, reason: 'CANCELLED' };
+                    }
+
+                    if (notifDoc.user) {
+                         // Send to single user
+                         await NotificationHelper.sendToUser(notifDoc.user.toString(), {
+                              title: notifDoc.title,
+                              body: notifDoc.message,
+                              type: 'SYSTEM',
+                         });
+                    } else {
+                         // Send to target role or all verified users
+                         const userFilter: any = { verified: true };
+                         if (notifDoc.targetRole && notifDoc.targetRole !== 'ALL') {
+                              userFilter.role = notifDoc.targetRole;
+                         }
+                         const targetUsers = await User.find(userFilter).select('_id').lean();
+                         const userIds = targetUsers.map((u) => u._id);
+                         if (userIds.length > 0) {
+                              await NotificationHelper.sendToBatch(userIds, {
+                                   title: notifDoc.title,
+                                   body: notifDoc.message,
+                                   type: 'SYSTEM',
+                              });
+                         }
+                    }
+
+                    notifDoc.status = 'SENT';
+                    notifDoc.sentAt = new Date();
+                    await notifDoc.save();
+
+                    logger.info(colors.green(`✅ Scheduled push notification ${pushNotificationId} executed and dispatched successfully`));
+                    return { success: true, pushNotificationId, status: 'SENT' };
+               }
 
                // In-app + Push notification via NotificationHelper
                if (channels?.includes('in-app') || channels?.includes('push')) {

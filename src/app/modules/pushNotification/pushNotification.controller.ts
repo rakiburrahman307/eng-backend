@@ -4,14 +4,45 @@ import catchAsync from "../../../shared/catchAsync";
 import sendResponse from "../../../shared/sendResponse";
 import { NotificationService } from "./pushNotification.service";
 
-
 const sendNotification = catchAsync(async (req: Request, res: Response) => {
-  const result = await NotificationService.sendNotificationToUsers(req.body);
+  const adminId = (req.user as any)?._id || (req.user as any)?.id;
+  const result = await NotificationService.sendNotificationToUsers({
+    ...req.body,
+    adminId,
+  });
+
+  const isScheduled = req.body.isScheduled;
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.CREATED,
-    message: "Notification sent successfully",
+    message: isScheduled
+      ? "Push notification scheduled successfully (UK Timezone)"
+      : "Push notification broadcasted successfully",
+    data: result,
+  });
+});
+
+const cancelScheduledNotification = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const result = await NotificationService.cancelScheduledNotificationFromDB(id);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Scheduled push notification cancelled successfully",
+    data: result,
+  });
+});
+
+const sendScheduledNow = catchAsync(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const result = await NotificationService.sendScheduledNowFromDB(id);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Scheduled notification dispatched immediately",
     data: result,
   });
 });
@@ -23,14 +54,14 @@ const getNotifications = catchAsync(async (req: Request, res: Response) => {
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
-    message: "Notifications retrieved successfully",
-    data: result.result,
-    pagination: result.pagination,
+    message: "Push notifications retrieved successfully",
+    data: result,
   });
 });
+
 const deleteNotification = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const result = await NotificationService.deleteNotificationFromDB(id as string);
+  const id = req.params.id as string;
+  const result = await NotificationService.deleteNotificationFromDB(id);
 
   sendResponse(res, {
     success: true,
@@ -53,6 +84,8 @@ const clearAllNotifications = catchAsync(async (req: Request, res: Response) => 
 
 export const NotificationController = {
   sendNotification,
+  cancelScheduledNotification,
+  sendScheduledNow,
   getNotifications,
   deleteNotification,
   clearAllNotifications,

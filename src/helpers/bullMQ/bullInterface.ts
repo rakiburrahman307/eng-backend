@@ -21,6 +21,8 @@ export interface NotificationJobData {
      referenceModel?: string;
      screen?: 'DASHBOARD' | 'PAYMENT_HISTORY' | 'PROFILE';
      receiverRole?: 'SUPER_ADMIN' | 'ADMIN' | 'USER' | 'PLAYER' | 'TOURNAMENT_PLAYER';
+     pushNotificationId?: string;
+     targetRole?: string;
 }
 
 export interface SMSJobData {
