@@ -279,9 +279,20 @@ const getNotificationsFromDB = async (id: string, role: string, query: Record<st
   const result = await queryBuilder.modelQuery;
   const pagination = await queryBuilder.getPaginationInfo();
 
+  const total = await PushNotification.countDocuments();
+  const scheduledCount = await PushNotification.countDocuments({ status: "SCHEDULED" });
+  const cancelledCount = await PushNotification.countDocuments({ status: "CANCELLED" });
+  const sentCount = await PushNotification.countDocuments({ status: "SENT" });
+
   return {
     result,
     pagination,
+    stats: {
+      total,
+      sentCount,
+      scheduledCount,
+      cancelledCount,
+    },
   };
 };
 
