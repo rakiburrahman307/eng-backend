@@ -427,23 +427,23 @@ const approveTransferToDB = async (id: string, user: any) => {
     transfer.status = "MANAGER_APPROVED";
     await transfer.save();
 
-    // 🔔 Notify Buying Club Manager
+    // Notify Buying Club Manager
     await NotificationQueueHelper.sendNotification(
       transfer.requestedBy.toString(),
       `${fromTeamName} has accepted your transfer bid for ${playerName}. Awaiting final Admin approval.`,
-      "Transfer Bid Accepted by Club 👍",
+      "Transfer Bid Accepted by Club",
       NOTIFICATION_TYPE.TRANSFER_REQUESTED,
       USER_ROLES.MANAGER,
       transfer._id.toString(),
       "Transfer",
     );
 
-    // 🔔 Notify Parents
+    // Notify Parents
     if (player?.parentId) {
       await NotificationQueueHelper.sendNotification(
         player.parentId.toString(),
         `${fromTeamName} has accepted the transfer bid for ${playerName}. Awaiting final league approval.`,
-        "Transfer Bid Accepted by Club 👍",
+        "Transfer Bid Accepted by Club",
         NOTIFICATION_TYPE.TRANSFER_REQUESTED,
         undefined,
         transfer._id.toString(),
@@ -451,11 +451,11 @@ const approveTransferToDB = async (id: string, user: any) => {
       );
     }
 
-    // 🔔 Notify player via background queue
+    // Notify player via background queue
     await NotificationQueueHelper.sendNotification(
       transfer.player.toString(),
       `Your club manager (${fromTeamName}) has approved the transfer request. Awaiting final Admin approval.`,
-      "Manager Approved Transfer 👍",
+      "Manager Approved Transfer",
       NOTIFICATION_TYPE.GENERAL,
       USER_ROLES.PLAYER,
       transfer._id.toString(),
@@ -577,25 +577,25 @@ const approveTransferToDB = async (id: string, user: any) => {
     transfer.approvedBy = userId as any;
     await transfer.save();
 
-    // 1.3 🔔 Notify Buying Club Manager
+    // 1.3 Notify Buying Club Manager
     await NotificationQueueHelper.sendNotification(
       transfer.requestedBy.toString(),
-      `Transfer Complete! ${playerName} has officially joined ${toTeamName}.`,
-      "🎉 Transfer Complete!",
+      `Transfer Complete: ${playerName} has officially joined ${toTeamName}.`,
+      "Transfer Complete",
       NOTIFICATION_TYPE.TRANSFER_APPROVED,
       USER_ROLES.MANAGER,
       transfer._id.toString(),
       "Transfer",
     );
 
-    // 1.3 🔔 Notify Selling Club Manager(s)
+    // 1.3 Notify Selling Club Manager(s)
     if (transfer.fromTeam) {
       const sellingManagers = await ManagerTeam.find({ team: transfer.fromTeam });
       for (const sm of sellingManagers) {
         await NotificationQueueHelper.sendNotification(
           sm.manager.toString(),
-          `Transfer Complete! ${playerName} has moved to ${toTeamName}.${playerCost > 0 ? ` ${playerCost.toLocaleString()} coins have been credited to your club.` : ""}`,
-          "🎉 Transfer Finalized",
+          `Transfer Complete: ${playerName} has moved to ${toTeamName}.${playerCost > 0 ? ` ${playerCost.toLocaleString()} coins have been credited to your club.` : ""}`,
+          "Transfer Finalized",
           NOTIFICATION_TYPE.TRANSFER_APPROVED,
           USER_ROLES.MANAGER,
           transfer._id.toString(),
@@ -604,12 +604,12 @@ const approveTransferToDB = async (id: string, user: any) => {
       }
     }
 
-    // 1.3 🔔 Notify Parents
+    // 1.3 Notify Parents
     if (userDetails.parentId) {
       await NotificationQueueHelper.sendNotification(
         userDetails.parentId.toString(),
-        `Transfer Complete! ${playerName} is now officially registered with ${toTeamName}.`,
-        "🎉 Transfer Complete!",
+        `Transfer Complete: ${playerName} is now officially registered with ${toTeamName}.`,
+        "Transfer Complete",
         NOTIFICATION_TYPE.TRANSFER_APPROVED,
         undefined,
         transfer._id.toString(),
@@ -617,16 +617,50 @@ const approveTransferToDB = async (id: string, user: any) => {
       );
     }
 
-    // 🔔 Notify player: transfer approved via background queue
+    // Notify player: transfer approved via background queue
     await NotificationQueueHelper.sendNotification(
       transfer.player.toString(),
-      `Congratulations! Your transfer request to ${toTeamName} has been fully approved by Admin. You are now part of the new team.`,
-      "🎉 Transfer Approved!",
+      `Your transfer request to ${toTeamName} has been approved by the Administrator. You are now registered with the new team.`,
+      "Transfer Approved",
       NOTIFICATION_TYPE.TRANSFER_APPROVED,
       USER_ROLES.PLAYER,
       transfer._id.toString(),
       "Transfer",
     );
+
+    // Notify subscribers of the new team via BullMQ
+    if (transfer.toTeam) {
+      try {
+        await NotificationQueueHelper.notifyTeamSubscribers(
+          transfer.toTeam.toString(),
+          `New Player Signing: ${toTeamName}`,
+          `${playerName} has officially joined ${toTeamName}.`,
+          "TRANSFER",
+          transfer._id.toString(),
+          "Transfer",
+          { playerId: transfer.player.toString(), transferId: transfer._id.toString() }
+        );
+      } catch (err) {
+        console.error("Failed to notify toTeam subscribers:", err);
+      }
+    }
+
+    // Notify subscribers of the former team via BullMQ
+    if (transfer.fromTeam) {
+      try {
+        await NotificationQueueHelper.notifyTeamSubscribers(
+          transfer.fromTeam.toString(),
+          `Squad Update: ${playerName}`,
+          `${playerName} has completed a transfer to ${toTeamName}.`,
+          "TRANSFER",
+          transfer._id.toString(),
+          "Transfer",
+          { playerId: transfer.player.toString(), transferId: transfer._id.toString() }
+        );
+      } catch (err) {
+        console.error("Failed to notify fromTeam subscribers:", err);
+      }
+    }
 
     return transfer;
   }

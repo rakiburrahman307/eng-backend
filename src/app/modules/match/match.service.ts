@@ -1743,11 +1743,51 @@ const updateMatchStatusInDB = async (
       }
     }
 
-    // 🧤 Auto-award Clean Sheets to GK and Defenders if opponent conceded 0
+    // Auto-award Clean Sheets to GK and Defenders if opponent conceded 0
     try {
       await awardMatchCleanSheets(match._id);
     } catch (csErr) {
       console.error("Failed to auto-award clean sheets on match finish:", csErr);
+    }
+
+    // Notify subscribers of both teams about Full-Time match result via BullMQ
+    try {
+      const [homeTeamDoc, awayTeamDoc] = await Promise.all([
+        match.homeTeam ? Team.findById(match.homeTeam).select("teamName").lean() : null,
+        match.awayTeam ? Team.findById(match.awayTeam).select("teamName").lean() : null,
+      ]);
+
+      const hName = homeTeamDoc?.teamName || "Home Team";
+      const aName = awayTeamDoc?.teamName || "Away Team";
+      const hScore = match.homeScore || 0;
+      const aScore = match.awayScore || 0;
+      const fullTimeMsg = `Full-Time Result: ${hName} ${hScore} - ${aScore} ${aName}.`;
+
+      if (match.homeTeam) {
+        await NotificationQueueHelper.notifyTeamSubscribers(
+          match.homeTeam.toString(),
+          `Full Time: ${hName}`,
+          fullTimeMsg,
+          "MATCH_RESULT",
+          match._id.toString(),
+          "Match",
+          { matchId: match._id.toString(), homeScore: String(hScore), awayScore: String(aScore) }
+        );
+      }
+
+      if (match.awayTeam) {
+        await NotificationQueueHelper.notifyTeamSubscribers(
+          match.awayTeam.toString(),
+          `Full Time: ${aName}`,
+          fullTimeMsg,
+          "MATCH_RESULT",
+          match._id.toString(),
+          "Match",
+          { matchId: match._id.toString(), homeScore: String(hScore), awayScore: String(aScore) }
+        );
+      }
+    } catch (teamNotifErr) {
+      console.error("Failed to notify team subscribers of match finish:", teamNotifErr);
     }
   } else if (targetStatus === "cancelled") {
     match.status = "cancelled";
@@ -1819,7 +1859,7 @@ const updateMatchStatusInDB = async (
 
       if (userDetails.length > 0) {
         const title =
-          targetStatus === "live" ? "Match is Live! ⚽" : "Match Finished! 🏁";
+          targetStatus === "live" ? "Match is Live" : "Match Finished";
         const message =
           targetStatus === "live"
             ? `The match ${matchName} has officially started and is now live!`
@@ -2617,14 +2657,14 @@ const modifyMatchScoreInDB = async (
           await NotificationQueueHelper.sendNotification(
             String(scorer.player),
             `Congratulations! You scored a goal at minute ${min}.`,
-            "Goal Scored! ⚽",
+            "Goal Scored",
             NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,
           );
           if (scorer.assistPlayer) {
             await NotificationQueueHelper.sendNotification(
               String(scorer.assistPlayer),
               `Well done! You assisted a goal at minute ${min}.`,
-              "Assist Recorded! 👟⚽",
+              "Assist Recorded",
               NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,
             );
           }
@@ -2791,7 +2831,7 @@ export const emitMatchUpdate = async (matchId: string) => {
       io.emit("matches_list_update", lightweightPayload);
     }
   } catch (error) {
-    console.error("❌ Failed to emit match update:", error);
+    console.error("Failed to emit match update:", error);
   }
 };
 

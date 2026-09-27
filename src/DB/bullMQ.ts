@@ -27,37 +27,37 @@ const cleanupQueueEvents = new QueueEvents('cleanup-queue', { connection: redisC
 export function setupQueueEvents(): void {
      // Email Queue Events
      emailQueueEvents.on('completed', ({ jobId }) => {
-          logger.info(colors.green(`✅ Email job ${jobId} completed`));
+          logger.info(colors.green(`[BullMQ] Email job ${jobId} completed`));
      });
      emailQueueEvents.on('failed', ({ jobId, failedReason }) => {
-          errorLogger.error(colors.red(`❌ Email job ${jobId} failed: ${failedReason}`));
+          errorLogger.error(colors.red(`[BullMQ] Email job ${jobId} failed: ${failedReason}`));
      });
 
      // Notification Queue Events
      notificationQueueEvents.on('completed', ({ jobId }) => {
-          logger.info(colors.green(`✅ Notification job ${jobId} completed`));
+          logger.info(colors.green(`[BullMQ] Notification job ${jobId} completed`));
      });
      notificationQueueEvents.on('failed', ({ jobId, failedReason }) => {
-          errorLogger.error(colors.red(`❌ Notification job ${jobId} failed: ${failedReason}`));
+          errorLogger.error(colors.red(`[BullMQ] Notification job ${jobId} failed: ${failedReason}`));
      });
 
      // SMS Queue Events
      smsQueueEvents.on('completed', ({ jobId }) => {
-          logger.info(colors.green(`✅ SMS job ${jobId} completed`));
+          logger.info(colors.green(`[BullMQ] SMS job ${jobId} completed`));
      });
      smsQueueEvents.on('failed', ({ jobId, failedReason }) => {
-          errorLogger.error(colors.red(`❌ SMS job ${jobId} failed: ${failedReason}`));
+          errorLogger.error(colors.red(`[BullMQ] SMS job ${jobId} failed: ${failedReason}`));
      });
 
      // Cleanup Queue Events
      cleanupQueueEvents.on('completed', ({ jobId }) => {
-          logger.info(colors.green(`✅ Cleanup job ${jobId} completed`));
+          logger.info(colors.green(`[BullMQ] Cleanup job ${jobId} completed`));
      });
      cleanupQueueEvents.on('failed', ({ jobId, failedReason }) => {
-          errorLogger.error(colors.red(`❌ Cleanup job ${jobId} failed: ${failedReason}`));
+          errorLogger.error(colors.red(`[BullMQ] Cleanup job ${jobId} failed: ${failedReason}`));
      });
 
-     logger.info(colors.bgBlue.white('📊 BullMQ queue events initialized for all queues'));
+     logger.info(colors.bgBlue.white('[BullMQ] Queue events initialized for all queues'));
 }
 
 // ==========================================
@@ -72,40 +72,40 @@ export function setupWorkerEvents(): void {
      } = require('../helpers/bullMQ/bullWorkers');
 
      emailWorker.on('completed', (job: any) => {
-          logger.info(colors.green(`✅ Email worker job ${job.id} completed`));
+          logger.info(colors.green(`[BullMQ] Email worker job ${job.id} completed`));
      });
 
      emailWorker.on('failed', (job: any, err: any) => {
-          errorLogger.error(colors.red(`❌ Email worker job ${job?.id} failed: ${err.message}`));
+          errorLogger.error(colors.red(`[BullMQ] Email worker job ${job?.id} failed: ${err.message}`));
      });
 
      notificationWorker.on('completed', (job: any) => {
-          logger.info(colors.green(`✅ Notification worker job ${job.id} completed`));
+          logger.info(colors.green(`[BullMQ] Notification worker job ${job.id} completed`));
      });
 
      notificationWorker.on('failed', (job: any, err: any) => {
           errorLogger.error(
-               colors.red(`❌ Notification worker job ${job?.id} failed: ${err.message}`),
+               colors.red(`[BullMQ] Notification worker job ${job?.id} failed: ${err.message}`),
           );
      });
 
      smsWorker.on('completed', (job: any) => {
-          logger.info(colors.green(`✅ SMS worker job ${job.id} completed`));
+          logger.info(colors.green(`[BullMQ] SMS worker job ${job.id} completed`));
      });
 
      smsWorker.on('failed', (job: any, err: any) => {
-          errorLogger.error(colors.red(`❌ SMS worker job ${job?.id} failed: ${err.message}`));
+          errorLogger.error(colors.red(`[BullMQ] SMS worker job ${job?.id} failed: ${err.message}`));
      });
 
      cleanupWorker.on('completed', (job: any) => {
-          logger.info(colors.green(`✅ Cleanup worker job ${job.id} completed`));
+          logger.info(colors.green(`[BullMQ] Cleanup worker job ${job.id} completed`));
      });
 
      cleanupWorker.on('failed', (job: any, err: any) => {
-          errorLogger.error(colors.red(`❌ Cleanup worker job ${job?.id} failed: ${err.message}`));
+          errorLogger.error(colors.red(`[BullMQ] Cleanup worker job ${job?.id} failed: ${err.message}`));
      });
 
-     logger.info(colors.bgMagenta.white('🚀 All BullMQ worker events initialized'));
+     logger.info(colors.bgMagenta.white('[BullMQ] All BullMQ worker events initialized'));
 }
 
 export function getAllQueues() {

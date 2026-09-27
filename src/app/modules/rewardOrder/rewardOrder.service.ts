@@ -129,7 +129,7 @@ const createRewardOrderToDB = async (payload: any, userId: string) => {
     await NotificationQueueHelper.sendNotification(
       user._id.toString(),
       `Your reward order has been placed successfully. ${rewardProduct.point} points have been deducted from your ENG Coins.`,
-      "Reward Order Placed 🎁",
+      "Reward Order Placed",
       NOTIFICATION_TYPE.REWARD_ORDER_PLACED,
       undefined,
       order[0]._id.toString(),
@@ -140,7 +140,7 @@ const createRewardOrderToDB = async (payload: any, userId: string) => {
       await NotificationQueueHelper.sendNotification(
         userId.toString(),
         `Reward order placed for ${user.firstName || "Player"}. ${rewardProduct.point} points have been deducted.`,
-        "Reward Order Placed 🎁",
+        "Reward Order Placed",
         NOTIFICATION_TYPE.REWARD_ORDER_PLACED,
         undefined,
         order[0]._id.toString(),
@@ -160,7 +160,7 @@ const createRewardOrderToDB = async (payload: any, userId: string) => {
       },
     });
 
-    console.log("✅ Admin notification sent");
+    console.log("Admin notification sent");
     console.log("========== SUCCESS ==========");
 
     return order[0];
@@ -171,7 +171,7 @@ const createRewardOrderToDB = async (payload: any, userId: string) => {
     await session.abortTransaction();
     session.endSession();
 
-    console.log("❌ Transaction aborted");
+    console.log("Transaction aborted");
 
     throw error;
   }
@@ -292,11 +292,11 @@ const approveRewardOrderToDB = async (id: string, adminId: string) => {
 
   await order.save();
 
-  // 🔔 Notify player: order approved via background queue
+  // Notify player: order approved via background queue
   await NotificationQueueHelper.sendNotification(
     order.user.toString(),
     "Your reward order has been approved! It will be delivered to you soon.",
-    "✅ Reward Order Approved!",
+    "Reward Order Approved",
     NOTIFICATION_TYPE.REWARD_ORDER_APPROVED,
     undefined,
     order._id.toString(),
@@ -397,11 +397,11 @@ const deliveredRewardOrderToDB = async (id: string) => {
 
   await order.save();
 
-  // 🔔 Notify player: order delivered via background queue
+  // Notify player: order delivered via background queue
   await NotificationQueueHelper.sendNotification(
     order.user.toString(),
     "Your reward order has been delivered! Enjoy your reward.",
-    "🚚 Reward Order Delivered!",
+    "Reward Order Delivered",
     NOTIFICATION_TYPE.REWARD_ORDER_DELIVERED,
     undefined,
     order._id.toString(),

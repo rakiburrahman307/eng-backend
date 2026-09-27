@@ -7,8 +7,9 @@ import { ManagerTeam } from "../managerTeam/managerTeam.model";
 
 import { USER_ROLES } from "../../../enums/user";
 import { Subscription } from "../subscription/subscription.model";
+import { TeamSubscription } from "../teamSubscription/teamSubscription.model";
 
-const getTeamDashboardFromDB = async (teamId: string) => {
+const getTeamDashboardFromDB = async (teamId: string, userId?: string) => {
   const teamObjectId = new mongoose.Types.ObjectId(teamId);
   // Active subscription user IDs for players
   const activeSubUserIds = await Subscription.find({
@@ -86,9 +87,15 @@ const getTeamDashboardFromDB = async (teamId: string) => {
   }).populate("player", "firstName lastName jerseyNumber");
 
   // 🏟 TEAM INFO
-  const team = await Team.findById(teamObjectId).select(
-    "teamName shortName teamLogo city country stadiumName coin marketValue ageGroup teamType",
-  );
+  const [team, subDoc, subscriberCount] = await Promise.all([
+    Team.findById(teamObjectId).select(
+      "teamName shortName teamLogo city country stadiumName coin marketValue ageGroup teamType",
+    ),
+    userId && mongoose.Types.ObjectId.isValid(userId)
+      ? TeamSubscription.findOne({ user: userId, team: teamObjectId }).lean()
+      : null,
+    TeamSubscription.countDocuments({ team: teamObjectId, isBellActive: true }),
+  ]);
 
   return {
     team,
@@ -99,6 +106,8 @@ const getTeamDashboardFromDB = async (teamId: string) => {
     upcomingMatches,
     recentMatches,
     matchResults,
+    isSubscribed: !!subDoc?.isBellActive,
+    subscriberCount,
   };
 };
 

@@ -201,11 +201,11 @@ const reviewClaimInDB = async (
     claim.approvedBy = adminId as any;
     await claim.save();
 
-    // 🔔 Send Notification to User via background queue
+    // Send Notification to User via background queue
     await NotificationQueueHelper.sendNotification(
       claim.user.toString(),
       `Congratulations! Your position claim for "${tournament.title}" (${claim.claimedPositionName}) has been approved. ${pointsToAward} reward points have been added to your account!`,
-      'Tournament Reward Credited! 🏆',
+      'Tournament Reward Credited',
       NOTIFICATION_TYPE.GENERAL,
       undefined,
       claim._id.toString(),
@@ -216,11 +216,11 @@ const reviewClaimInDB = async (
     claim.approvedBy = adminId as any;
     await claim.save();
 
-    // 🔔 Send Notification to User via background queue
+    // Send Notification to User via background queue
     await NotificationQueueHelper.sendNotification(
       claim.user.toString(),
       `Your position claim for "${tournament.title}" (${claim.claimedPositionName}) was not approved by Admin.`,
-      'Tournament Claim Update ℹ️',
+      'Tournament Claim Update',
       NOTIFICATION_TYPE.GENERAL,
       undefined,
       claim._id.toString(),

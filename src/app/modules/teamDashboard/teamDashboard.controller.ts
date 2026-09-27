@@ -8,7 +8,10 @@ import { TeamDashboardService } from "./teamDashboard.service";
 const getTeamDashboard = catchAsync(async (req: Request, res: Response) => {
   const teamId = req.params.teamId as string;
 
-  const result = await TeamDashboardService.getTeamDashboardFromDB(teamId);
+  const result = await TeamDashboardService.getTeamDashboardFromDB(
+    teamId,
+    req.user?.id
+  );
 
   sendResponse(res, {
     success: true,

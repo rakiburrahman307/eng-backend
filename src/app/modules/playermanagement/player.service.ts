@@ -358,7 +358,7 @@ const approvePlayerByAdminToDB = async (playerId: string) => {
       await NotificationQueueHelper.sendNotification(
         player.parentId.toString(),
         `Great news! Player profile for "${player.firstName} ${player.lastName}" has been approved by admin. You can now register for products and events.`,
-        "Player Profile Approved! 🎉",
+        "Player Profile Approved",
         NOTIFICATION_TYPE.PLAYER_APPROVED,
       );
     } catch (err) {
@@ -406,7 +406,7 @@ const rejectPlayerByAdminToDB = async (playerId: string, reason?: string) => {
       await NotificationQueueHelper.sendNotification(
         player.parentId.toString(),
         `Player profile for "${player.firstName} ${player.lastName}" was rejected. Reason: ${rejectionReason}`,
-        "Player Profile Rejected ❌",
+        "Player Profile Rejected",
         NOTIFICATION_TYPE.PLAYER_REJECTED,
       );
     } catch (err) {

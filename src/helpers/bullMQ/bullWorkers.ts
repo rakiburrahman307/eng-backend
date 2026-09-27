@@ -24,7 +24,7 @@ export const emailWorker = new Worker<EmailJobData>(
      async (job) => {
           try {
                const { template, to, data } = job.data;
-               logger.info(colors.blue(`📧 Processing email job ${job.id}`));
+               logger.info(colors.blue(`[BullMQ] Processing email job ${job.id}`));
 
                let emailData;
                switch (template) {
@@ -50,10 +50,10 @@ export const emailWorker = new Worker<EmailJobData>(
                // Send email
                await emailHelper.sendEmail(emailData);
 
-               logger.info(colors.green(`✅ Email sent to ${emailData.to}`));
+               logger.info(colors.green(`[BullMQ] Email sent to ${emailData.to}`));
                return { success: true, recipient: emailData.to, jobId: job.id };
           } catch (error: any) {
-               errorLogger.error(colors.red(`❌ Email job ${job.id} failed:`), error);
+               errorLogger.error(colors.red(`[BullMQ] Email job ${job.id} failed:`), error);
                throw error;
           }
      },
@@ -82,7 +82,7 @@ export const notificationWorker = new Worker<NotificationJobData>(
                     screen,
                     receiverRole,
                } = job.data;
-               logger.info(colors.blue(`🔔 Processing notification job ${job.id} (${job.name})`));
+               logger.info(colors.blue(`[BullMQ] Processing notification job ${job.id} (${job.name})`));
 
                // Handle scheduled push notifications
                if (job.name === 'scheduled-push-notification' || job.data.pushNotificationId) {
@@ -91,12 +91,12 @@ export const notificationWorker = new Worker<NotificationJobData>(
                     const notifDoc = await PushNotification.findById(pushNotificationId);
 
                     if (!notifDoc) {
-                         logger.info(colors.yellow(`⚠️ Scheduled push notification ${pushNotificationId} not found`));
+                         logger.info(colors.yellow(`[BullMQ] Scheduled push notification ${pushNotificationId} not found`));
                          return { success: false, reason: 'NOT_FOUND' };
                     }
 
                     if (notifDoc.status === 'CANCELLED') {
-                         logger.info(colors.yellow(`⚠️ Scheduled push notification ${pushNotificationId} was cancelled`));
+                         logger.info(colors.yellow(`[BullMQ] Scheduled push notification ${pushNotificationId} was cancelled`));
                          return { success: false, reason: 'CANCELLED' };
                     }
 
@@ -118,8 +118,67 @@ export const notificationWorker = new Worker<NotificationJobData>(
                     notifDoc.sentAt = new Date();
                     await notifDoc.save();
 
-                    logger.info(colors.green(`✅ Scheduled push notification ${pushNotificationId} executed and dispatched successfully`));
+                    logger.info(colors.green(`[BullMQ] Scheduled push notification ${pushNotificationId} executed and dispatched successfully`));
                     return { success: true, pushNotificationId, status: 'SENT' };
+               }
+
+               // Handle Team Subscriber Notifications (Bell Icon subscribers)
+               if (job.name === 'team-subscriber-notification' || (job.data.teamId && !userId)) {
+                    const teamId = job.data.teamId;
+                    const { TeamSubscription } = require('../../app/modules/teamSubscription/teamSubscription.model');
+
+                    const subscribers = await TeamSubscription.find({
+                         team: teamId,
+                         isBellActive: true,
+                    }).select('user').lean();
+
+                    // 1. Strictly deduplicate subscriber user IDs
+                    let subscriberUserIds: string[] = Array.from(
+                         new Set<string>(
+                              (subscribers || [])
+                                   .map((s: any) => s.user?.toString())
+                                   .filter(Boolean),
+                         ),
+                    );
+
+                    // 2. Exclude the trigger player / user so they do not receive a duplicate personal notification
+                    const excludedUserIds = new Set<string>(
+                         [
+                              data?.playerId,
+                              ...(data?.excludeUserIds || []),
+                         ]
+                              .filter(Boolean)
+                              .map((id: any) => String(id)),
+                    );
+
+                    if (excludedUserIds.size > 0) {
+                         subscriberUserIds = subscriberUserIds.filter(
+                              (uId: string) => !excludedUserIds.has(uId),
+                         );
+                    }
+
+                    logger.info(colors.cyan(`[Team Notification] Found ${subscriberUserIds.length} unique subscribers for team ${teamId}`));
+
+                    if (subscriberUserIds.length > 0) {
+                         const CHUNK_SIZE = 500;
+                         for (let i = 0; i < subscriberUserIds.length; i += CHUNK_SIZE) {
+                              const batch = subscriberUserIds.slice(i, i + CHUNK_SIZE);
+                              await NotificationHelper.sendToBatch(batch, {
+                                   title: title || 'Team Update',
+                                   body: message,
+                                   type: type || 'TEAM_UPDATE',
+                                   reference,
+                                   referenceModel: referenceModel || 'Team',
+                                   data: {
+                                        teamId: teamId?.toString() || '',
+                                        screen: screen || 'TEAM_DETAILS',
+                                        ...(data || {}),
+                                   },
+                              });
+                         }
+                    }
+
+                    return { success: true, teamId, subscribersCount: subscriberUserIds.length };
                }
 
                // In-app + Push notification via NotificationHelper
@@ -138,12 +197,12 @@ export const notificationWorker = new Worker<NotificationJobData>(
                               ...data,
                          },
                     });
-                    logger.info(colors.cyan(`✅ Notification saved & sent to user ${userId}`));
+                    logger.info(colors.cyan(`[BullMQ] Notification saved & sent to user ${userId}`));
                }
-               logger.info(colors.green(`✅ Notification job ${job.id} completed`));
+               logger.info(colors.green(`[BullMQ] Notification job ${job.id} completed`));
                return { success: true, userId, channels, jobId: job.id };
           } catch (error: any) {
-               errorLogger.error(colors.red(`❌ Notification job ${job.id} failed:`), error);
+               errorLogger.error(colors.red(`[BullMQ] Notification job ${job.id} failed:`), error);
                throw error;
           }
      },
@@ -161,13 +220,13 @@ export const smsWorker = new Worker<SMSJobData>(
      async (job) => {
           try {
                const { phone, message, countryCode } = job.data;
-               logger.info(colors.blue(`📱 Processing SMS job ${job.id}`));
+               logger.info(colors.blue(`[BullMQ] Processing SMS job ${job.id}`));
                
                // Implement SMS sending logic here if needed (e.g. Twilio/VeevoTech)
-               logger.info(colors.green(`✅ SMS sent to ${phone}`));
+               logger.info(colors.green(`[BullMQ] SMS sent to ${phone}`));
                return { success: true, phone, jobId: job.id };
           } catch (error: any) {
-               errorLogger.error(colors.red(`❌ SMS job ${job.id} failed:`), error);
+               errorLogger.error(colors.red(`[BullMQ] SMS job ${job.id} failed:`), error);
                throw error;
           }
      },
@@ -185,7 +244,7 @@ export const cleanupWorker = new Worker<CleanupJobData>(
      async (job) => {
           try {
                const { type, olderThan } = job.data;
-               logger.info(colors.blue(`🧹 Processing cleanup job ${job.id} - Type: ${type}`));
+               logger.info(colors.blue(`[BullMQ] Processing cleanup job ${job.id} - Type: ${type}`));
 
                let deletedCount = 0;
 
@@ -200,21 +259,21 @@ export const cleanupWorker = new Worker<CleanupJobData>(
                          });
 
                          deletedCount = result.deletedCount || 0;
-                         logger.info(colors.cyan(`🗑️  Deleted ${deletedCount} old notifications`));
+                         logger.info(colors.cyan(`[BullMQ] Deleted ${deletedCount} old notifications`));
                          break;
 
                     case 'completed-jobs':
                          await emailQueue.clean(24 * 3600 * 1000, 100, 'completed');
                          await notificationQueue.clean(12 * 3600 * 1000, 50, 'completed');
                          await smsQueue.clean(24 * 3600 * 1000, 100, 'completed');
-                         logger.info(colors.cyan(`🗑️  Cleaned old completed jobs from queues`));
+                         logger.info(colors.cyan(`[BullMQ] Cleaned old completed jobs from queues`));
                          break;
 
                     case 'failed-jobs':
                          await emailQueue.clean(7 * 24 * 3600 * 1000, 500, 'failed');
                          await notificationQueue.clean(7 * 24 * 3600 * 1000, 500, 'failed');
                          await smsQueue.clean(7 * 24 * 3600 * 1000, 500, 'failed');
-                         logger.info(colors.cyan(`🗑️  Cleaned old failed jobs from queues`));
+                         logger.info(colors.cyan(`[BullMQ] Cleaned old failed jobs from queues`));
                          break;
 
                     case 'all-notifications':
@@ -227,7 +286,7 @@ export const cleanupWorker = new Worker<CleanupJobData>(
                          });
 
                          deletedCount = allResult.deletedCount || 0;
-                         logger.info(colors.cyan(`🗑️  Deleted ${deletedCount} very old notifications`));
+                         logger.info(colors.cyan(`[BullMQ] Deleted ${deletedCount} very old notifications`));
                          break;
 
                     case 'subscription-sync':
@@ -253,7 +312,7 @@ export const cleanupWorker = new Worker<CleanupJobData>(
                                    }
                               }
                          }
-                         logger.info(colors.cyan(`🔄 [BullMQ] Restored ${restoredCount} valid subscriptions back to 'active'`));
+                         logger.info(colors.cyan(`[BullMQ] Restored ${restoredCount} valid subscriptions back to 'active'`));
                          break;
 
                     case 'unverified-users':
@@ -262,17 +321,17 @@ export const cleanupWorker = new Worker<CleanupJobData>(
                               verified: false,
                               createdAt: { $lt: cutoffDate },
                          });
-                         logger.info(colors.cyan(`🗑️  [BullMQ] Deleted ${delRes.deletedCount || 0} unverified accounts`));
+                         logger.info(colors.cyan(`[BullMQ] Deleted ${delRes.deletedCount || 0} unverified accounts`));
                          break;
 
                     default:
                          logger.warn(colors.yellow(`Unknown cleanup type: ${type}`));
                }
 
-               logger.info(colors.green(`✅ Cleanup job ${job.id} completed`));
+               logger.info(colors.green(`[BullMQ] Cleanup job ${job.id} completed`));
                return { success: true, type, deletedCount, jobId: job.id };
           } catch (error: any) {
-               errorLogger.error(colors.red(`❌ Cleanup job ${job.id} failed:`), error);
+               errorLogger.error(colors.red(`[BullMQ] Cleanup job ${job.id} failed:`), error);
                throw error;
           }
      },
@@ -282,4 +341,4 @@ export const cleanupWorker = new Worker<CleanupJobData>(
      },
 );
 
-logger.info(colors.bgMagenta.white('🚀 All BullMQ workers are running'));
+logger.info(colors.bgMagenta.white('All BullMQ workers are running'));

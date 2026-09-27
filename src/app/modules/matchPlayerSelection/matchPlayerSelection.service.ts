@@ -118,7 +118,7 @@ const createSelectionIntoDB = async (payload: any, user: any) => {
   const teamData = await Team.findById(team);
   const teamName = teamData?.teamName || "your team";
 
-  // 🔔 Send notification to selected players via background queue
+  // Send notification to selected players via background queue
   const notifyPromises = players
     .filter((p) => p.player)
     .map((p) => {
@@ -127,7 +127,7 @@ const createSelectionIntoDB = async (payload: any, user: any) => {
       return NotificationQueueHelper.sendNotification(
         p.player.toString(),
         `You have been selected to play ${positionText}${statusText} for ${teamName} in the upcoming match.`,
-        "You are Selected! 🏃‍♂️",
+        "You are Selected",
         NOTIFICATION_TYPE.GENERAL,
         undefined,
         match.toString(),

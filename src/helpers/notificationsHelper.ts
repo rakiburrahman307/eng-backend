@@ -31,7 +31,7 @@ export const sendNotification = async (data: {
 
     return notification;
   } catch (error) {
-    console.error("❌ sendNotification error:", error);
+    console.error("sendNotification error:", error);
     return null;
   }
 };
@@ -78,7 +78,7 @@ export const sendNotificationToAdmins = async (data: {
       });
     }
   } catch (error) {
-    console.error("❌ sendNotificationToAdmins error:", error);
+    console.error("sendNotificationToAdmins error:", error);
   }
 };
 
