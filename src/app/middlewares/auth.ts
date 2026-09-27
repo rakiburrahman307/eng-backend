@@ -12,7 +12,7 @@ const auth =
       const authHeader = req.headers.authorization;
 
       // ----------------------------------------
-      // 1️⃣ Parse options
+      // 1. Parse options
       // ----------------------------------------
 
       let required = true;
@@ -25,7 +25,7 @@ const auth =
       }
 
       // ----------------------------------------
-      // 2️⃣ No token case (Guest handling)
+      // 2. No token case (Guest handling)
       // ----------------------------------------
 
       const isInvalidHeader =
@@ -47,7 +47,7 @@ const auth =
       }
 
       // ----------------------------------------
-      // 3️⃣ Token extract
+      // 3. Token extract
       // ----------------------------------------
 
       const token = authHeader.startsWith("Bearer ")
@@ -70,7 +70,7 @@ const auth =
       }
 
       // ----------------------------------------
-      // 4️⃣ Verify token
+      // 4. Verify token
       // ----------------------------------------
 
       let decoded;
@@ -86,17 +86,18 @@ const auth =
       }
 
       // ----------------------------------------
-      // 5️⃣ Attach user
+      // 5. Attach user
       // ----------------------------------------
 
       req.user = {
         _id: decoded._id || decoded.id,
+        id: decoded._id || decoded.id,
         email: decoded.email,
         role: decoded.role,
       };
 
       // ----------------------------------------
-      // 6️⃣ Role check (only if roles given)
+      // 6. Role check (only if roles given)
       // ----------------------------------------
 
       if (roles.length) {
