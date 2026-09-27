@@ -1,6 +1,6 @@
 import express from "express";
-import auth from "../../middlewares/auth";
 import { TeamDashboardController } from "./teamDashboard.controller";
+import auth from "../../middlewares/auth";
 
 const router = express.Router();
 

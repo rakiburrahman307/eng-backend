@@ -1,117 +1,125 @@
-import { NextFunction, Request, Response } from 'express';
-import { StatusCodes } from 'http-status-codes';
-import { Secret } from 'jsonwebtoken';
-import config from '../../config';
-import { jwtHelper } from '../../helpers/jwtHelper';
-import ApiError from '../../errors/ApiErrors';
+import { NextFunction, Request, Response } from "express";
+import { StatusCodes } from "http-status-codes";
+import { Secret } from "jsonwebtoken";
+import config from "../../config";
+import { jwtHelper } from "../../helpers/jwtHelper";
+import ApiError from "../../errors/ApiErrors";
 
-const auth = (...args: any[]) => async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const authHeader = req.headers.authorization;
-
-
-
-    // ----------------------------------------
-    // 1️⃣ Parse options
-    // ----------------------------------------
-
-    let required = true;
-    let roles: string[] = [];
-
-    if (args.length === 1 && typeof args[0] === "boolean") {
-      required = args[0]; // auth(false)
-    } else {
-      roles = args; // auth("ADMIN", "USER")
-    }
-
-    // ----------------------------------------
-    // 2️⃣ No token case (Guest handling)
-    // ----------------------------------------
-
-    const isInvalidHeader = !authHeader || authHeader === "null" || authHeader === "undefined" || authHeader.trim() === "";
-
-    if (isInvalidHeader) {
-      if (required) {
-        throw new ApiError(StatusCodes.UNAUTHORIZED, "You are not authorized");
-      }
-
-      req.user = null; // guest user
-      return next();
-    }
-
-    // ----------------------------------------
-    // 3️⃣ Token extract
-    // ----------------------------------------
-
-    const token = authHeader.startsWith("Bearer ")
-      ? authHeader.split(" ")[1]
-      : authHeader;
-
-    const isInvalidToken = !token || token === "null" || token === "undefined" || token.trim() === "";
-
-    if (isInvalidToken) {
-      if (required) {
-        throw new ApiError(StatusCodes.UNAUTHORIZED, "Token not found");
-      }
-
-      req.user = null;
-      return next();
-    }
-
-    // ----------------------------------------
-    // 4️⃣ Verify token
-    // ----------------------------------------
-
-    let decoded;
+const auth =
+  (...args: any[]) =>
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
-      decoded = jwtHelper.verifyToken(
-        token,
-        config.jwt.jwt_secret as Secret
-      );
-    } catch (err) {
-      if (required) {
-        throw new ApiError(StatusCodes.UNAUTHORIZED, "Invalid token");
+      const authHeader = req.headers.authorization;
+
+      // ----------------------------------------
+      // 1️⃣ Parse options
+      // ----------------------------------------
+
+      let required = true;
+      let roles: string[] = [];
+
+      if (args.length === 1 && typeof args[0] === "boolean") {
+        required = args[0]; // auth(false)
+      } else {
+        roles = args; // auth("ADMIN", "USER")
       }
 
-      req.user = null;
-      return next();
-    }
+      // ----------------------------------------
+      // 2️⃣ No token case (Guest handling)
+      // ----------------------------------------
 
-    // ----------------------------------------
-    // 5️⃣ Attach user
-    // ----------------------------------------
+      const isInvalidHeader =
+        !authHeader ||
+        authHeader === "null" ||
+        authHeader === "undefined" ||
+        authHeader.trim() === "";
 
-    req.user = {
-      _id: decoded._id || decoded.id,
-      email: decoded.email,
-      role: decoded.role
-    };
+      if (isInvalidHeader) {
+        if (required) {
+          throw new ApiError(
+            StatusCodes.UNAUTHORIZED,
+            "You are not authorized",
+          );
+        }
 
-    // ----------------------------------------
-    // 6️⃣ Role check (only if roles given)
-    // ----------------------------------------
+        req.user = null; // guest user
+        return next();
+      }
 
-    if (roles.length) {
-      const userRoleUpper = (req.user.role || "").toString().trim().toUpperCase();
-      const allowedRolesUpper = roles.map((r) => String(r).trim().toUpperCase());
+      // ----------------------------------------
+      // 3️⃣ Token extract
+      // ----------------------------------------
 
-      if (!allowedRolesUpper.includes(userRoleUpper)) {
-        throw new ApiError(
-          StatusCodes.FORBIDDEN,
-          "You don't have permission to access this api"
+      const token = authHeader.startsWith("Bearer ")
+        ? authHeader.split(" ")[1]
+        : authHeader;
+
+      const isInvalidToken =
+        !token ||
+        token === "null" ||
+        token === "undefined" ||
+        token.trim() === "";
+
+      if (isInvalidToken) {
+        if (required) {
+          throw new ApiError(StatusCodes.UNAUTHORIZED, "Token not found");
+        }
+
+        req.user = null;
+        return next();
+      }
+
+      // ----------------------------------------
+      // 4️⃣ Verify token
+      // ----------------------------------------
+
+      let decoded;
+      try {
+        decoded = jwtHelper.verifyToken(token, config.jwt.jwt_secret as Secret);
+      } catch (err) {
+        if (required) {
+          throw new ApiError(StatusCodes.UNAUTHORIZED, "Invalid token");
+        }
+
+        req.user = null;
+        return next();
+      }
+
+      // ----------------------------------------
+      // 5️⃣ Attach user
+      // ----------------------------------------
+
+      req.user = {
+        _id: decoded._id || decoded.id,
+        email: decoded.email,
+        role: decoded.role,
+      };
+
+      // ----------------------------------------
+      // 6️⃣ Role check (only if roles given)
+      // ----------------------------------------
+
+      if (roles.length) {
+        const userRoleUpper = (req.user.role || "")
+          .toString()
+          .trim()
+          .toUpperCase();
+        const allowedRolesUpper = roles.map((r) =>
+          String(r).trim().toUpperCase(),
         );
-      }
-    }
 
-    next();
-  } catch (error) {
-    next(error);
-  }
-};
+        if (!allowedRolesUpper.includes(userRoleUpper)) {
+          throw new ApiError(
+            StatusCodes.FORBIDDEN,
+            "You don't have permission to access this api",
+          );
+        }
+      }
+
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
 
 export default auth;
-

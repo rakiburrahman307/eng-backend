@@ -5,12 +5,18 @@ import sendResponse from "../../../shared/sendResponse";
 import { TeamDashboardService } from "./teamDashboard.service";
 
 // GET TEAM DASHBOARD
-const getTeamDashboard = catchAsync(async (req: Request, res: Response) => {
+const getTeamDashboard = catchAsync(async (req, res) => {
   const teamId = req.params.teamId as string;
+
+  // Support both Token (req.user) and Query Param (?userId=...)
+  const userId =
+    (req.user as any)?._id ||
+    (req.user as any)?.id ||
+    (req.query.userId as string);
 
   const result = await TeamDashboardService.getTeamDashboardFromDB(
     teamId,
-    req.user?.id
+    userId
   );
 
   sendResponse(res, {
@@ -23,7 +29,7 @@ const getTeamDashboard = catchAsync(async (req: Request, res: Response) => {
 
 
 const getClubOverview = catchAsync(
-  async (req: Request, res: Response) => {
+  async (req, res) => {
     const teamId = req.params.teamId as string;
 
     const result =
