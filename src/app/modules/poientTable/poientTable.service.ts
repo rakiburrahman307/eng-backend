@@ -3,10 +3,17 @@ import { LeagueTeam } from "../leagueTeam/leagueTeam.model";
 import { Match } from "../match/match.model";
 import { Team } from "../team/team.model";
 import { User } from "../user/user.model";
+import { PointTable } from "./poientTable.model";
 import mongoose from "mongoose";
+import ApiError from "../../../errors/ApiErrors";
+import { StatusCodes } from "http-status-codes";
 
-// Helper to calculate standings synchronously from prefetched teams & matches
-const computeStandings = (leagueTeams: any[], matches: any[]) => {
+// Helper to calculate standings synchronously from prefetched teams & matches & manual overrides
+const computeStandings = (
+  leagueTeams: any[],
+  matches: any[],
+  manualOverrides: any[] = []
+) => {
   // Sort matches chronologically
   const sortedMatches = [...matches].sort((a, b) => {
     const dateA = new Date(a.matchDate || a.createdAt || 0).getTime();
@@ -14,15 +21,25 @@ const computeStandings = (leagueTeams: any[], matches: any[]) => {
     return dateA - dateB;
   });
 
+  // Map manual overrides by teamId
+  const overrideMap: Record<string, any> = {};
+  for (const mo of manualOverrides) {
+    const tId = (mo.team?._id || mo.team)?.toString();
+    if (tId) {
+      overrideMap[tId] = mo;
+    }
+  }
+
   // Helper to build raw table from given match list
-  const buildRawTable = (matchList: any[]) => {
+  const buildRawTable = (matchList: any[], applyOverrides: boolean = false) => {
     const table: Record<string, any> = {};
 
     for (const lt of leagueTeams) {
       if (!lt.team) continue;
       const team: any = lt.team;
+      const teamId = team._id.toString();
 
-      table[team._id.toString()] = {
+      table[teamId] = {
         team,
         played: 0,
         win: 0,
@@ -32,7 +49,28 @@ const computeStandings = (leagueTeams: any[], matches: any[]) => {
         goalsAgainst: 0,
         goalDifference: 0,
         points: 0,
+        isManual: false,
       };
+    }
+
+    // Include teams that exist in manual overrides even if not yet in leagueTeams
+    if (applyOverrides) {
+      for (const [tId, mo] of Object.entries(overrideMap)) {
+        if (!table[tId] && (mo.team?._id || mo.team)) {
+          table[tId] = {
+            team: mo.team,
+            played: 0,
+            win: 0,
+            draw: 0,
+            loss: 0,
+            goalsFor: 0,
+            goalsAgainst: 0,
+            goalDifference: 0,
+            points: 0,
+            isManual: true,
+          };
+        }
+      }
     }
 
     for (const match of matchList) {
@@ -72,6 +110,24 @@ const computeStandings = (leagueTeams: any[], matches: any[]) => {
     for (const teamId in table) {
       table[teamId].goalDifference =
         table[teamId].goalsFor - table[teamId].goalsAgainst;
+
+      // Apply manual override if active and applyOverrides is true
+      if (applyOverrides && overrideMap[teamId]) {
+        const mo = overrideMap[teamId];
+        table[teamId].played = Number(mo.played ?? table[teamId].played);
+        table[teamId].win = Number(mo.win ?? table[teamId].win);
+        table[teamId].draw = Number(mo.draw ?? table[teamId].draw);
+        table[teamId].loss = Number(mo.loss ?? table[teamId].loss);
+        table[teamId].goalsFor = Number(mo.goalsFor ?? table[teamId].goalsFor);
+        table[teamId].goalsAgainst = Number(mo.goalsAgainst ?? table[teamId].goalsAgainst);
+        table[teamId].goalDifference =
+          mo.goalDifference !== undefined
+            ? Number(mo.goalDifference)
+            : table[teamId].goalsFor - table[teamId].goalsAgainst;
+        table[teamId].points = Number(mo.points ?? table[teamId].points);
+        table[teamId].isManual = true;
+        table[teamId]._pointTableId = mo._id?.toString();
+      }
     }
 
     const list = Object.values(table);
@@ -87,15 +143,15 @@ const computeStandings = (leagueTeams: any[], matches: any[]) => {
     return list;
   };
 
-  // 1. Current Full Standings
-  const currentStandings = buildRawTable(sortedMatches);
+  // 1. Current Full Standings (with manual overrides applied)
+  const currentStandings = buildRawTable(sortedMatches, true);
 
   // 2. Previous Standings (before last match) to determine trend (UP/DOWN/SAME)
   const prevMatches =
     sortedMatches.length > 0
       ? sortedMatches.slice(0, sortedMatches.length - 1)
       : [];
-  const prevStandings = buildRawTable(prevMatches);
+  const prevStandings = buildRawTable(prevMatches, false);
 
   const prevRankMap: Record<string, number> = {};
   prevStandings.forEach((item: any, index: number) => {
@@ -148,7 +204,7 @@ const computeStandings = (leagueTeams: any[], matches: any[]) => {
 const calculateLeague = async (league: any) => {
   const leagueId = league._id.toString();
 
-  const [leagueTeams, matches] = await Promise.all([
+  const [leagueTeams, matches, overrides] = await Promise.all([
     LeagueTeam.find({ league: leagueId }).populate(
       "team",
       "teamName shortName teamLogo",
@@ -158,9 +214,13 @@ const calculateLeague = async (league: any) => {
       status: "finished",
       matchType: { $nin: ["friendly", "cup"] },
     }),
+    PointTable.find({ league: leagueId }).populate(
+      "team",
+      "teamName shortName teamLogo",
+    ),
   ]);
 
-  return computeStandings(leagueTeams, matches);
+  return computeStandings(leagueTeams, matches, overrides);
 };
 
 // =========================
@@ -292,16 +352,21 @@ const getPointTable = async (query: Record<string, any> = {}) => {
 
   const leagueIds = leagues.map((l) => l._id);
 
-  const [allLeagueTeams, directTeamsInLeague, allMatches] = await Promise.all([
-    LeagueTeam.find({ league: { $in: leagueIds } }).populate(
-      "team",
-      "teamName shortName teamLogo",
-    ),
-    Team.find({ league: { $in: leagueIds } }).select(
-      "teamName shortName teamLogo league",
-    ),
-    Match.find({ league: { $in: leagueIds }, status: "finished" }),
-  ]);
+  const [allLeagueTeams, directTeamsInLeague, allMatches, allPointTableOverrides] =
+    await Promise.all([
+      LeagueTeam.find({ league: { $in: leagueIds } }).populate(
+        "team",
+        "teamName shortName teamLogo",
+      ),
+      Team.find({ league: { $in: leagueIds } }).select(
+        "teamName shortName teamLogo league",
+      ),
+      Match.find({ league: { $in: leagueIds }, status: "finished" }),
+      PointTable.find({ league: { $in: leagueIds } }).populate(
+        "team",
+        "teamName shortName teamLogo",
+      ),
+    ]);
 
   const leagueTeamsMap: Record<string, any[]> = {};
   for (const lt of allLeagueTeams) {
@@ -334,14 +399,24 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     }
   }
 
+  const pointTableOverridesMap: Record<string, any[]> = {};
+  for (const pto of allPointTableOverrides) {
+    const lId = pto.league?.toString();
+    if (lId) {
+      if (!pointTableOverridesMap[lId]) pointTableOverridesMap[lId] = [];
+      pointTableOverridesMap[lId].push(pto);
+    }
+  }
+
   const response = [];
 
   for (const league of leagues) {
     const lId = league._id.toString();
     const leagueTeams = leagueTeamsMap[lId] || [];
     const matches = matchesMap[lId] || [];
+    const overrides = pointTableOverridesMap[lId] || [];
 
-    const standings = computeStandings(leagueTeams, matches);
+    const standings = computeStandings(leagueTeams, matches, overrides);
 
     // If targetTeamId is passed, ensure this league contains the target team
     if (targetTeamId) {
@@ -372,6 +447,90 @@ const getPointTable = async (query: Record<string, any> = {}) => {
   return response;
 };
 
+// =========================
+// UPDATE / UPSERT MANUAL STANDING
+// =========================
+const updateSinglePointTable = async (payload: {
+  league: string;
+  team: string;
+  played?: number;
+  win?: number;
+  draw?: number;
+  loss?: number;
+  goalsFor?: number;
+  goalsAgainst?: number;
+  goalDifference?: number;
+  points?: number;
+}) => {
+  const { league, team, ...stats } = payload;
+  if (!league || !team) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "League and Team IDs are required");
+  }
+
+  const goalsFor = stats.goalsFor !== undefined ? Number(stats.goalsFor) : 0;
+  const goalsAgainst = stats.goalsAgainst !== undefined ? Number(stats.goalsAgainst) : 0;
+  const goalDifference =
+    stats.goalDifference !== undefined
+      ? Number(stats.goalDifference)
+      : goalsFor - goalsAgainst;
+
+  const win = stats.win !== undefined ? Number(stats.win) : 0;
+  const draw = stats.draw !== undefined ? Number(stats.draw) : 0;
+  const loss = stats.loss !== undefined ? Number(stats.loss) : 0;
+  const played =
+    stats.played !== undefined ? Number(stats.played) : win + draw + loss;
+  const points =
+    stats.points !== undefined ? Number(stats.points) : win * 3 + draw;
+
+  const updateData = {
+    league,
+    team,
+    played,
+    win,
+    draw,
+    loss,
+    goalsFor,
+    goalsAgainst,
+    goalDifference,
+    points,
+    isManual: true,
+  };
+
+  const result = await PointTable.findOneAndUpdate(
+    { league, team },
+    { $set: updateData },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  ).populate("team", "teamName shortName teamLogo");
+
+  return result;
+};
+
+const updatePointTable = async (payload: any) => {
+  if (Array.isArray(payload)) {
+    const results = [];
+    for (const item of payload) {
+      results.push(await updateSinglePointTable(item));
+    }
+    return results;
+  }
+  return await updateSinglePointTable(payload);
+};
+
+// =========================
+// RESET MANUAL STANDING TO AUTO-CALC
+// =========================
+const resetPointTable = async (payload: { league: string; team: string }) => {
+  const { league, team } = payload;
+  if (!league || !team) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "League and Team IDs are required");
+  }
+  const result = await PointTable.findOneAndDelete({ league, team });
+  return result;
+};
+
 export const PointTableService = {
   getPointTable,
+  calculateLeague,
+  updatePointTable,
+  resetPointTable,
 };

@@ -4,7 +4,6 @@ import catchAsync from '../../../shared/catchAsync';
 import sendResponse from '../../../shared/sendResponse';
 import { PointTableService } from './poientTable.service';
 
-
 const getPointTable = catchAsync(async (req: Request, res: Response) => {
   const result = await PointTableService.getPointTable(req.query);
 
@@ -16,6 +15,30 @@ const getPointTable = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const updatePointTable = catchAsync(async (req: Request, res: Response) => {
+  const result = await PointTableService.updatePointTable(req.body);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Point table updated successfully',
+    data: result,
+  });
+});
+
+const resetPointTable = catchAsync(async (req: Request, res: Response) => {
+  const result = await PointTableService.resetPointTable(req.body);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Point table reset to auto-calculated successfully',
+    data: result,
+  });
+});
+
 export const PointTableController = {
   getPointTable,
+  updatePointTable,
+  resetPointTable,
 };
