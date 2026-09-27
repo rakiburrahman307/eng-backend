@@ -48,6 +48,16 @@ const pointTableSchema = new Schema(
       type: Boolean,
       default: true,
     },
+    baseMatchIds: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'Match',
+      },
+    ],
+    overrideAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
   {
     timestamps: true,

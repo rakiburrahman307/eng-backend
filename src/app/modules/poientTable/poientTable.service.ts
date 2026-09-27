@@ -73,61 +73,86 @@ const computeStandings = (
       }
     }
 
+    // Initialize base values: If team has an override and applyOverrides is true, start from override base!
+    if (applyOverrides) {
+      for (const teamId in table) {
+        if (overrideMap[teamId]) {
+          const mo = overrideMap[teamId];
+          table[teamId].played = Number(mo.played ?? 0);
+          table[teamId].win = Number(mo.win ?? 0);
+          table[teamId].draw = Number(mo.draw ?? 0);
+          table[teamId].loss = Number(mo.loss ?? 0);
+          table[teamId].goalsFor = Number(mo.goalsFor ?? 0);
+          table[teamId].goalsAgainst = Number(mo.goalsAgainst ?? 0);
+          table[teamId].goalDifference =
+            mo.goalDifference !== undefined
+              ? Number(mo.goalDifference)
+              : table[teamId].goalsFor - table[teamId].goalsAgainst;
+          table[teamId].points = Number(mo.points ?? 0);
+          table[teamId].isManual = true;
+          table[teamId]._pointTableId = mo._id?.toString();
+        }
+      }
+    }
+
+    // Process matches:
     for (const match of matchList) {
+      const matchId = match._id?.toString();
       const homeId = match.homeTeam?.toString();
       const awayId = match.awayTeam?.toString();
 
       const homeScore = match.homeScore || 0;
       const awayScore = match.awayScore || 0;
 
-      if (!table[homeId] || !table[awayId]) continue;
+      // Determine if this match was already part of the base edit
+      const homeOverride = applyOverrides ? overrideMap[homeId] : null;
+      const homeAlreadyInBase =
+        homeOverride?.baseMatchIds &&
+        homeOverride.baseMatchIds.some((id: any) => id.toString() === matchId);
 
-      table[homeId].played++;
-      table[awayId].played++;
+      const awayOverride = applyOverrides ? overrideMap[awayId] : null;
+      const awayAlreadyInBase =
+        awayOverride?.baseMatchIds &&
+        awayOverride.baseMatchIds.some((id: any) => id.toString() === matchId);
 
-      table[homeId].goalsFor += homeScore;
-      table[homeId].goalsAgainst += awayScore;
+      // 1. Home Team calculation (only if not already baked into base edit)
+      if (table[homeId] && !homeAlreadyInBase) {
+        table[homeId].played++;
+        table[homeId].goalsFor += homeScore;
+        table[homeId].goalsAgainst += awayScore;
 
-      table[awayId].goalsFor += awayScore;
-      table[awayId].goalsAgainst += homeScore;
+        if (homeScore > awayScore) {
+          table[homeId].win++;
+          table[homeId].points += 3;
+        } else if (homeScore < awayScore) {
+          table[homeId].loss++;
+        } else {
+          table[homeId].draw++;
+          table[homeId].points += 1;
+        }
+      }
 
-      if (homeScore > awayScore) {
-        table[homeId].win++;
-        table[homeId].points += 3;
-        table[awayId].loss++;
-      } else if (awayScore > homeScore) {
-        table[awayId].win++;
-        table[awayId].points += 3;
-        table[homeId].loss++;
-      } else {
-        table[homeId].draw++;
-        table[awayId].draw++;
-        table[homeId].points += 1;
-        table[awayId].points += 1;
+      // 2. Away Team calculation (only if not already baked into base edit)
+      if (table[awayId] && !awayAlreadyInBase) {
+        table[awayId].played++;
+        table[awayId].goalsFor += awayScore;
+        table[awayId].goalsAgainst += homeScore;
+
+        if (awayScore > homeScore) {
+          table[awayId].win++;
+          table[awayId].points += 3;
+        } else if (awayScore < homeScore) {
+          table[awayId].loss++;
+        } else {
+          table[awayId].draw++;
+          table[awayId].points += 1;
+        }
       }
     }
 
     for (const teamId in table) {
       table[teamId].goalDifference =
         table[teamId].goalsFor - table[teamId].goalsAgainst;
-
-      // Apply manual override if active and applyOverrides is true
-      if (applyOverrides && overrideMap[teamId]) {
-        const mo = overrideMap[teamId];
-        table[teamId].played = Number(mo.played ?? table[teamId].played);
-        table[teamId].win = Number(mo.win ?? table[teamId].win);
-        table[teamId].draw = Number(mo.draw ?? table[teamId].draw);
-        table[teamId].loss = Number(mo.loss ?? table[teamId].loss);
-        table[teamId].goalsFor = Number(mo.goalsFor ?? table[teamId].goalsFor);
-        table[teamId].goalsAgainst = Number(mo.goalsAgainst ?? table[teamId].goalsAgainst);
-        table[teamId].goalDifference =
-          mo.goalDifference !== undefined
-            ? Number(mo.goalDifference)
-            : table[teamId].goalsFor - table[teamId].goalsAgainst;
-        table[teamId].points = Number(mo.points ?? table[teamId].points);
-        table[teamId].isManual = true;
-        table[teamId]._pointTableId = mo._id?.toString();
-      }
     }
 
     const list = Object.values(table);
@@ -143,7 +168,7 @@ const computeStandings = (
     return list;
   };
 
-  // 1. Current Full Standings (with manual overrides applied)
+  // 1. Current Full Standings (with manual overrides + new subsequent matches applied)
   const currentStandings = buildRawTable(sortedMatches, true);
 
   // 2. Previous Standings (before last match) to determine trend (UP/DOWN/SAME)
@@ -448,7 +473,7 @@ const getPointTable = async (query: Record<string, any> = {}) => {
 };
 
 // =========================
-// UPDATE / UPSERT MANUAL STANDING
+// UPDATE / UPSERT MANUAL STANDING (OPTION 2: INCREMENTAL BASE)
 // =========================
 const updateSinglePointTable = async (payload: {
   league: string;
@@ -466,6 +491,15 @@ const updateSinglePointTable = async (payload: {
   if (!league || !team) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "League and Team IDs are required");
   }
+
+  // Find all currently finished matches in this league for this team up to this moment
+  const finishedMatches = await Match.find({
+    league,
+    status: "finished",
+    $or: [{ homeTeam: team }, { awayTeam: team }],
+  }).select("_id");
+
+  const baseMatchIds = finishedMatches.map((m) => m._id);
 
   const goalsFor = stats.goalsFor !== undefined ? Number(stats.goalsFor) : 0;
   const goalsAgainst = stats.goalsAgainst !== undefined ? Number(stats.goalsAgainst) : 0;
@@ -494,6 +528,8 @@ const updateSinglePointTable = async (payload: {
     goalDifference,
     points,
     isManual: true,
+    baseMatchIds,
+    overrideAt: new Date(),
   };
 
   const result = await PointTable.findOneAndUpdate(
