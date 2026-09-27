@@ -98,7 +98,10 @@ const sendNotificationToUsers = async (payload: SendNotificationPayload) => {
   // ----------------------------------------------------
   if (isScheduled && scheduledAt) {
     // 1. Parse date in UK Timezone (Europe/London)
-    const scheduledUkTime = dayjs.tz(scheduledAt, UK_TIMEZONE);
+    const scheduledUkTime =
+      typeof scheduledAt === "string" && !scheduledAt.includes("T") && !scheduledAt.includes("Z")
+        ? dayjs.tz(scheduledAt, UK_TIMEZONE)
+        : dayjs(scheduledAt).tz(UK_TIMEZONE);
     if (!scheduledUkTime.isValid()) {
       throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid scheduled date/time format for UK timezone");
     }
