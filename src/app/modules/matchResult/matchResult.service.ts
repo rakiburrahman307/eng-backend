@@ -544,7 +544,7 @@ const applyPlayerStats = async (payload: any) => {
         await recordCoinTransaction({
           userId: player,
           amount: yellowCardCoin,
-          category: COIN_TRANSACTION_CATEGORY.RED_CARD_PENALTY,
+          category: COIN_TRANSACTION_CATEGORY.YELLOW_CARD_PENALTY,
           title: "Yellow Card Penalty",
           description: `Yellow card penalty at minute ${eventMin}`,
           matchId: matchRefId,
@@ -618,16 +618,16 @@ const applyPlayerStats = async (payload: any) => {
 
     if (isPro) {
       const foulCoin = pe?.foul?.coin ? pe.foul.coin : -100;
-      const foulMV = pe?.foul?.marketValue ? pe.foul.marketValue : (foulCoin * (pe?.conversionRate ?? 10));
-      const user = await User.findById(player);
-      if (user) {
-        const floorMV = Number(pe?.startingMarketValue) || 10000000;
-        const newCoins = Math.max(0, (user.engCoine ?? 0) + foulCoin);
-        const newMV = Math.max(floorMV, (user.marketValue ?? floorMV) + foulMV);
-        await User.findOneAndUpdate(
-          { _id: player },
-          { $set: { engCoine: newCoins, marketValue: newMV } },
-        );
+      if (foulCoin !== 0) {
+        await recordCoinTransaction({
+          userId: player,
+          amount: foulCoin,
+          category: COIN_TRANSACTION_CATEGORY.FOUL_PENALTY,
+          title: "Foul Penalty",
+          description: `Foul committed at minute ${eventMin}`,
+          matchId: matchRefId,
+          referenceId: matchRefId,
+        });
       }
     }
   }
@@ -636,16 +636,16 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "sin_bin") {
     if (isPro) {
       const sinBinCoin = pe?.sinBin?.coin ? pe.sinBin.coin : -2500;
-      const sinBinMV = pe?.sinBin?.marketValue ? pe.sinBin.marketValue : (sinBinCoin * (pe?.conversionRate ?? 10));
-      const user = await User.findById(player);
-      if (user) {
-        const floorMV = Number(pe?.startingMarketValue) || 10000000;
-        const newCoins = Math.max(0, (user.engCoine ?? 0) + sinBinCoin);
-        const newMV = Math.max(floorMV, (user.marketValue ?? floorMV) + sinBinMV);
-        await User.findOneAndUpdate(
-          { _id: player },
-          { $set: { engCoine: newCoins, marketValue: newMV } },
-        );
+      if (sinBinCoin !== 0) {
+        await recordCoinTransaction({
+          userId: player,
+          amount: sinBinCoin,
+          category: COIN_TRANSACTION_CATEGORY.SIN_BIN_PENALTY,
+          title: "Sin Bin Penalty",
+          description: `Sin bin penalty at minute ${eventMin}`,
+          matchId: matchRefId,
+          referenceId: matchRefId,
+        });
       }
     }
   }
@@ -654,16 +654,16 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "disrespect_to_referee") {
     if (isPro) {
       const disrespectCoin = pe?.disrespectToReferee?.coin ? pe.disrespectToReferee.coin : -7500;
-      const disrespectMV = pe?.disrespectToReferee?.marketValue ? pe.disrespectToReferee.marketValue : (disrespectCoin * (pe?.conversionRate ?? 10));
-      const user = await User.findById(player);
-      if (user) {
-        const floorMV = Number(pe?.startingMarketValue) || 10000000;
-        const newCoins = Math.max(0, (user.engCoine ?? 0) + disrespectCoin);
-        const newMV = Math.max(floorMV, (user.marketValue ?? floorMV) + disrespectMV);
-        await User.findOneAndUpdate(
-          { _id: player },
-          { $set: { engCoine: newCoins, marketValue: newMV } },
-        );
+      if (disrespectCoin !== 0) {
+        await recordCoinTransaction({
+          userId: player,
+          amount: disrespectCoin,
+          category: COIN_TRANSACTION_CATEGORY.DISRESPECT_TO_REFEREE,
+          title: "Disrespect to Referee Penalty",
+          description: `Disrespect to referee penalty at minute ${eventMin}`,
+          matchId: matchRefId,
+          referenceId: matchRefId,
+        });
       }
     }
   }
@@ -672,16 +672,16 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "gross_misconduct") {
     if (isPro) {
       const misconductCoin = pe?.grossMisconduct?.coin ? pe.grossMisconduct.coin : -10000;
-      const misconductMV = pe?.grossMisconduct?.marketValue ? pe.grossMisconduct.marketValue : (misconductCoin * (pe?.conversionRate ?? 10));
-      const user = await User.findById(player);
-      if (user) {
-        const floorMV = Number(pe?.startingMarketValue) || 10000000;
-        const newCoins = Math.max(0, (user.engCoine ?? 0) + misconductCoin);
-        const newMV = Math.max(floorMV, (user.marketValue ?? floorMV) + misconductMV);
-        await User.findOneAndUpdate(
-          { _id: player },
-          { $set: { engCoine: newCoins, marketValue: newMV } },
-        );
+      if (misconductCoin !== 0) {
+        await recordCoinTransaction({
+          userId: player,
+          amount: misconductCoin,
+          category: COIN_TRANSACTION_CATEGORY.GROSS_MISCONDUCT,
+          title: "Gross Misconduct Penalty",
+          description: `Gross misconduct penalty at minute ${eventMin}`,
+          matchId: matchRefId,
+          referenceId: matchRefId,
+        });
       }
     }
   }
@@ -690,11 +690,17 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "good_rating") {
     if (isPro) {
       const coin = pe?.goodRating?.coin ?? 0;
-      const mv = pe?.goodRating?.marketValue ?? (coin * (pe?.conversionRate ?? 10));
-      await User.findOneAndUpdate(
-        { _id: player },
-        { $inc: { engCoine: coin, marketValue: mv } },
-      );
+      if (coin > 0) {
+        await recordCoinTransaction({
+          userId: player,
+          amount: coin,
+          category: COIN_TRANSACTION_CATEGORY.MATCH_RATING,
+          title: "Good Match Rating Bonus",
+          description: `Received Good match rating`,
+          matchId: matchRefId,
+          referenceId: matchRefId,
+        });
+      }
     }
   }
 
@@ -702,11 +708,17 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "great_rating") {
     if (isPro) {
       const coin = pe?.greatRating?.coin ?? 0;
-      const mv = pe?.greatRating?.marketValue ?? (coin * (pe?.conversionRate ?? 10));
-      await User.findOneAndUpdate(
-        { _id: player },
-        { $inc: { engCoine: coin, marketValue: mv } },
-      );
+      if (coin > 0) {
+        await recordCoinTransaction({
+          userId: player,
+          amount: coin,
+          category: COIN_TRANSACTION_CATEGORY.MATCH_RATING,
+          title: "Great Match Rating Bonus",
+          description: `Received Great match rating`,
+          matchId: matchRefId,
+          referenceId: matchRefId,
+        });
+      }
     }
   }
 
@@ -714,11 +726,17 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "elite_rating") {
     if (isPro) {
       const coin = pe?.eliteRating?.coin ?? 0;
-      const mv = pe?.eliteRating?.marketValue ?? (coin * (pe?.conversionRate ?? 10));
-      await User.findOneAndUpdate(
-        { _id: player },
-        { $inc: { engCoine: coin, marketValue: mv } },
-      );
+      if (coin > 0) {
+        await recordCoinTransaction({
+          userId: player,
+          amount: coin,
+          category: COIN_TRANSACTION_CATEGORY.MATCH_RATING,
+          title: "Elite Match Rating Bonus",
+          description: `Received Elite match rating`,
+          matchId: matchRefId,
+          referenceId: matchRefId,
+        });
+      }
     }
   }
 
@@ -726,11 +744,17 @@ const applyPlayerStats = async (payload: any) => {
   if (eventType === "playing_match") {
     if (isPro) {
       const coin = pe?.playingMatch?.coin ?? 0;
-      const mv = pe?.playingMatch?.marketValue ?? (coin * (pe?.conversionRate ?? 10));
-      await User.findOneAndUpdate(
-        { _id: player },
-        { $inc: { engCoine: coin, marketValue: mv } },
-      );
+      if (coin > 0) {
+        await recordCoinTransaction({
+          userId: player,
+          amount: coin,
+          category: COIN_TRANSACTION_CATEGORY.PLAYING_MATCH,
+          title: "Match Appearance Bonus",
+          description: `Participated in match`,
+          matchId: matchRefId,
+          referenceId: matchRefId,
+        });
+      }
     }
   }
 

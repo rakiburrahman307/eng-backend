@@ -16,11 +16,36 @@ const getMyCoinHistoryFromDB = async (
 
   const filter: any = { user: new mongoose.Types.ObjectId(userId) };
 
-  if (query.category && Object.values(COIN_TRANSACTION_CATEGORY).includes(query.category)) {
-    filter.category = query.category;
+  // Category filter: case-insensitive, alias support (e.g., 'goal', 'clean_sheet', 'yellow_card', or comma-separated 'goal,assist')
+  if (query.category) {
+    const rawCat = String(query.category).trim();
+    if (rawCat) {
+      const catList = rawCat.split(",").map((c) => c.trim()).filter(Boolean);
+      const regexPatterns = catList.map((cat) => {
+        const pattern = cat.replace(/[-_ ]+/g, ".*");
+        return new RegExp(`^.*${pattern}.*$`, "i");
+      });
+      filter.category = regexPatterns.length === 1 ? regexPatterns[0] : { $in: regexPatterns };
+    }
   }
-  if (query.type && (query.type === "CREDIT" || query.type === "DEBIT")) {
-    filter.type = query.type;
+
+  // Type filter: CREDIT or DEBIT (case-insensitive)
+  if (query.type) {
+    const typeUpper = String(query.type).trim().toUpperCase();
+    if (typeUpper === "CREDIT" || typeUpper === "DEBIT") {
+      filter.type = typeUpper;
+    }
+  }
+
+  // Search filter
+  if (query.searchTerm || query.search) {
+    const searchStr = String(query.searchTerm || query.search).trim();
+    if (searchStr) {
+      filter.$or = [
+        { title: { $regex: searchStr, $options: "i" } },
+        { description: { $regex: searchStr, $options: "i" } },
+      ];
+    }
   }
 
   const [transactions, total] = await Promise.all([
