@@ -170,6 +170,7 @@ const getUserProfileFromDB = async (user: JwtPayload) => {
     document: isExistUser.document || [],
     phone: isExistUser.phone || null,
     status: userDetails?.status || "PENDING",
+    permissions: isExistUser.permissions || [],
 
     // ✅ Screen 2 profile details completion status
     isDetailsSubmitted,

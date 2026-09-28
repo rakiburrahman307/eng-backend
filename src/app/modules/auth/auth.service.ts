@@ -76,6 +76,7 @@ const loginUserFromDB = async (payload: ILoginData) => {
       id: isExistUser._id,
       role: isExistUser.role,
       email: isExistUser.email,
+      permissions: isExistUser.permissions || [],
     },
     config.jwt.jwt_secret as Secret,
     config.jwt.jwt_expire_in as string,
@@ -87,6 +88,7 @@ const loginUserFromDB = async (payload: ILoginData) => {
       id: isExistUser._id,
       role: isExistUser.role,
       email: isExistUser.email,
+      permissions: isExistUser.permissions || [],
     },
     config.jwt.jwtRefreshSecret as Secret,
     config.jwt.jwtRefreshExpiresIn as string,
@@ -97,11 +99,10 @@ const loginUserFromDB = async (payload: ILoginData) => {
   return {
     accessToken,
     refreshToken,
-
+    role: isExistUser.role,
+    permissions: isExistUser.permissions || [],
     profileStatus: userDetails ? userDetails.status : "INCOMPLETE",
-
     isDetailsSubmitted,
-
     paymentStatus: subscription ? true : false,
   };
 };

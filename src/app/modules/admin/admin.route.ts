@@ -14,15 +14,28 @@ router.post(
 );
 
 router.get(
-    '/get-admin',
-    auth(USER_ROLES.SUPER_ADMIN),
-    AdminController.getAdmin
+  '/get-admin',
+  auth(USER_ROLES.SUPER_ADMIN),
+  AdminController.getAdmin
+);
+
+router.get(
+  '/:id',
+  auth(USER_ROLES.SUPER_ADMIN),
+  AdminController.getSingleAdmin
+);
+
+router.patch(
+  '/:id',
+  auth(USER_ROLES.SUPER_ADMIN),
+  validateRequest(AdminValidation.updateAdminZodSchema),
+  AdminController.updateAdmin
 );
 
 router.delete(
-    '/:id',
-    auth(USER_ROLES.SUPER_ADMIN),
-    AdminController.deleteAdmin
+  '/:id',
+  auth(USER_ROLES.SUPER_ADMIN),
+  AdminController.deleteAdmin
 );
 
 export const AdminRoutes = router;

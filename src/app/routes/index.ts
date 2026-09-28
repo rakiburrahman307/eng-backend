@@ -43,6 +43,7 @@ import TournamentClaimRoutes from "../modules/tournamentClaim/tournamentClaim.ro
 import CoinTransactionRoute from "../modules/coinTransaction/coinTransaction.route";
 import StatsAuditRoute from "../modules/statsAudit/statsAudit.route";
 import { TeamSubscriptionRoutes } from "../modules/teamSubscription/teamSubscription.route";
+import { AdminRoutes } from "../modules/admin/admin.route";
 
 const router = express.Router();
 
@@ -92,6 +93,7 @@ const apiRoutes = [
     { path: "/coins", route: CoinTransactionRoute },
     { path: "/stats-audit", route: StatsAuditRoute },
     { path: "/team-subscription", route: TeamSubscriptionRoutes },
+    { path: "/admin", route: AdminRoutes },
 ]
 
 apiRoutes.forEach(route => router.use(route.path, route.route));

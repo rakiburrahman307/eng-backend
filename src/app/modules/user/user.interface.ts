@@ -68,6 +68,7 @@ export type IUser = {
     jerseyNumber?: string;
     isSubscribed?: boolean;
     hasAccess?: boolean;
+    permissions?: string[];
 }
 
 export type UserModal = {
