@@ -12,10 +12,10 @@ router.get(
   CoinTransactionController.getMyCoinHistory
 );
 
-// 🔍 ADMIN: View any player's coin history
+// View player's coin history (Parent, Player, Manager, Admin)
 router.get(
   "/history/:playerId",
-  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  auth(...ROLE_GROUPS.All),
   CoinTransactionController.getPlayerCoinHistoryForAdmin
 );
 

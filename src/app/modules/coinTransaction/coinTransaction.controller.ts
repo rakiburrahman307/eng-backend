@@ -1,13 +1,14 @@
-import { Request, Response } from "express";
 import catchAsync from "../../../shared/catchAsync";
 import sendResponse from "../../../shared/sendResponse";
 import { StatusCodes } from "http-status-codes";
 import { CoinTransactionService } from "./coinTransaction.service";
 
-const getMyCoinHistory = catchAsync(async (req: Request, res: Response) => {
-  const userId = (req.user as any)?._id || (req.user as any)?.id;
+const getMyCoinHistory = catchAsync(async (req, res) => {
+  const loggedInUserId = (req.user as any)?._id || (req.user as any)?.id;
+  // If parent passes child player ID via ?playerId=..., use that child's ID
+  const targetUserId = (req.query.playerId as string) || loggedInUserId;
   const result = await CoinTransactionService.getMyCoinHistoryFromDB(
-    userId,
+    targetUserId,
     req.query
   );
 
@@ -19,7 +20,7 @@ const getMyCoinHistory = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-const getPlayerCoinHistoryForAdmin = catchAsync(async (req: Request, res: Response) => {
+const getPlayerCoinHistoryForAdmin = catchAsync(async (req, res) => {
   const playerId = req.params.playerId as string;
   const result = await CoinTransactionService.getPlayerCoinHistoryForAdminFromDB(
     playerId,
@@ -34,7 +35,7 @@ const getPlayerCoinHistoryForAdmin = catchAsync(async (req: Request, res: Respon
   });
 });
 
-const adminAdjustCoins = catchAsync(async (req: Request, res: Response) => {
+const adminAdjustCoins = catchAsync(async (req, res) => {
   const adminId = (req.user as any)?._id || (req.user as any)?.id;
   const playerId = req.params.playerId as string;
 
