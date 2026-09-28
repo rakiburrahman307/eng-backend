@@ -50,7 +50,7 @@ const getMyCoinHistoryFromDB = async (
 
   const [transactions, total] = await Promise.all([
     CoinTransaction.find(filter)
-      .select("_id title type amount balanceAfter category createdAt")
+      .select("_id title type amount balanceBefore balanceAfter category description createdAt")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -58,12 +58,14 @@ const getMyCoinHistoryFromDB = async (
     CoinTransaction.countDocuments(filter),
   ]);
 
+  const totalPage = Math.ceil(total / limit) || 1;
+
   return {
     meta: {
       page,
       limit,
       total,
-      totalPage: Math.ceil(total / limit),
+      totalPage
     },
     data: transactions,
   };

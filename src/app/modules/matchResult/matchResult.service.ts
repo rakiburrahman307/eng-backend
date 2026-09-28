@@ -15,6 +15,7 @@ import { emitMatchUpdate, getMinFloorCoin } from "../match/match.service";
 import { isUserPremiumPlayer } from "../../../helpers/packageHelper";
 import { MatchEvaluation } from "../refereeRating/refereeRating.model";
 import { recordCoinTransaction } from "../../../helpers/coinLedgerHelper";
+import { CoinTransaction } from "../coinTransaction/coinTransaction.model";
 import { COIN_TRANSACTION_CATEGORY } from "../coinTransaction/coinTransaction.interface";
 import mongoose from "mongoose";
 
@@ -171,7 +172,7 @@ const createMatchResultToDB = async (payload: any) => {
   await applyMatchScore(payload);
 
   // 9. UPDATE PLAYER STATS
-  await applyPlayerStats(payload);
+  await applyPlayerStats(result);
 
   // 10. UPDATE WINNER
   await updateMatchWinner(match);
@@ -483,6 +484,7 @@ const applyPlayerStats = async (payload: any) => {
 
   const inc: any = {};
   const matchRefId = match ? (match._id || match).toString() : undefined;
+  const eventRefId = payload._id ? payload._id.toString() : matchRefId;
   const eventMin = Number(minute) || 1;
 
   // ================= GOAL =================
@@ -501,7 +503,7 @@ const applyPlayerStats = async (payload: any) => {
             title: "Goal Reward",
             description: `Scored a goal at minute ${eventMin}`,
             matchId: matchRefId,
-            referenceId: matchRefId,
+            referenceId: eventRefId,
           });
         }
       }
@@ -527,7 +529,7 @@ const applyPlayerStats = async (payload: any) => {
             title: "Assist Reward",
             description: `Assisted a goal at minute ${eventMin}`,
             matchId: matchRefId,
-            referenceId: matchRefId,
+            referenceId: eventRefId ? `${eventRefId}_assist` : undefined,
           });
         }
       }
@@ -548,7 +550,7 @@ const applyPlayerStats = async (payload: any) => {
           title: "Yellow Card Penalty",
           description: `Yellow card penalty at minute ${eventMin}`,
           matchId: matchRefId,
-          referenceId: matchRefId,
+          referenceId: eventRefId,
         });
       }
     }
@@ -568,7 +570,7 @@ const applyPlayerStats = async (payload: any) => {
           title: "Red Card Penalty",
           description: `Red card penalty at minute ${eventMin}`,
           matchId: matchRefId,
-          referenceId: matchRefId,
+          referenceId: eventRefId,
         });
       }
     }
@@ -588,7 +590,7 @@ const applyPlayerStats = async (payload: any) => {
           title: "Clean Sheet Reward",
           description: `Clean sheet awarded in match`,
           matchId: matchRefId,
-          referenceId: matchRefId,
+          referenceId: eventRefId,
         });
       }
     }
@@ -626,7 +628,7 @@ const applyPlayerStats = async (payload: any) => {
           title: "Foul Penalty",
           description: `Foul committed at minute ${eventMin}`,
           matchId: matchRefId,
-          referenceId: matchRefId,
+          referenceId: eventRefId,
         });
       }
     }
@@ -644,7 +646,7 @@ const applyPlayerStats = async (payload: any) => {
           title: "Sin Bin Penalty",
           description: `Sin bin penalty at minute ${eventMin}`,
           matchId: matchRefId,
-          referenceId: matchRefId,
+          referenceId: eventRefId,
         });
       }
     }
@@ -662,7 +664,7 @@ const applyPlayerStats = async (payload: any) => {
           title: "Disrespect to Referee Penalty",
           description: `Disrespect to referee penalty at minute ${eventMin}`,
           matchId: matchRefId,
-          referenceId: matchRefId,
+          referenceId: eventRefId,
         });
       }
     }
@@ -680,7 +682,7 @@ const applyPlayerStats = async (payload: any) => {
           title: "Gross Misconduct Penalty",
           description: `Gross misconduct penalty at minute ${eventMin}`,
           matchId: matchRefId,
-          referenceId: matchRefId,
+          referenceId: eventRefId,
         });
       }
     }
@@ -698,7 +700,7 @@ const applyPlayerStats = async (payload: any) => {
           title: "Good Match Rating Bonus",
           description: `Received Good match rating`,
           matchId: matchRefId,
-          referenceId: matchRefId,
+          referenceId: eventRefId,
         });
       }
     }
@@ -716,7 +718,7 @@ const applyPlayerStats = async (payload: any) => {
           title: "Great Match Rating Bonus",
           description: `Received Great match rating`,
           matchId: matchRefId,
-          referenceId: matchRefId,
+          referenceId: eventRefId,
         });
       }
     }
@@ -734,7 +736,7 @@ const applyPlayerStats = async (payload: any) => {
           title: "Elite Match Rating Bonus",
           description: `Received Elite match rating`,
           matchId: matchRefId,
-          referenceId: matchRefId,
+          referenceId: eventRefId,
         });
       }
     }
@@ -752,7 +754,7 @@ const applyPlayerStats = async (payload: any) => {
           title: "Match Appearance Bonus",
           description: `Participated in match`,
           matchId: matchRefId,
-          referenceId: matchRefId,
+          referenceId: eventRefId,
         });
       }
     }
@@ -771,6 +773,14 @@ const rollbackPlayerStats = async (payload: any) => {
   const { player, eventType, eventMeta } = payload;
 
   if (!player) return;
+
+  // Clean up associated coin transactions for this event if it was recorded
+  if (payload._id) {
+    const eventIdStr = payload._id.toString();
+    await CoinTransaction.deleteMany({
+      $or: [{ referenceId: eventIdStr }, { referenceId: `${eventIdStr}_assist` }],
+    });
+  }
 
   // Fetch PlayerEconomy config from DB for rollback reversal
   const pe = await PlayerEconomy.findOne();
@@ -1101,6 +1111,7 @@ const rollbackAllResultsForMatch = async (matchId: string) => {
   for (const r of results) {
     await rollbackPlayerStats(r);
   }
+  await CoinTransaction.deleteMany({ match: matchId });
   await MatchResult.deleteMany({ match: matchId });
 };
 
