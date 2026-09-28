@@ -16,7 +16,8 @@ const getMyCoinHistory = catchAsync(async (req, res) => {
     statusCode: StatusCodes.OK,
     success: true,
     message: "Coin transaction history retrieved successfully",
-    data: result,
+    data: result.data,
+    pagination: result.meta,
   });
 });
 

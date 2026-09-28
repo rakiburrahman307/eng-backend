@@ -23,15 +23,14 @@ const getMyCoinHistoryFromDB = async (
     filter.type = query.type;
   }
 
-  const [transactions, total, user] = await Promise.all([
+  const [transactions, total] = await Promise.all([
     CoinTransaction.find(filter)
+      .select("_id title type amount balanceAfter category createdAt")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate("match", "homeTeam awayTeam homeScore awayScore matchDate")
       .lean(),
     CoinTransaction.countDocuments(filter),
-    User.findById(userId).select("engCoine marketValue firstName lastName role").lean(),
   ]);
 
   return {
@@ -41,8 +40,6 @@ const getMyCoinHistoryFromDB = async (
       total,
       totalPage: Math.ceil(total / limit),
     },
-    currentBalance: user?.engCoine || 0,
-    marketValue: user?.marketValue || 0,
     data: transactions,
   };
 };
