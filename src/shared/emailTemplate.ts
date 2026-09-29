@@ -501,7 +501,7 @@ const adminCredentials = (values: IAdminCredentials) => {
                                             If you did not expect this email, please contact the system administrator.
                                         </p>
                                         <br/>
-                                               <p
+                                        <p
                                             style="margin:0; padding:0; font-size:12px; line-height:18px; color:#94a3b8; text-align:center;"
                                         >
                                             &copy; ${new Date().getFullYear()} ENG Sports. All rights reserved.

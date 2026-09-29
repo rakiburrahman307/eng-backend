@@ -3,14 +3,19 @@ import { StatusCodes } from 'http-status-codes';
 import catchAsync from '../../../shared/catchAsync';
 import sendResponse from '../../../shared/sendResponse';
 import { MatchResultService } from './matchResult.service';
+import { USER_ROLES } from '../../../enums/user';
 
 // CREATE
 const createMatchResult = catchAsync(async (req: Request, res: Response) => {
-  const user = req.user;
+  const user = req.user as any;
+  const userRole = user?.role;
+  const isAdmin = userRole === USER_ROLES.ADMIN || userRole === USER_ROLES.SUPER_ADMIN;
 
   const payload = {
     ...req.body,
-    addedBy: user?._id,
+    addedBy: user?._id || user?.id,
+    userRole,
+    isAdmin,
   };
 
   const result = await MatchResultService.createMatchResultToDB(payload);
@@ -52,9 +57,19 @@ const getSingleMatchResult = catchAsync(async (req: Request, res: Response) => {
 
 // UPDATE
 const updateMatchResult = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user as any;
+  const userRole = user?.role;
+  const isAdmin = userRole === USER_ROLES.ADMIN || userRole === USER_ROLES.SUPER_ADMIN;
+
+  const payload = {
+    ...req.body,
+    userRole,
+    isAdmin,
+  };
+
   const result = await MatchResultService.updateMatchResultToDB(
     req.params.id as string,
-    req.body
+    payload
   );
 
   sendResponse(res, {

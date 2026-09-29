@@ -267,7 +267,9 @@ export const manualAwardCleanSheet = async (
   adminId: string,
   reason?: string
 ): Promise<{ success: boolean; message: string }> => {
-  const match = await Match.findById(matchId);
+  const match = await Match.findById(matchId)
+    .populate("homeTeam", "teamName shortName")
+    .populate("awayTeam", "teamName shortName");
   if (!match) throw new Error("Match not found");
 
   const player = await User.findById(playerId);
@@ -307,12 +309,18 @@ export const manualAwardCleanSheet = async (
 
   const isPro = await isUserPremiumPlayer(player._id);
   if (isPro && csCoin > 0) {
+    const homeName = (match.homeTeam as any)?.teamName || "Home";
+    const awayName = (match.awayTeam as any)?.teamName || "Away";
+    const tId = teamId?.toString();
+    const hId = (match.homeTeam as any)?._id?.toString() || match.homeTeam?.toString();
+    const oppName = tId === hId ? awayName : homeName;
+
     await recordCoinTransaction({
       userId: player._id,
       amount: csCoin,
       category: COIN_TRANSACTION_CATEGORY.CLEAN_SHEET,
       title: "Clean Sheet Reward (Admin Manual)",
-      description: reason || `Clean sheet manually awarded by admin for match ${match._id}`,
+      description: reason || `Clean sheet manually awarded vs ${oppName} in match: ${homeName} vs ${awayName}`,
       matchId: match._id,
       referenceId: match._id.toString(),
       createdBy: adminId,
@@ -354,12 +362,22 @@ export const manualRevokeCleanSheet = async (
   if (cs.player) {
     const isPro = await isUserPremiumPlayer(cs.player);
     if (isPro && csCoin > 0) {
+      let fixtureInfo = "";
+      try {
+        const m = await Match.findById(matchId).populate("homeTeam", "teamName").populate("awayTeam", "teamName").lean();
+        if (m) {
+          const hName = (m.homeTeam as any)?.teamName || "Home";
+          const aName = (m.awayTeam as any)?.teamName || "Away";
+          fixtureInfo = ` in match: ${hName} vs ${aName}`;
+        }
+      } catch (_) {}
+
       await recordCoinTransaction({
         userId: cs.player,
         amount: -csCoin,
         category: COIN_TRANSACTION_CATEGORY.ROLLBACK,
         title: "Clean Sheet Revoked (Admin Manual)",
-        description: reason || `Clean sheet manually revoked by admin for match ${matchId}`,
+        description: reason || `Clean sheet manually revoked by admin${fixtureInfo}`,
         matchId: cs.match ? cs.match : undefined,
         referenceId: cs.match ? cs.match.toString() : undefined,
         createdBy: adminId,

@@ -43,9 +43,18 @@ const createMatchResultToDB = async (payload: any) => {
   }
 
   // 3️⃣ VALIDATE TEAM IN MATCH
+  let eventTeam = team;
+  if (!eventTeam && player) {
+    const playerUser = await User.findById(player).select("selectTeam").lean();
+    if (playerUser?.selectTeam) {
+      eventTeam = (playerUser.selectTeam._id || playerUser.selectTeam).toString();
+      payload.team = eventTeam;
+    }
+  }
+
   const isTeamValid =
-    String(matchData.homeTeam) === String(team) ||
-    String(matchData.awayTeam) === String(team);
+    String(matchData.homeTeam) === String(eventTeam) ||
+    String(matchData.awayTeam) === String(eventTeam);
 
   if (!isTeamValid) {
     throw new ApiError(
@@ -54,8 +63,8 @@ const createMatchResultToDB = async (payload: any) => {
     );
   }
 
-  // 4️⃣ CHECK MATCH STATUS
-  if (matchData.status !== "live") {
+  // 4️⃣ CHECK MATCH STATUS (Admins have master override to record/adjust match events anytime)
+  if (!payload.isAdmin && matchData.status !== "live") {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Match is not running");
   }
 
@@ -163,6 +172,23 @@ const createMatchResultToDB = async (payload: any) => {
     await Match.findByIdAndUpdate(match, {
       $set: { manOfTheMatch: player ? new mongoose.Types.ObjectId(player) : null },
     });
+  }
+
+  // 6.7️⃣ AUTO-POPULATE REQUIRED EVENT META
+  if (!payload.eventMeta) {
+    payload.eventMeta = {};
+  }
+  if (eventType === "yellow_card" && !payload.eventMeta.cardType) {
+    payload.eventMeta.cardType = "yellow";
+  }
+  if (eventType === "red_card" && !payload.eventMeta.cardType) {
+    payload.eventMeta.cardType = "red";
+  }
+  if (eventType === "goal" && !payload.eventMeta.goalType) {
+    payload.eventMeta.goalType = "normal";
+  }
+  if (eventType === "substitution" && !payload.eventMeta.substitutionType) {
+    payload.eventMeta.substitutionType = "in";
   }
 
   // 7️⃣ CREATE EVENT
@@ -466,8 +492,9 @@ const getMatchWiseResultsFromDB = async (matchId: string) => {
   return await MatchResult.find({ match: matchId })
     .populate("team")
     .populate("player")
+    .populate("eventMeta.assist")
     .populate("addedBy")
-    .sort({ minute: 1 });
+    .sort({ minute: 1, createdAt: 1 });
 };
 
 // ============================================================
@@ -487,6 +514,46 @@ const applyPlayerStats = async (payload: any) => {
   const eventRefId = payload._id ? payload._id.toString() : matchRefId;
   const eventMin = Number(minute) || 1;
 
+  // Resolve opponent team name and fixture for clear coin ledger logging
+  let opponentName = "";
+  let fixtureStr = "";
+  if (matchRefId) {
+    try {
+      const matchDoc = await Match.findById(matchRefId)
+        .populate("homeTeam", "teamName shortName")
+        .populate("awayTeam", "teamName shortName")
+        .lean();
+      if (matchDoc) {
+        const homeId = (matchDoc.homeTeam as any)?._id?.toString() || matchDoc.homeTeam?.toString();
+        const awayId = (matchDoc.awayTeam as any)?._id?.toString() || matchDoc.awayTeam?.toString();
+
+        let playerTeamId = team ? (team._id || team).toString() : "";
+        if (!playerTeamId) {
+          const playerUser = await User.findById(player).select("selectTeam").lean();
+          if (playerUser?.selectTeam) {
+            playerTeamId = (playerUser.selectTeam._id || playerUser.selectTeam).toString();
+          }
+        }
+
+        const homeName = (matchDoc.homeTeam as any)?.teamName || (matchDoc.homeTeam as any)?.shortName || "Home Team";
+        const awayName = (matchDoc.awayTeam as any)?.teamName || (matchDoc.awayTeam as any)?.shortName || "Away Team";
+        fixtureStr = `${homeName} vs ${awayName}`;
+
+        if (playerTeamId) {
+          if (playerTeamId === homeId) {
+            opponentName = awayName;
+          } else if (playerTeamId === awayId) {
+            opponentName = homeName;
+          }
+        }
+      }
+    } catch (e) {
+      // Graceful fallback if query fails
+    }
+  }
+
+  const vsOpponent = opponentName ? ` vs ${opponentName}` : "";
+
   // ================= GOAL =================
   if (eventType === "goal") {
     if (eventMeta?.goalType !== "own_goal") {
@@ -501,7 +568,7 @@ const applyPlayerStats = async (payload: any) => {
             amount: goalCoin,
             category: COIN_TRANSACTION_CATEGORY.GOAL,
             title: "Goal Reward",
-            description: `Scored a goal at minute ${eventMin}`,
+            description: `Scored a goal${vsOpponent} at minute ${eventMin}`,
             matchId: matchRefId,
             referenceId: eventRefId,
           });
@@ -527,11 +594,30 @@ const applyPlayerStats = async (payload: any) => {
             amount: assistCoin,
             category: COIN_TRANSACTION_CATEGORY.ASSIST,
             title: "Assist Reward",
-            description: `Assisted a goal at minute ${eventMin}`,
+            description: `Assisted a goal${vsOpponent} at minute ${eventMin}`,
             matchId: matchRefId,
             referenceId: eventRefId ? `${eventRefId}_assist` : undefined,
           });
         }
+      }
+    }
+  }
+
+  // ================= STANDALONE ASSIST =================
+  if (eventType === "assist") {
+    inc.assists = 1;
+    if (isPro) {
+      const assistCoin = pe?.assist?.coin ?? 0;
+      if (assistCoin > 0) {
+        await recordCoinTransaction({
+          userId: player,
+          amount: assistCoin,
+          category: COIN_TRANSACTION_CATEGORY.ASSIST,
+          title: "Assist Reward",
+          description: `Assisted a goal${vsOpponent} at minute ${eventMin}`,
+          matchId: matchRefId,
+          referenceId: eventRefId,
+        });
       }
     }
   }
@@ -548,7 +634,7 @@ const applyPlayerStats = async (payload: any) => {
           amount: yellowCardCoin,
           category: COIN_TRANSACTION_CATEGORY.YELLOW_CARD_PENALTY,
           title: "Yellow Card Penalty",
-          description: `Yellow card penalty at minute ${eventMin}`,
+          description: `Yellow card penalty${vsOpponent} at minute ${eventMin}`,
           matchId: matchRefId,
           referenceId: eventRefId,
         });
@@ -568,7 +654,7 @@ const applyPlayerStats = async (payload: any) => {
           amount: redCardCoin,
           category: COIN_TRANSACTION_CATEGORY.RED_CARD_PENALTY,
           title: "Red Card Penalty",
-          description: `Red card penalty at minute ${eventMin}`,
+          description: `Red card penalty${vsOpponent} at minute ${eventMin}`,
           matchId: matchRefId,
           referenceId: eventRefId,
         });
@@ -588,7 +674,7 @@ const applyPlayerStats = async (payload: any) => {
           amount: csCoin,
           category: COIN_TRANSACTION_CATEGORY.CLEAN_SHEET,
           title: "Clean Sheet Reward",
-          description: `Clean sheet awarded in match`,
+          description: `Clean sheet awarded${vsOpponent ? ` against ${opponentName}` : (fixtureStr ? ` in ${fixtureStr}` : " in match")}`,
           matchId: matchRefId,
           referenceId: eventRefId,
         });
@@ -607,7 +693,7 @@ const applyPlayerStats = async (payload: any) => {
         amount: potdCoin,
         category: COIN_TRANSACTION_CATEGORY.PLAYER_OF_THE_DAY,
         title: "Player of the Day Bonus",
-        description: `Player of the Day reward in match`,
+        description: `Player of the Day reward${vsOpponent ? ` vs ${opponentName}` : (fixtureStr ? ` in ${fixtureStr}` : " in match")}`,
         matchId: matchRefId,
         referenceId: matchRefId,
       });
@@ -626,7 +712,7 @@ const applyPlayerStats = async (payload: any) => {
           amount: foulCoin,
           category: COIN_TRANSACTION_CATEGORY.FOUL_PENALTY,
           title: "Foul Penalty",
-          description: `Foul committed at minute ${eventMin}`,
+          description: `Foul committed${vsOpponent} at minute ${eventMin}`,
           matchId: matchRefId,
           referenceId: eventRefId,
         });
@@ -644,7 +730,7 @@ const applyPlayerStats = async (payload: any) => {
           amount: sinBinCoin,
           category: COIN_TRANSACTION_CATEGORY.SIN_BIN_PENALTY,
           title: "Sin Bin Penalty",
-          description: `Sin bin penalty at minute ${eventMin}`,
+          description: `Sin bin penalty${vsOpponent} at minute ${eventMin}`,
           matchId: matchRefId,
           referenceId: eventRefId,
         });
@@ -662,7 +748,7 @@ const applyPlayerStats = async (payload: any) => {
           amount: disrespectCoin,
           category: COIN_TRANSACTION_CATEGORY.DISRESPECT_TO_REFEREE,
           title: "Disrespect to Referee Penalty",
-          description: `Disrespect to referee penalty at minute ${eventMin}`,
+          description: `Disrespect to referee penalty${vsOpponent} at minute ${eventMin}`,
           matchId: matchRefId,
           referenceId: eventRefId,
         });
@@ -680,7 +766,7 @@ const applyPlayerStats = async (payload: any) => {
           amount: misconductCoin,
           category: COIN_TRANSACTION_CATEGORY.GROSS_MISCONDUCT,
           title: "Gross Misconduct Penalty",
-          description: `Gross misconduct penalty at minute ${eventMin}`,
+          description: `Gross misconduct penalty${vsOpponent} at minute ${eventMin}`,
           matchId: matchRefId,
           referenceId: eventRefId,
         });
@@ -698,7 +784,7 @@ const applyPlayerStats = async (payload: any) => {
           amount: coin,
           category: COIN_TRANSACTION_CATEGORY.MATCH_RATING,
           title: "Good Match Rating Bonus",
-          description: `Received Good match rating`,
+          description: `Received Good match rating${vsOpponent ? ` vs ${opponentName}` : (fixtureStr ? ` in ${fixtureStr}` : "")}`,
           matchId: matchRefId,
           referenceId: eventRefId,
         });
@@ -716,7 +802,7 @@ const applyPlayerStats = async (payload: any) => {
           amount: coin,
           category: COIN_TRANSACTION_CATEGORY.MATCH_RATING,
           title: "Great Match Rating Bonus",
-          description: `Received Great match rating`,
+          description: `Received Great match rating${vsOpponent ? ` vs ${opponentName}` : (fixtureStr ? ` in ${fixtureStr}` : "")}`,
           matchId: matchRefId,
           referenceId: eventRefId,
         });
@@ -734,7 +820,7 @@ const applyPlayerStats = async (payload: any) => {
           amount: coin,
           category: COIN_TRANSACTION_CATEGORY.MATCH_RATING,
           title: "Elite Match Rating Bonus",
-          description: `Received Elite match rating`,
+          description: `Received Elite match rating${vsOpponent ? ` vs ${opponentName}` : (fixtureStr ? ` in ${fixtureStr}` : "")}`,
           matchId: matchRefId,
           referenceId: eventRefId,
         });
@@ -752,7 +838,7 @@ const applyPlayerStats = async (payload: any) => {
           amount: coin,
           category: COIN_TRANSACTION_CATEGORY.PLAYING_MATCH,
           title: "Match Appearance Bonus",
-          description: `Participated in match`,
+          description: `Participated in match${vsOpponent ? ` vs ${opponentName}` : (fixtureStr ? `: ${fixtureStr}` : "")}`,
           matchId: matchRefId,
           referenceId: eventRefId,
         });
@@ -824,6 +910,21 @@ const rollbackPlayerStats = async (payload: any) => {
           $set: { engCoine: newCoins, marketValue: newMV },
         });
       }
+    }
+  }
+
+  // ================= STANDALONE ASSIST =================
+  if (eventType === "assist") {
+    inc.assists = -1;
+    const assistCoin = pe?.assist?.coin ?? 0;
+    const assistMV = pe?.assist?.marketValue ? pe.assist.marketValue : (assistCoin * (pe?.conversionRate ?? 10));
+    const assistUser = await User.findById(player);
+    if (assistUser && (assistCoin > 0 || assistMV > 0)) {
+      const newCoins = Math.max(0, (assistUser.engCoine ?? 0) - assistCoin);
+      const newMV = Math.max(minFloorMV, (assistUser.marketValue ?? minFloorMV) - assistMV);
+      await User.findByIdAndUpdate(player, {
+        $set: { engCoine: newCoins, marketValue: newMV },
+      });
     }
   }
 

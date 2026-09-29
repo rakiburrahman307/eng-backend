@@ -2116,12 +2116,34 @@ const addMatchReviewToDB = async (
     }
     if (r.player && (coinDelta !== 0 || valueDelta !== 0)) {
       try {
+        let opponentDesc = "";
+        try {
+          const mDoc = await Match.findById(match._id)
+            .populate("homeTeam", "teamName shortName")
+            .populate("awayTeam", "teamName shortName")
+            .lean();
+          if (mDoc) {
+            const hId = (mDoc.homeTeam as any)?._id?.toString() || mDoc.homeTeam?.toString();
+            const aId = (mDoc.awayTeam as any)?._id?.toString() || mDoc.awayTeam?.toString();
+            const hName = (mDoc.homeTeam as any)?.teamName || (mDoc.homeTeam as any)?.shortName || "Home";
+            const aName = (mDoc.awayTeam as any)?.teamName || (mDoc.awayTeam as any)?.shortName || "Away";
+            const rTeamId = r.team ? r.team.toString() : "";
+            if (rTeamId && rTeamId === hId) {
+              opponentDesc = ` vs ${aName}`;
+            } else if (rTeamId && rTeamId === aId) {
+              opponentDesc = ` vs ${hName}`;
+            } else {
+              opponentDesc = ` in ${hName} vs ${aName}`;
+            }
+          }
+        } catch (_) {}
+
         await recordCoinTransaction({
           userId: r.player,
           amount: coinDelta,
           category: COIN_TRANSACTION_CATEGORY.MATCH_RATING,
           title: "Match Rating Reward",
-          description: `Manager match evaluation rating: ${r.rating}/10`,
+          description: `Manager match evaluation rating: ${r.rating}/10${opponentDesc}`,
           matchId: match._id,
           referenceId: match._id.toString(),
         });
