@@ -28,6 +28,7 @@ import {
   manualRevokeCleanSheet,
 } from "../../../helpers/matchCleanSheetHelper";
 import { recordCoinTransaction } from "../../../helpers/coinLedgerHelper";
+import { CoinTransaction } from "../coinTransaction/coinTransaction.model";
 import { COIN_TRANSACTION_CATEGORY } from "../coinTransaction/coinTransaction.interface";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -2424,6 +2425,35 @@ const modifyMatchScoreInDB = async (
     }
   }
 
+  // Resolve match teams for opponent name and fixture descriptions in coin transactions
+  let homeTeamName = "Home Team";
+  let awayTeamName = "Away Team";
+  let homeIdStr = match.homeTeam ? (match.homeTeam._id || match.homeTeam).toString() : "";
+  let awayIdStr = match.awayTeam ? (match.awayTeam._id || match.awayTeam).toString() : "";
+
+  try {
+    const populatedMatch = await Match.findById(id)
+      .populate("homeTeam", "teamName shortName")
+      .populate("awayTeam", "teamName shortName")
+      .lean();
+    if (populatedMatch) {
+      homeTeamName = (populatedMatch.homeTeam as any)?.teamName || (populatedMatch.homeTeam as any)?.shortName || "Home Team";
+      awayTeamName = (populatedMatch.awayTeam as any)?.teamName || (populatedMatch.awayTeam as any)?.shortName || "Away Team";
+      homeIdStr = (populatedMatch.homeTeam as any)?._id?.toString() || homeIdStr;
+      awayIdStr = (populatedMatch.awayTeam as any)?._id?.toString() || awayIdStr;
+    }
+  } catch (e) {
+    // fallback safely
+  }
+
+  const fixtureStr = `${homeTeamName} vs ${awayTeamName}`;
+  const getOpponentForTeam = (teamId?: any) => {
+    const tStr = teamId ? (teamId._id || teamId).toString() : "";
+    if (tStr === homeIdStr) return awayTeamName;
+    if (tStr === awayIdStr) return homeTeamName;
+    return "";
+  };
+
   // Handle assigned goal scorers for player stats, coins & notifications
   if (Array.isArray(payload.goalScorers)) {
     const pe = await PlayerEconomy.findOne();
@@ -2504,6 +2534,10 @@ const modifyMatchScoreInDB = async (
                 });
               }
             }
+            await CoinTransaction.deleteMany({
+              referenceId: existingMatchGoal._id.toString(),
+              user: oldPlayer,
+            });
           }
           if (newPlayer) {
             await PlayerStats.findOneAndUpdate(
@@ -2511,9 +2545,17 @@ const modifyMatchScoreInDB = async (
               { $inc: { goals: 1 }, $set: { team: incoming.team } },
               { upsert: true, new: true },
             );
-            if (goalCoin > 0 || goalMV > 0) {
-              await User.findByIdAndUpdate(newPlayer, {
-                $inc: { engCoine: goalCoin, marketValue: goalMV },
+            const oppName = getOpponentForTeam(incoming.team);
+            const vsOpponent = oppName ? ` vs ${oppName}` : "";
+            if (goalCoin > 0) {
+              await recordCoinTransaction({
+                userId: newPlayer,
+                amount: goalCoin,
+                category: COIN_TRANSACTION_CATEGORY.GOAL,
+                title: "Goal Reward",
+                description: `Scored a goal${vsOpponent} at minute ${targetMin}`,
+                matchId: match._id,
+                referenceId: existingMatchGoal._id.toString(),
               });
             }
           }
@@ -2553,6 +2595,10 @@ const modifyMatchScoreInDB = async (
                 });
               }
             }
+            await CoinTransaction.deleteMany({
+              referenceId: `${existingMatchGoal._id.toString()}_assist`,
+              user: oldAssist,
+            });
           }
           if (newAssist) {
             await PlayerStats.findOneAndUpdate(
@@ -2560,9 +2606,17 @@ const modifyMatchScoreInDB = async (
               { $inc: { assists: 1 }, $set: { team: incoming.team } },
               { upsert: true, new: true },
             );
-            if (assistCoin > 0 || assistMV > 0) {
-              await User.findByIdAndUpdate(newAssist, {
-                $inc: { engCoine: assistCoin, marketValue: assistMV },
+            const oppName = getOpponentForTeam(incoming.team);
+            const vsOpponent = oppName ? ` vs ${oppName}` : "";
+            if (assistCoin > 0) {
+              await recordCoinTransaction({
+                userId: newAssist,
+                amount: assistCoin,
+                category: COIN_TRANSACTION_CATEGORY.ASSIST,
+                title: "Assist Reward",
+                description: `Assisted a goal${vsOpponent} at minute ${targetMin}`,
+                matchId: match._id,
+                referenceId: `${existingMatchGoal._id.toString()}_assist`,
               });
             }
           }
@@ -2626,6 +2680,14 @@ const modifyMatchScoreInDB = async (
         }
       }
 
+      // Delete associated CoinTransactions for this removed goal
+      await CoinTransaction.deleteMany({
+        $or: [
+          { referenceId: removedGoal._id.toString() },
+          { referenceId: `${removedGoal._id.toString()}_assist` },
+        ],
+      });
+
       // Permanently remove the MatchResult document
       await MatchResult.findByIdAndDelete(removedGoal._id);
     }
@@ -2635,7 +2697,7 @@ const modifyMatchScoreInDB = async (
       if (scorer.player && scorer.team) {
         const min = Number(scorer.minute) || 1;
 
-        await MatchResult.create({
+        const newGoalDoc = await MatchResult.create({
           match: match._id,
           league: match.league || undefined,
           team: scorer.team,
@@ -2655,9 +2717,18 @@ const modifyMatchScoreInDB = async (
           { upsert: true, new: true },
         );
 
-        if (goalCoin > 0 || goalMV > 0) {
-          await User.findByIdAndUpdate(scorer.player, {
-            $inc: { engCoine: goalCoin, marketValue: goalMV },
+        const oppName = getOpponentForTeam(scorer.team);
+        const vsOpponent = oppName ? ` vs ${oppName}` : "";
+
+        if (goalCoin > 0) {
+          await recordCoinTransaction({
+            userId: scorer.player,
+            amount: goalCoin,
+            category: COIN_TRANSACTION_CATEGORY.GOAL,
+            title: "Goal Reward",
+            description: `Scored a goal${vsOpponent} at minute ${min}`,
+            matchId: match._id,
+            referenceId: newGoalDoc._id.toString(),
           });
         }
 
@@ -2667,9 +2738,16 @@ const modifyMatchScoreInDB = async (
             { $inc: { assists: 1 }, $set: { team: scorer.team } },
             { upsert: true, new: true },
           );
-          if (assistCoin > 0 || assistMV > 0) {
-            await User.findByIdAndUpdate(scorer.assistPlayer, {
-              $inc: { engCoine: assistCoin, marketValue: assistMV },
+
+          if (assistCoin > 0) {
+            await recordCoinTransaction({
+              userId: scorer.assistPlayer,
+              amount: assistCoin,
+              category: COIN_TRANSACTION_CATEGORY.ASSIST,
+              title: "Assist Reward",
+              description: `Assisted a goal${vsOpponent} at minute ${min}`,
+              matchId: match._id,
+              referenceId: `${newGoalDoc._id.toString()}_assist`,
             });
           }
         }
@@ -2743,6 +2821,11 @@ const modifyMatchScoreInDB = async (
             });
           }
         }
+        await CoinTransaction.deleteMany({
+          match: match._id,
+          user: oldMOTM,
+          category: COIN_TRANSACTION_CATEGORY.PLAYER_OF_THE_DAY,
+        });
       }
     }
 
@@ -2762,9 +2845,26 @@ const modifyMatchScoreInDB = async (
         { $inc: { playerOfTheDay: 1 } },
         { upsert: true, new: true },
       );
-      if (potdCoin > 0 || potdMV > 0) {
-        await User.findByIdAndUpdate(targetMOTM, {
-          $inc: { engCoine: potdCoin, marketValue: potdMV },
+
+      let motmOpponent = "";
+      try {
+        const motmUser = await User.findById(targetMOTM).select("selectTeam").lean();
+        if (motmUser?.selectTeam) {
+          motmOpponent = getOpponentForTeam(motmUser.selectTeam);
+        }
+      } catch (e) {}
+
+      const vsMotm = motmOpponent ? ` vs ${motmOpponent}` : (fixtureStr ? ` in ${fixtureStr}` : " in match");
+
+      if (potdCoin > 0) {
+        await recordCoinTransaction({
+          userId: targetMOTM,
+          amount: potdCoin,
+          category: COIN_TRANSACTION_CATEGORY.PLAYER_OF_THE_DAY,
+          title: "Player of the Day Bonus",
+          description: `Player of the Day reward${vsMotm}`,
+          matchId: match._id,
+          referenceId: `${match._id.toString()}_motm`,
         });
       }
     }
