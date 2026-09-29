@@ -1,6 +1,4 @@
 import os from 'os';
-import * as fs from 'fs';
-import * as path from 'path';
 const formatBytes = (bytes: number) => {
      return {
           bytes,
@@ -51,55 +49,7 @@ const serverHealth = async () => {
           timestamp: new Date().toISOString(),
      };
 };
-const getServerLogsFromDB = async (query: Record<string, unknown>) => {
-     const type = query.type === 'error' ? 'error' : 'success';
-     const limit = Number(query.limit) || 100;
-     const dirPath = path.join(process.cwd(), 'winston', type);
 
-     if (!fs.existsSync(dirPath)) {
-          return { logs: [] };
-     }
-
-     const files = fs
-          .readdirSync(dirPath)
-          .filter((file) => file.endsWith('.log'))
-          .map((file) => ({
-               name: file,
-               path: path.join(dirPath, file),
-               mtime: fs.statSync(path.join(dirPath, file)).mtime,
-          }))
-          .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-
-     if (files.length === 0) {
-          return { logs: [] };
-     }
-
-     let logs: string[] = [];
-     let chosenFile = files[0].name;
-
-     for (const file of files) {
-          try {
-               const content = fs.readFileSync(file.path, 'utf-8');
-               const lines = content.split('\n').filter(Boolean);
-               if (lines.length > 0) {
-                    logs = [...lines, ...logs];
-                    chosenFile = file.name;
-                    if (logs.length >= limit) {
-                         logs = logs.slice(-limit);
-                         break;
-                    }
-               }
-          } catch (err) {
-               // Ignore unreadable or locked log files
-          }
-     }
-
-     return {
-          fileName: chosenFile,
-          logs,
-     };
-};
 export const ServerHealthServices = {
      serverHealth,
-     getServerLogsFromDB,
 };

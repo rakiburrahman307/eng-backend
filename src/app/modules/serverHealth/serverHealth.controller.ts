@@ -12,17 +12,6 @@ const serverHealth = catchAsync(async (req, res) => {
           data: result,
      });
 });
-const getServerLogs = catchAsync(async (req, res) => {
-     const query = req.query;
-     const result = await ServerHealthServices.getServerLogsFromDB(query);
-     sendResponse(res, {
-          statusCode: StatusCodes.OK,
-          success: true,
-          message: 'Server Logs Retrieved Successfully',
-          data: result,
-     });
-});
 export const ServerHealthControllers = {
      serverHealth,
-     getServerLogs,
 };
