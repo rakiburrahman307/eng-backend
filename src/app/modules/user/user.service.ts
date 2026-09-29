@@ -15,6 +15,8 @@ import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
 import { getPlayerStatsSummary } from "../../../helpers/playerStatsHelper";
 import { isUserPremiumPlayer } from "../../../helpers/packageHelper";
+import { recordCoinTransaction } from "../../../helpers/coinLedgerHelper";
+import { COIN_TRANSACTION_CATEGORY } from "../coinTransaction/coinTransaction.interface";
 
 const createAdminToDB = async (payload: any): Promise<IUser> => {
   // check admin is exist or not;
@@ -560,20 +562,35 @@ const updateUserCoinOrMarketValue = async (
       );
     }
 
+    let targetCoin = payload.engCoine;
     if (isPlayer) {
       if (isPro) {
         // Professional player floor: dynamic from PlayerEconomy config
-        updateData.engCoine = Math.max(minFloorCoin, payload.engCoine);
+        targetCoin = Math.max(minFloorCoin, payload.engCoine);
       } else {
         // Non-professional players have no coin access, force 0
-        updateData.engCoine = 0;
+        targetCoin = 0;
       }
-    } else {
-      updateData.engCoine = payload.engCoine;
+    }
+
+    const currentCoin = Number(user.engCoine) || 0;
+    const delta = targetCoin - currentCoin;
+    if (delta !== 0) {
+      await recordCoinTransaction({
+        userId,
+        amount: delta,
+        category: COIN_TRANSACTION_CATEGORY.ADMIN_ADJUSTMENT,
+        title: "Admin Coin Adjustment",
+        description:
+          delta > 0
+            ? `Admin credited ${delta.toLocaleString()} ENG Coins`
+            : `Admin deducted ${Math.abs(delta).toLocaleString()} ENG Coins`,
+        syncMarketValue: payload.marketValue === undefined,
+      });
     }
 
     if (payload.marketValue === undefined) {
-      updateData.marketValue = updateData.engCoine * conversionRate;
+      updateData.marketValue = targetCoin * conversionRate;
     }
   }
 
@@ -596,18 +613,15 @@ const updateUserCoinOrMarketValue = async (
     }
   }
 
-  if (Object.keys(updateData).length === 0) {
-    throw new ApiError(
-      StatusCodes.BAD_REQUEST,
-      "At least one field (engCoine or marketValue) must be provided",
+  if (Object.keys(updateData).length > 0) {
+    return await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true },
     );
   }
 
-  return await User.findByIdAndUpdate(
-    userId,
-    { $set: updateData },
-    { new: true, runValidators: true },
-  );
+  return await User.findById(userId);
 };
 
 // APPROVE OR REJECT USER (Admin only)

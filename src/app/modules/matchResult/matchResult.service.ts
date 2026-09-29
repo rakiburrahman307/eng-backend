@@ -627,7 +627,7 @@ const applyPlayerStats = async (payload: any) => {
     inc.yellowCards = 1;
 
     if (isPro) {
-      const yellowCardCoin = pe?.yellowCard?.coin ? pe.yellowCard.coin : -500;
+      const yellowCardCoin = pe?.yellowCard?.coin ? -Math.abs(pe.yellowCard.coin) : -500;
       if (yellowCardCoin !== 0) {
         await recordCoinTransaction({
           userId: player,
@@ -647,7 +647,7 @@ const applyPlayerStats = async (payload: any) => {
     inc.redCards = 1;
 
     if (isPro) {
-      const redCardCoin = pe?.redCard?.coin ? pe.redCard.coin : -5000;
+      const redCardCoin = pe?.redCard?.coin ? -Math.abs(pe.redCard.coin) : -5000;
       if (redCardCoin !== 0) {
         await recordCoinTransaction({
           userId: player,
@@ -705,7 +705,7 @@ const applyPlayerStats = async (payload: any) => {
     inc.fouls = 1;
 
     if (isPro) {
-      const foulCoin = pe?.foul?.coin ? pe.foul.coin : -100;
+      const foulCoin = pe?.foul?.coin ? -Math.abs(pe.foul.coin) : -100;
       if (foulCoin !== 0) {
         await recordCoinTransaction({
           userId: player,
@@ -723,7 +723,7 @@ const applyPlayerStats = async (payload: any) => {
   // ================= SIN BIN =================
   if (eventType === "sin_bin") {
     if (isPro) {
-      const sinBinCoin = pe?.sinBin?.coin ? pe.sinBin.coin : -2500;
+      const sinBinCoin = pe?.sinBin?.coin ? -Math.abs(pe.sinBin.coin) : -2500;
       if (sinBinCoin !== 0) {
         await recordCoinTransaction({
           userId: player,
@@ -741,7 +741,7 @@ const applyPlayerStats = async (payload: any) => {
   // ================= DISRESPECT TO REFEREE =================
   if (eventType === "disrespect_to_referee") {
     if (isPro) {
-      const disrespectCoin = pe?.disrespectToReferee?.coin ? pe.disrespectToReferee.coin : -7500;
+      const disrespectCoin = pe?.disrespectToReferee?.coin ? -Math.abs(pe.disrespectToReferee.coin) : -7500;
       if (disrespectCoin !== 0) {
         await recordCoinTransaction({
           userId: player,
@@ -759,7 +759,7 @@ const applyPlayerStats = async (payload: any) => {
   // ================= GROSS MISCONDUCT =================
   if (eventType === "gross_misconduct") {
     if (isPro) {
-      const misconductCoin = pe?.grossMisconduct?.coin ? pe.grossMisconduct.coin : -10000;
+      const misconductCoin = pe?.grossMisconduct?.coin ? -Math.abs(pe.grossMisconduct.coin) : -10000;
       if (misconductCoin !== 0) {
         await recordCoinTransaction({
           userId: player,

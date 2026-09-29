@@ -20,6 +20,30 @@ export interface IRecordCoinTransactionParams {
   syncMarketValue?: boolean;
 }
 
+const PENALTY_CATEGORIES = new Set<COIN_TRANSACTION_CATEGORY>([
+  COIN_TRANSACTION_CATEGORY.YELLOW_CARD_PENALTY,
+  COIN_TRANSACTION_CATEGORY.RED_CARD_PENALTY,
+  COIN_TRANSACTION_CATEGORY.FOUL_PENALTY,
+  COIN_TRANSACTION_CATEGORY.SIN_BIN_PENALTY,
+  COIN_TRANSACTION_CATEGORY.DISRESPECT_TO_REFEREE,
+  COIN_TRANSACTION_CATEGORY.GROSS_MISCONDUCT,
+  COIN_TRANSACTION_CATEGORY.PRODUCT_PURCHASE,
+]);
+
+const REWARD_CATEGORIES = new Set<COIN_TRANSACTION_CATEGORY>([
+  COIN_TRANSACTION_CATEGORY.GOAL,
+  COIN_TRANSACTION_CATEGORY.ASSIST,
+  COIN_TRANSACTION_CATEGORY.CLEAN_SHEET,
+  COIN_TRANSACTION_CATEGORY.PLAYER_OF_THE_DAY,
+  COIN_TRANSACTION_CATEGORY.MATCH_RATING,
+  COIN_TRANSACTION_CATEGORY.ATTEND_MATCH,
+  COIN_TRANSACTION_CATEGORY.PLAYING_MATCH,
+  COIN_TRANSACTION_CATEGORY.WIN_MATCH,
+  COIN_TRANSACTION_CATEGORY.DRAW_MATCH,
+  COIN_TRANSACTION_CATEGORY.SUBSCRIPTION_BONUS,
+  COIN_TRANSACTION_CATEGORY.TOURNAMENT_PRIZE,
+]);
+
 export const recordCoinTransaction = async (
   params: IRecordCoinTransactionParams
 ): Promise<{ user: any; transaction: ICoinTransaction | null }> => {
@@ -46,15 +70,24 @@ export const recordCoinTransaction = async (
     throw new Error(`User not found for ID: ${userId}`);
   }
 
+  let signedAmount = Number(amount);
+  if (PENALTY_CATEGORIES.has(category)) {
+    // Penalties must strictly be deductions (negative amount)
+    signedAmount = -Math.abs(signedAmount);
+  } else if (REWARD_CATEGORIES.has(category)) {
+    // Rewards must strictly be credits (positive amount)
+    signedAmount = Math.abs(signedAmount);
+  }
+
   const balanceBefore = Number(user.engCoine) || 0;
-  const balanceAfter = Math.max(0, balanceBefore + Number(amount));
+  const balanceAfter = Math.max(0, balanceBefore + signedAmount);
 
   user.engCoine = balanceAfter;
 
   if (syncMarketValue) {
     const pe = await PlayerEconomy.findOne().session(session || null);
-    const rate = Number(pe?.conversionRate) || 100;
-    const floorMV = Number(pe?.startingMarketValue) || 10000000;
+    const rate = Number(pe?.conversionRate) || 10;
+    const floorMV = Number(pe?.startingMarketValue) || 100000;
     user.marketValue = Math.max(floorMV, balanceAfter * rate);
   }
 
@@ -62,8 +95,8 @@ export const recordCoinTransaction = async (
 
   const transactionData: Partial<ICoinTransaction> = {
     user: user._id,
-    type: amount >= 0 ? "CREDIT" : "DEBIT",
-    amount: Math.abs(Number(amount)),
+    type: signedAmount >= 0 ? "CREDIT" : "DEBIT",
+    amount: Math.abs(signedAmount),
     balanceBefore,
     balanceAfter,
     category,
@@ -80,3 +113,4 @@ export const recordCoinTransaction = async (
 
   return { user, transaction };
 };
+

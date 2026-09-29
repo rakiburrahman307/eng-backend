@@ -7,6 +7,8 @@ import { Tournament } from "./tournament.model";
 import { User } from "../user/user.model";
 import { Subscription } from "../subscription/subscription.model";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
+import { recordCoinTransaction } from "../../../helpers/coinLedgerHelper";
+import { COIN_TRANSACTION_CATEGORY } from "../coinTransaction/coinTransaction.interface";
 
 const createTournamentToDB = async (
   payload: Partial<ITournament>,
@@ -337,15 +339,19 @@ const redeemTournamentRewardInDB = async (
     );
   }
 
-  const pe = await PlayerEconomy.findOne();
-  const rate = pe?.conversionRate ?? 10;
-  const currentCoins = Number(user.engCoine) || 0;
-  const newCoins = currentCoins + prizeCoins;
-  const addedMV = prizeCoins * rate;
+  const { user: updatedUser } = await recordCoinTransaction({
+    userId: playerObjectId,
+    amount: prizeCoins,
+    category: COIN_TRANSACTION_CATEGORY.TOURNAMENT_PRIZE,
+    title: "Tournament Prize Reward",
+    description: `Claimed prize for ${matchedPosition.positionName || `Position ${matchedPosition.position}`} in tournament "${tournament.title || "Tournament"}"`,
+    referenceId: tournament._id.toString(),
+  });
 
-  user.engCoine = newCoins;
-  user.marketValue = (user.marketValue || 0) + addedMV;
-  await user.save();
+  if (updatedUser) {
+    user.engCoine = updatedUser.engCoine;
+    user.marketValue = updatedUser.marketValue;
+  }
 
   if (!tournament.redeemedPlayers) {
     tournament.redeemedPlayers = [];
