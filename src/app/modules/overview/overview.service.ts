@@ -3,6 +3,7 @@ import { Team } from "../team/team.model";
 import { Match } from "../match/match.model";
 import { Subscription } from "../subscription/subscription.model";
 import { USER_ROLES } from "../../../enums/user";
+import { ServerHealthServices } from "../serverHealth/serverHealth.service";
 
 const getOverviewFromDB = async () => {
   const activeSubUserIds = await Subscription.find({
@@ -50,6 +51,7 @@ const getOverviewFromDB = async () => {
     totalMatches,
     pendingMatches,
     activeSubscriptions,
+    serverHealth,
   ] = await Promise.all([
     User.countDocuments({
       ...playerEligibility,
@@ -99,6 +101,8 @@ const getOverviewFromDB = async () => {
     Subscription.countDocuments({
       status: "active",
     }),
+
+    ServerHealthServices.serverHealth(),
   ]);
 
   return {
@@ -118,6 +122,7 @@ const getOverviewFromDB = async () => {
       totalMatches,
       pendingMatches,
     },
+    serverHealth,
   };
 };
 

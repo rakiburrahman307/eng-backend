@@ -44,6 +44,7 @@ import CoinTransactionRoute from "../modules/coinTransaction/coinTransaction.rou
 import StatsAuditRoute from "../modules/statsAudit/statsAudit.route";
 import { TeamSubscriptionRoutes } from "../modules/teamSubscription/teamSubscription.route";
 import { AdminRoutes } from "../modules/admin/admin.route";
+import { ServerHealthRoutes } from "../modules/serverHealth/serverHealth.route";
 
 const router = express.Router();
 
@@ -94,6 +95,7 @@ const apiRoutes = [
     { path: "/stats-audit", route: StatsAuditRoute },
     { path: "/team-subscription", route: TeamSubscriptionRoutes },
     { path: "/admin", route: AdminRoutes },
+    { path: "/server-health", route: ServerHealthRoutes },
 ]
 
 apiRoutes.forEach(route => router.use(route.path, route.route));
