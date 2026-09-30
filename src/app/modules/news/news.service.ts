@@ -189,6 +189,22 @@ const rearrangeNewsInDB = async (
   return { modifiedCount: result.modifiedCount };
 };
 
+const getNewsAnalyticsFromDB = async () => {
+  const [total, published, draft, scheduled] = await Promise.all([
+    News.countDocuments(),
+    News.countDocuments({ status: 'publish' }),
+    News.countDocuments({ status: 'draft' }),
+    News.countDocuments({ status: 'schedule' }),
+  ]);
+
+  return {
+    total,
+    published,
+    draft,
+    scheduled,
+  };
+};
+
 export const NewsService = {
   createNewsToDB,
   getAllNewsFromDB,
@@ -199,4 +215,5 @@ export const NewsService = {
   toggleNewsStatusToDB,
   getPublicNewsFromDB,
   rearrangeNewsInDB,
+  getNewsAnalyticsFromDB,
 };

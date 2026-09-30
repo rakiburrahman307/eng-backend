@@ -206,6 +206,18 @@ const rearrangeNews = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// GET NEWS ANALYTICS
+const getNewsAnalytics = catchAsync(async (req: Request, res: Response) => {
+  const result = await NewsService.getNewsAnalyticsFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'News analytics retrieved successfully',
+    data: result,
+  });
+});
+
 export const NewsController = {
   createNews,
   getAllNews,
@@ -216,4 +228,5 @@ export const NewsController = {
   toggleNewsStatus,
   getPublicNews,
   rearrangeNews,
+  getNewsAnalytics,
 };
