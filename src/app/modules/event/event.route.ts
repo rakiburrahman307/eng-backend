@@ -25,6 +25,9 @@ router.patch(
   EventController.rearrangeEvents
 );
 
+// EVENT ANALYTICS
+router.get('/analytics', EventController.getEventAnalytics);
+
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')

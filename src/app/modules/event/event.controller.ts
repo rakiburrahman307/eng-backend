@@ -184,6 +184,18 @@ const rearrangeEvents = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// EVENT ANALYTICS
+const getEventAnalytics = catchAsync(async (req: Request, res: Response) => {
+  const result = await EventService.getEventAnalyticsFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Event analytics retrieved successfully',
+    data: result,
+  });
+});
+
 export const EventController = {
   createEvent,
   getAllEvents,
@@ -192,4 +204,5 @@ export const EventController = {
   deleteEvent,
   getPublicEvents,
   rearrangeEvents,
+  getEventAnalytics,
 };

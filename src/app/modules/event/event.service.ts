@@ -131,6 +131,23 @@ const rearrangeEventsInDB = async (
   return { modifiedCount: result.modifiedCount };
 };
 
+const getEventAnalyticsFromDB = async () => {
+  const now = new Date();
+  const [total, published, upcoming, drafts] = await Promise.all([
+    Event.countDocuments(),
+    Event.countDocuments({ status: 'publish' }),
+    Event.countDocuments({ eventDate: { $gte: now } }),
+    Event.countDocuments({ status: 'draft' }),
+  ]);
+
+  return {
+    total,
+    published,
+    upcoming,
+    drafts,
+  };
+};
+
 export const EventService = {
   createEventToDB,
   getAllEventsFromDB,
@@ -139,4 +156,5 @@ export const EventService = {
   deleteEventFromDB,
   getPublicEventsFromDB,
   rearrangeEventsInDB,
+  getEventAnalyticsFromDB,
 };

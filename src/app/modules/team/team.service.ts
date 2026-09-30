@@ -7,6 +7,7 @@ import { User } from "../user/user.model";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { USER_ROLES } from "../../../enums/user";
 import { Subscription } from "../subscription/subscription.model";
+import { League } from "../league/league.model";
 
 // CREATE TEAM
 const createTeamToDB = async (payload: any) => {
@@ -369,6 +370,32 @@ const updateTeamCoinOrMarketValue = async (
   );
 };
 
+const getTeamAnalyticsFromDB = async () => {
+  const [totalTeams, totalLeagues, distinctManagers, economyAgg] =
+    await Promise.all([
+      Team.countDocuments(),
+      League.countDocuments(),
+      ManagerTeam.distinct("manager"),
+      Team.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalCoins: { $sum: "$coin" },
+            totalMarketValue: { $sum: "$marketValue" },
+          },
+        },
+      ]),
+    ]);
+
+  return {
+    totalTeams,
+    totalLeagues,
+    totalManagers: distinctManagers.length,
+    totalCoins: economyAgg[0]?.totalCoins || 0,
+    totalMarketValue: economyAgg[0]?.totalMarketValue || 0,
+  };
+};
+
 export const TeamService = {
   createTeamToDB,
   getAllTeamsFromDB,
@@ -376,4 +403,5 @@ export const TeamService = {
   updateTeamToDB,
   deleteTeamFromDB,
   updateTeamCoinOrMarketValue,
+  getTeamAnalyticsFromDB,
 };

@@ -16,6 +16,9 @@ router
   )
   .get(TeamController.getAllTeams);
 
+// TEAM ANALYTICS
+router.get('/analytics', TeamController.getTeamAnalytics);
+
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')

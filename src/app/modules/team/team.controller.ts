@@ -118,6 +118,18 @@ const updateTeamCoinOrMarketValue = catchAsync(async (req: Request, res: Respons
   });
 });
 
+// GET TEAM ANALYTICS
+const getTeamAnalytics = catchAsync(async (req: Request, res: Response) => {
+  const result = await TeamService.getTeamAnalyticsFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Team analytics retrieved successfully',
+    data: result,
+  });
+});
+
 export const TeamController = {
   createTeam,
   getAllTeams,
@@ -125,4 +137,5 @@ export const TeamController = {
   updateTeam,
   deleteTeam,
   updateTeamCoinOrMarketValue,
+  getTeamAnalytics,
 };

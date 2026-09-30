@@ -29,6 +29,9 @@ router.route('/rearrange').patch(
   VideoController.rearrangeVideos
 );
 
+// VIDEO ANALYTICS
+router.route('/analytics').get(VideoController.getVideoAnalytics);
+
 // SINGLE + UPDATE + DELETE
 router
   .route('/:id')

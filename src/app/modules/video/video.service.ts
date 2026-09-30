@@ -308,6 +308,22 @@ const rearrangeVideosInDB = async (payload: {
   return result;
 };
 
+const getVideoAnalyticsFromDB = async () => {
+  const [total, published, highlights, drafts] = await Promise.all([
+    Video.countDocuments(),
+    Video.countDocuments({ status: 'publish' }),
+    Video.countDocuments({ isHighlight: true }),
+    Video.countDocuments({ status: 'draft' }),
+  ]);
+
+  return {
+    total,
+    published,
+    highlights,
+    drafts,
+  };
+};
+
 export const VideoService = {
   createVideoToDB,
   getAllVideosFromDB,
@@ -319,4 +335,5 @@ export const VideoService = {
   generatePresignedUrl,
   retryTranscodeToDB,
   rearrangeVideosInDB,
+  getVideoAnalyticsFromDB,
 };

@@ -230,6 +230,17 @@ const rearrangeVideos = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getVideoAnalytics = catchAsync(async (req: Request, res: Response) => {
+  const result = await VideoService.getVideoAnalyticsFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Video analytics retrieved successfully',
+    data: result,
+  });
+});
+
 export const VideoController = {
   createVideo,
   getAllVideos,
@@ -241,4 +252,5 @@ export const VideoController = {
   getPresignedUrl,
   retryTranscode,
   rearrangeVideos,
+  getVideoAnalytics,
 };
