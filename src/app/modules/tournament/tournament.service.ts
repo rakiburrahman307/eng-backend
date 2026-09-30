@@ -404,6 +404,22 @@ const redeemTournamentRewardInDB = async (
   };
 };
 
+const getTournamentAnalyticsFromDB = async () => {
+  const [total, active, upcoming, completed] = await Promise.all([
+    Tournament.countDocuments(),
+    Tournament.countDocuments({ status: { $in: ['active', 'ongoing'] } }),
+    Tournament.countDocuments({ status: 'upcoming' }),
+    Tournament.countDocuments({ status: { $in: ['completed', 'finished'] } }),
+  ]);
+
+  return {
+    total,
+    active,
+    upcoming,
+    completed,
+  };
+};
+
 export const TournamentService = {
   createTournamentToDB,
   getAllTournamentsFromDB,
@@ -412,4 +428,5 @@ export const TournamentService = {
   deleteTournamentFromDB,
   getTournamentQrCodeFromDB,
   redeemTournamentRewardInDB,
+  getTournamentAnalyticsFromDB,
 };

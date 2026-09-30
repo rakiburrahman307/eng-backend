@@ -20,6 +20,8 @@ router
   )
   .get(TournamentController.getAllTournaments);
 
+router.get('/analytics', TournamentController.getTournamentAnalytics);
+
 // GET QR CODE PAYLOAD FOR TOURNAMENT (ADMIN / MANAGER)
 router.get(
   '/:id/qr-code',

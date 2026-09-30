@@ -89,6 +89,17 @@ const redeemTournamentReward = catchAsync(async (req: Request, res: Response) =>
   });
 });
 
+const getTournamentAnalytics = catchAsync(async (req: Request, res: Response) => {
+  const result = await TournamentService.getTournamentAnalyticsFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Tournament analytics retrieved successfully',
+    data: result,
+  });
+});
+
 export const TournamentController = {
   createTournament,
   getAllTournaments,
@@ -97,4 +108,5 @@ export const TournamentController = {
   deleteTournament,
   getTournamentQrCode,
   redeemTournamentReward,
+  getTournamentAnalytics,
 };
