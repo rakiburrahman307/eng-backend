@@ -258,6 +258,11 @@ const formatMatchVenue = async (matchItem: any) => {
     timerStatus,
     timerStartedAt,
     elapsedSeconds: liveSeconds,
+    ageGroup:
+      matchObj.ageGroup ||
+      matchObj.homeTeam?.ageGroup ||
+      matchObj.awayTeam?.ageGroup ||
+      null,
   };
 };
 
@@ -369,6 +374,12 @@ const createMatchToDB = async (payload: any) => {
     // create
     if (!matchData.scheduledAt && matchDate) {
       matchData.scheduledAt = new Date(matchDate);
+    }
+    if (!matchData.ageGroup && homeTeam) {
+      const homeTeamDoc = await Team.findById(homeTeam).select("ageGroup");
+      if (homeTeamDoc?.ageGroup) {
+        matchData.ageGroup = homeTeamDoc.ageGroup;
+      }
     }
     if (matchData.venueName && mongoose.Types.ObjectId.isValid(matchData.venueName)) {
       matchData.venueCategory = matchData.venueName;
@@ -865,15 +876,60 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
     andConditions.push({ ageGroupCategory });
   }
 
-  // Age Group Filter
+  // Age Group Filter (matches match.ageGroup, homeTeam, awayTeam, and league)
   if (
     ageGroup &&
     ageGroup !== "ALL" &&
     ageGroup !== "null" &&
     ageGroup !== "undefined"
   ) {
+    const trimmedAge = (ageGroup as string).trim();
+    const exactRegex = new RegExp(`^${trimmedAge}$`, "i");
+    const wordRegex = new RegExp(`\\b${trimmedAge}\\b`, "i");
+
+    const numMatch = trimmedAge.match(/\d+/);
+    const numPart = numMatch ? numMatch[0] : "";
+    const underRegex = numPart
+      ? new RegExp(`(u|under\\s*)${numPart}\\b`, "i")
+      : wordRegex;
+
+    const [matchingTeams, matchingLeagues] = await Promise.all([
+      Team.find({
+        $or: [
+          { ageGroup: exactRegex },
+          { ageGroup: wordRegex },
+          { ageGroup: underRegex },
+          { teamName: wordRegex },
+          { teamName: underRegex },
+        ],
+      }).select("_id"),
+      League.find({
+        $or: [
+          { leagueName: exactRegex },
+          { leagueName: wordRegex },
+          { leagueName: underRegex },
+        ],
+      }).select("_id"),
+    ]);
+
+    const matchingTeamIds = matchingTeams.map((t) => t._id);
+    const matchingLeagueIds = matchingLeagues.map((l) => l._id);
+
     andConditions.push({
-      ageGroup: { $regex: new RegExp(`^${ageGroup.trim()}$`, "i") },
+      $or: [
+        { ageGroup: exactRegex },
+        { ageGroup: wordRegex },
+        { ageGroup: underRegex },
+        ...(matchingTeamIds.length > 0
+          ? [
+              { homeTeam: { $in: matchingTeamIds } },
+              { awayTeam: { $in: matchingTeamIds } },
+            ]
+          : []),
+        ...(matchingLeagueIds.length > 0
+          ? [{ league: { $in: matchingLeagueIds } }]
+          : []),
+      ],
     });
   }
 
