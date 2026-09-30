@@ -1021,23 +1021,51 @@ const getMatchesByRefereeFromDB = async (
   query: Record<string, any>,
 ) => {
   const pageNumber = Math.max(1, parseInt(query.page as string, 10) || 1);
+  const limitNumber = Math.max(1, parseInt(query.limit as string, 10) || 10);
+  const skip = (pageNumber - 1) * limitNumber;
 
-  // Standard limit commented out for now to allow unlimited data (can be re-enabled later for dynamic pagination):
-  // const limitNumber = Math.max(1, parseInt(query.limit as string, 10) || 10);
-  // const skip = (pageNumber - 1) * limitNumber;
+  const refereeFilter = mongoose.Types.ObjectId.isValid(refereeId)
+    ? { $in: [refereeId, new mongoose.Types.ObjectId(refereeId)] }
+    : refereeId;
 
-  // Temporarily increased limit to return all/unlimited data:
-  const limitNumber = Math.max(1, parseInt(query.limit as string, 10) || 100000);
-  const skip = 0;
+  const filter: Record<string, any> = { referee: refereeFilter };
 
-  const filter = { referee: refereeId };
+  // Filter by status if provided (e.g. upcoming, live, finished, or comma-separated list)
+  if (query.status) {
+    if (typeof query.status === "string" && query.status.includes(",")) {
+      filter.status = {
+        $in: query.status.split(",").map((s: string) => s.trim().toLowerCase()),
+      };
+    } else {
+      filter.status = (query.status as string).trim().toLowerCase();
+    }
+  }
+
+  // Filter by league if provided
+  if (query.league) {
+    filter.league = query.league;
+  }
+
+  // Filter by matchDate or date if provided
+  if (query.date || query.matchDate) {
+    const targetDate = query.date || query.matchDate;
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+    filter.matchDate = { $gte: startOfDay, $lte: endOfDay };
+  }
+
   const total = await Match.countDocuments(filter);
   const totalPage = Math.ceil(total / limitNumber) || 1;
 
+  const sortOption =
+    query.sort ||
+    (query.status === "finished" ? "-matchDate" : "matchDate");
+
   const matches = await Match.find(filter)
-    .sort(query.sort || "matchDate")
-    // .skip(skip)
-    // .limit(limitNumber)
+    .sort(sortOption)
+    .skip(skip)
     .limit(limitNumber)
     .populate("league")
     .populate("homeTeam")

@@ -191,38 +191,9 @@ const adminAdjustTeamCoinsInDB = async (
   return result;
 };
 
-const getMyTeamCoinHistoryFromDB = async (
-  managerUserId: string,
-  query: Record<string, any>
-) => {
-  // Find teams assigned to this manager
-  const managerLinks = await ManagerTeam.find({ manager: managerUserId }).select("team").lean();
-  let managedTeamIds = managerLinks.map((ml: any) => ml.team?.toString()).filter(Boolean);
 
-  if (managedTeamIds.length === 0) {
-    const createdTeams = await Team.find({ createdBy: managerUserId }).select("_id").lean();
-    managedTeamIds = createdTeams.map((t: any) => t._id.toString());
-  }
-
-  if (managedTeamIds.length === 0) {
-    throw new ApiError(StatusCodes.NOT_FOUND, "No teams assigned or found for this manager");
-  }
-
-  const requestedTeamId = query.teamId;
-  let targetTeamId = managedTeamIds[0];
-
-  if (requestedTeamId) {
-    if (!managedTeamIds.includes(requestedTeamId)) {
-      throw new ApiError(StatusCodes.FORBIDDEN, "You do not have permission to view this team's coin history");
-    }
-    targetTeamId = requestedTeamId;
-  }
-
-  return await getTeamCoinHistoryFromDB(targetTeamId, query);
-};
 
 export const TeamCoinTransactionService = {
   getTeamCoinHistoryFromDB,
   adminAdjustTeamCoinsInDB,
-  getMyTeamCoinHistoryFromDB,
 };
