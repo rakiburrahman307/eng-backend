@@ -20,9 +20,22 @@ const createLeagueToDB = async (
 
 // GET ALL
 const getAllLeaguesFromDB = async (query: Record<string, any>) => {
+  const { status, ...restQuery } = query;
+  const now = new Date();
+
+  const filterConditions: Record<string, any> = {};
+  if (status === 'running') {
+    filterConditions.startDate = { $lte: now };
+    filterConditions.endDate = { $gte: now };
+  } else if (status === 'upcoming') {
+    filterConditions.startDate = { $gt: now };
+  } else if (status === 'finished') {
+    filterConditions.endDate = { $lt: now };
+  }
+
   const leagueQuery = new QueryBuilder(
-    League.find(),
-    query
+    League.find(filterConditions),
+    restQuery
   )
     .search(['leagueName', 'season'])
     .filter()
@@ -110,6 +123,31 @@ const getUniqueSeasonsFromDB = async () => {
   return await League.distinct('season');
 };
 
+const getLeagueAnalyticsFromDB = async () => {
+  const now = new Date();
+
+  const [total, running, upcoming, finished] = await Promise.all([
+    League.countDocuments(),
+    League.countDocuments({
+      startDate: { $lte: now },
+      endDate: { $gte: now },
+    }),
+    League.countDocuments({
+      startDate: { $gt: now },
+    }),
+    League.countDocuments({
+      endDate: { $lt: now },
+    }),
+  ]);
+
+  return {
+    total,
+    running,
+    upcoming,
+    finished,
+  };
+};
+
 export const LeagueService = {
   createLeagueToDB,
   getAllLeaguesFromDB,
@@ -117,4 +155,5 @@ export const LeagueService = {
   updateLeagueToDB,
   deleteLeagueFromDB,
   getUniqueSeasonsFromDB,
+  getLeagueAnalyticsFromDB,
 };

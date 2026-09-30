@@ -14,6 +14,7 @@ router
   )
   .get( LeagueController.getAllLeagues);
 
+router.get('/analytics', LeagueController.getLeagueAnalytics);
 router.get('/seasons', LeagueController.getUniqueSeasons);
 
 // SINGLE + UPDATE + DELETE

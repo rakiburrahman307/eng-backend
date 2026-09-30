@@ -90,6 +90,17 @@ const getUniqueSeasons = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getLeagueAnalytics = catchAsync(async (req: Request, res: Response) => {
+  const result = await LeagueService.getLeagueAnalyticsFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'League analytics retrieved successfully',
+    data: result,
+  });
+});
+
 export const LeagueController = {
   createLeague,
   getAllLeagues,
@@ -97,4 +108,5 @@ export const LeagueController = {
   updateLeague,
   deleteLeague,
   getUniqueSeasons,
+  getLeagueAnalytics,
 };
