@@ -31,7 +31,7 @@ const getAllRewardProductsFromDB = async (query: Record<string, any>) => {
     .paginate()
     .fields();
 
-  const [result, meta, summaryAgg] = await Promise.all([
+  const [result, meta] = await Promise.all([
     rewardQuery.modelQuery.populate({
       path: 'redeemedUsers.user',
       select:
@@ -42,36 +42,39 @@ const getAllRewardProductsFromDB = async (query: Record<string, any>) => {
       },
     }),
     rewardQuery.getPaginationInfo(),
-    RewardProduct.aggregate([
-      {
-        $group: {
-          _id: null,
-          totalItems: { $sum: 1 },
-          merchandiseCount: {
-            $sum: { $cond: [{ $eq: ["$productType", "nonCoffee"] }, 1, 0] },
-          },
-          coffeeCount: {
-            $sum: { $cond: [{ $eq: ["$productType", "Coffee"] }, 1, 0] },
-          },
-          totalClaims: {
-            $sum: { $size: { $ifNull: ["$redeemedUsers", []] } },
-          },
-        },
-      },
-    ]),
   ]);
-
-  const summary = summaryAgg?.[0] || {
-    totalItems: meta.total || 0,
-    merchandiseCount: 0,
-    coffeeCount: 0,
-    totalClaims: 0,
-  };
 
   return {
     meta,
-    summary,
     result,
+  };
+};
+
+// GET OVERVIEW / ANALYTICS (DEDICATED SEPARATE API)
+const getRewardProductsOverviewFromDB = async () => {
+  const summaryAgg = await RewardProduct.aggregate([
+    {
+      $group: {
+        _id: null,
+        totalItems: { $sum: 1 },
+        merchandiseCount: {
+          $sum: { $cond: [{ $eq: ["$productType", "nonCoffee"] }, 1, 0] },
+        },
+        coffeeCount: {
+          $sum: { $cond: [{ $eq: ["$productType", "Coffee"] }, 1, 0] },
+        },
+        totalClaims: {
+          $sum: { $size: { $ifNull: ["$redeemedUsers", []] } },
+        },
+      },
+    },
+  ]);
+
+  return summaryAgg?.[0] || {
+    totalItems: 0,
+    merchandiseCount: 0,
+    coffeeCount: 0,
+    totalClaims: 0,
   };
 };
 
@@ -387,6 +390,7 @@ const redeemCoffeeRewardInDB = async (
 export const RewardProductService = {
   createRewardProductToDB,
   getAllRewardProductsFromDB,
+  getRewardProductsOverviewFromDB,
   getSingleRewardProductFromDB,
   updateRewardProductToDB,
   deleteRewardProductToDB,

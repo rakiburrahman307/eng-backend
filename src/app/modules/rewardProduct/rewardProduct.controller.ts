@@ -58,13 +58,25 @@ const getAllRewardProducts = catchAsync(
       statusCode: StatusCodes.OK,
       message: 'Reward products retrieved successfully',
       pagination: result.meta,
-      summary: result.summary,
       data: result.result,
     });
   }
 );
 
-//getAdmin
+// GET OVERVIEW / ANALYTICS
+const getRewardProductsOverview = catchAsync(
+  async (req: Request, res: Response) => {
+    const result =
+      await RewardProductService.getRewardProductsOverviewFromDB();
+
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: 'Reward products overview retrieved successfully',
+      data: result,
+    });
+  }
+);
 
 
 // GET SINGLE
@@ -195,6 +207,7 @@ const redeemCoffeeReward = catchAsync(
 export const RewardProductController = {
   createRewardProduct,
   getAllRewardProducts,
+  getRewardProductsOverview,
   getSingleRewardProduct,
   updateRewardProduct,
   deleteRewardProduct,

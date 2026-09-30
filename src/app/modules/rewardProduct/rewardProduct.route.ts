@@ -24,7 +24,11 @@ router
     RewardProductController.createRewardProduct
   )
   .get(RewardProductController.getAllRewardProducts);
-  
+
+// OVERVIEW / SUMMARY ANALYTICS (DEDICATED API)
+router
+  .route('/overview')
+  .get(RewardProductController.getRewardProductsOverview);
 
 // SINGLE + UPDATE + DELETE
 router
