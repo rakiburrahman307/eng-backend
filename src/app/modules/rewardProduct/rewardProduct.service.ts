@@ -31,19 +31,46 @@ const getAllRewardProductsFromDB = async (query: Record<string, any>) => {
     .paginate()
     .fields();
 
-  const result = await rewardQuery.modelQuery.populate({
-    path: 'redeemedUsers.user',
-    select: 'userName firstName lastName email emergencyEmail phone profile role selectTeam parentId',
-    populate: {
-      path: 'parentId',
-      select: 'email emergencyEmail phone',
-    },
-  });
+  const [result, meta, summaryAgg] = await Promise.all([
+    rewardQuery.modelQuery.populate({
+      path: 'redeemedUsers.user',
+      select:
+        'userName firstName lastName email emergencyEmail phone profile role selectTeam parentId',
+      populate: {
+        path: 'parentId',
+        select: 'email emergencyEmail phone',
+      },
+    }),
+    rewardQuery.getPaginationInfo(),
+    RewardProduct.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalItems: { $sum: 1 },
+          merchandiseCount: {
+            $sum: { $cond: [{ $eq: ["$productType", "nonCoffee"] }, 1, 0] },
+          },
+          coffeeCount: {
+            $sum: { $cond: [{ $eq: ["$productType", "Coffee"] }, 1, 0] },
+          },
+          totalClaims: {
+            $sum: { $size: { $ifNull: ["$redeemedUsers", []] } },
+          },
+        },
+      },
+    ]),
+  ]);
 
-  const meta = await rewardQuery.getPaginationInfo();
+  const summary = summaryAgg?.[0] || {
+    totalItems: meta.total || 0,
+    merchandiseCount: 0,
+    coffeeCount: 0,
+    totalClaims: 0,
+  };
 
   return {
     meta,
+    summary,
     result,
   };
 };

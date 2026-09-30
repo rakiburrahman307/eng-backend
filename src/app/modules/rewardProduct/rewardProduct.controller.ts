@@ -58,6 +58,7 @@ const getAllRewardProducts = catchAsync(
       statusCode: StatusCodes.OK,
       message: 'Reward products retrieved successfully',
       pagination: result.meta,
+      summary: result.summary,
       data: result.result,
     });
   }
