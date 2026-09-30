@@ -8,11 +8,11 @@ import { Notification } from "./notification.model";
 // ─────────────────────────────────────────────────────────────────────────────
 const getMyNotifications = async (
   userId: string,
-  query: Record<string, any>
+  query: Record<string, any>,
 ) => {
   const notificationQuery = new QueryBuilder(
     Notification.find({ receiver: userId }).sort({ createdAt: -1 }),
-    query
+    query,
   )
     .filter()
     .paginate()
@@ -48,7 +48,7 @@ const markAsRead = async (notificationId: string, userId: string) => {
   if (!notification) {
     throw new ApiError(
       StatusCodes.NOT_FOUND,
-      "Notification not found or not yours"
+      "Notification not found or not yours",
     );
   }
 
@@ -64,7 +64,7 @@ const markAsRead = async (notificationId: string, userId: string) => {
 const markAllAsRead = async (userId: string) => {
   const result = await Notification.updateMany(
     { receiver: userId, isRead: false },
-    { $set: { isRead: true } }
+    { $set: { isRead: true } },
   );
 
   return {
@@ -79,12 +79,10 @@ const deleteNotification = async (id: string) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PLAYER: DELETE ALL NOTIFICATIONS 
+// PLAYER: DELETE ALL NOTIFICATIONS
 // ─────────────────────────────────────────────────────────────────────────────
 const deleteAllNotifications = async (userId: string) => {
-  const result = await Notification.deleteMany(
-    { receiver: userId },
-  );
+  const result = await Notification.deleteMany({ receiver: userId });
 
   return result;
 };
