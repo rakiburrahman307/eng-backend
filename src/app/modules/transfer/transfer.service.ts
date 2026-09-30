@@ -11,6 +11,8 @@ import { sendNotificationToAdmins } from "../../../helpers/notificationsHelper";
 import { NOTIFICATION_TYPE } from "../notification/notification.interface";
 import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
+import { recordTeamCoinTransaction } from "../../../helpers/teamCoinLedgerHelper";
+import { TEAM_COIN_CATEGORY } from "../teamCoinTransaction/teamCoinTransaction.interface";
 
 // CREATE
 const createTransferToDB = async (payload: any, userId: string) => {
@@ -536,16 +538,32 @@ const approveTransferToDB = async (id: string, user: any) => {
         );
       }
 
-      const clubRate = Number(clubEconomy?.conversionRate) || 10;
-      toTeamObj.coin = (toTeamObj.coin || 0) - playerCost;
-      toTeamObj.marketValue = (toTeamObj.coin || 0) * clubRate;
-      await toTeamObj.save();
+      const playerName = `${userDetails.firstName || ""} ${userDetails.lastName || userDetails.userName || "Player"}`.trim();
 
-      // 3. Add coins to selling team (fromTeam)
+      // Deduct from buying team with ledger history
+      await recordTeamCoinTransaction({
+        teamId: toTeamObj._id,
+        amount: -playerCost,
+        category: TEAM_COIN_CATEGORY.PLAYER_TRANSFER_BUY,
+        title: "Player Transfer Purchase",
+        description: `Purchased player ${playerName} from ${fromTeamObj?.teamName || "previous club"} for ${playerCost.toLocaleString()} coins`,
+        transferredPlayerId: userDetails._id,
+        opponentTeamId: fromTeamObj?._id,
+        transferId: transfer._id,
+      });
+
+      // 3. Add coins to selling team (fromTeam) with ledger history
       if (fromTeamObj) {
-        fromTeamObj.coin = (fromTeamObj.coin || 0) + playerCost;
-        fromTeamObj.marketValue = (fromTeamObj.coin || 0) * clubRate;
-        await fromTeamObj.save();
+        await recordTeamCoinTransaction({
+          teamId: fromTeamObj._id,
+          amount: playerCost,
+          category: TEAM_COIN_CATEGORY.PLAYER_TRANSFER_SELL,
+          title: "Player Transfer Sale",
+          description: `Sold player ${playerName} to ${toTeamObj.teamName} for ${playerCost.toLocaleString()} coins`,
+          transferredPlayerId: userDetails._id,
+          opponentTeamId: toTeamObj._id,
+          transferId: transfer._id,
+        });
       }
     }
 

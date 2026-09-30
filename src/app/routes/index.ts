@@ -45,6 +45,7 @@ import StatsAuditRoute from "../modules/statsAudit/statsAudit.route";
 import { TeamSubscriptionRoutes } from "../modules/teamSubscription/teamSubscription.route";
 import { AdminRoutes } from "../modules/admin/admin.route";
 import { ServerHealthRoutes } from "../modules/serverHealth/serverHealth.route";
+import { TeamCoinTransactionRoutes } from "../modules/teamCoinTransaction/teamCoinTransaction.route";
 
 const router = express.Router();
 
@@ -92,6 +93,7 @@ const apiRoutes = [
     { path: "/tournament", route: TournamentRoutes },
     { path: "/tournament-claim", route: TournamentClaimRoutes },
     { path: "/coins", route: CoinTransactionRoute },
+    { path: "/team-coins", route: TeamCoinTransactionRoutes },
     { path: "/stats-audit", route: StatsAuditRoute },
     { path: "/team-subscription", route: TeamSubscriptionRoutes },
     { path: "/admin", route: AdminRoutes },

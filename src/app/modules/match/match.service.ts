@@ -28,6 +28,8 @@ import {
   manualRevokeCleanSheet,
 } from "../../../helpers/matchCleanSheetHelper";
 import { recordCoinTransaction } from "../../../helpers/coinLedgerHelper";
+import { recordTeamCoinTransaction } from "../../../helpers/teamCoinLedgerHelper";
+import { TEAM_COIN_CATEGORY } from "../teamCoinTransaction/teamCoinTransaction.interface";
 import { CoinTransaction } from "../coinTransaction/coinTransaction.model";
 import { COIN_TRANSACTION_CATEGORY } from "../coinTransaction/coinTransaction.interface";
 import dayjs from "dayjs";
@@ -64,6 +66,9 @@ export const awardClubCoinsSafely = async (
   coinsToAward: number,
   marketValueToAward: number,
   customCap?: number,
+  category: TEAM_COIN_CATEGORY = TEAM_COIN_CATEGORY.ATTEND_MATCH,
+  title: string = "Match Coin Reward",
+  description?: string,
 ): Promise<number> => {
   if (!teamId || coinsToAward <= 0) return 0;
   const match = await Match.findById(matchId);
@@ -82,14 +87,32 @@ export const awardClubCoinsSafely = async (
   const actualCoins = maxCap > 0 ? Math.min(coinsToAward, available) : coinsToAward;
   if (actualCoins <= 0) return 0;
 
-  const actualMV =
-    coinsToAward > 0
-      ? Math.round((actualCoins / coinsToAward) * marketValueToAward)
-      : marketValueToAward;
+  const opponentId =
+    match.homeTeam?.toString() === teamId.toString()
+      ? match.awayTeam
+      : match.homeTeam;
 
-  await Team.findByIdAndUpdate(teamId, {
-    $inc: { coin: actualCoins, marketValue: actualMV },
-  });
+  // Record transaction in team coin ledger (updates team.coin and team.marketValue)
+  try {
+    await recordTeamCoinTransaction({
+      teamId,
+      amount: actualCoins,
+      category,
+      title,
+      description: description || `Awarded ${actualCoins.toLocaleString()} coins for match`,
+      matchId: match._id,
+      opponentTeamId: opponentId,
+    });
+  } catch (err) {
+    console.error("Error recording team coin transaction in match:", err);
+    const actualMV =
+      coinsToAward > 0
+        ? Math.round((actualCoins / coinsToAward) * marketValueToAward)
+        : marketValueToAward;
+    await Team.findByIdAndUpdate(teamId, {
+      $inc: { coin: actualCoins, marketValue: actualMV },
+    });
+  }
 
   if (!match.clubCoinsAwarded) {
     match.clubCoinsAwarded = new Map() as any;
@@ -121,19 +144,37 @@ export const rollbackClubCoinsSafely = async (
 
   const actualDeductCoins =
     currentAwarded > 0 ? Math.min(coinsToDeduct, currentAwarded) : coinsToDeduct;
-  const actualDeductMV =
-    coinsToDeduct > 0
-      ? Math.round((actualDeductCoins / coinsToDeduct) * marketValueToDeduct)
-      : marketValueToDeduct;
 
-  const team = await Team.findById(teamId);
-  if (team) {
-    await Team.findByIdAndUpdate(teamId, {
-      $set: {
-        coin: Math.max(0, (team.coin ?? 0) - actualDeductCoins),
-        marketValue: Math.max(0, (team.marketValue ?? 0) - actualDeductMV),
-      },
+  const opponentId =
+    match.homeTeam?.toString() === teamId.toString()
+      ? match.awayTeam
+      : match.homeTeam;
+
+  try {
+    await recordTeamCoinTransaction({
+      teamId,
+      amount: -actualDeductCoins,
+      category: TEAM_COIN_CATEGORY.ROLLBACK,
+      title: "Match Coin Rollback",
+      description: `Deducted ${actualDeductCoins.toLocaleString()} coins due to match modification / rollback`,
+      matchId: match._id,
+      opponentTeamId: opponentId,
     });
+  } catch (err) {
+    console.error("Error rolling back team coins:", err);
+    const actualDeductMV =
+      coinsToDeduct > 0
+        ? Math.round((actualDeductCoins / coinsToDeduct) * marketValueToDeduct)
+        : marketValueToDeduct;
+    const team = await Team.findById(teamId);
+    if (team) {
+      await Team.findByIdAndUpdate(teamId, {
+        $set: {
+          coin: Math.max(0, (team.coin ?? 0) - actualDeductCoins),
+          marketValue: Math.max(0, (team.marketValue ?? 0) - actualDeductMV),
+        },
+      });
+    }
   }
 
   if (match.clubCoinsAwarded && currentAwarded > 0) {
@@ -1717,10 +1758,28 @@ const updateMatchStatusInDB = async (
 
         if (attendCoin > 0 || attendBudget > 0) {
           if (match.homeTeam) {
-            await awardClubCoinsSafely(match._id, match.homeTeam, attendCoin, attendBudget);
+            await awardClubCoinsSafely(
+              match._id,
+              match.homeTeam,
+              attendCoin,
+              attendBudget,
+              undefined,
+              TEAM_COIN_CATEGORY.ATTEND_MATCH,
+              "Match Attendance Reward",
+              "Earned coins for attending and participating in the match"
+            );
           }
           if (match.awayTeam) {
-            await awardClubCoinsSafely(match._id, match.awayTeam, attendCoin, attendBudget);
+            await awardClubCoinsSafely(
+              match._id,
+              match.awayTeam,
+              attendCoin,
+              attendBudget,
+              undefined,
+              TEAM_COIN_CATEGORY.ATTEND_MATCH,
+              "Match Attendance Reward",
+              "Earned coins for attending and participating in the match"
+            );
           }
         }
       } catch (err) {
@@ -1779,10 +1838,28 @@ const updateMatchStatusInDB = async (
           const drawBudget = Number(ce?.drawMatch?.budgetValue) || (drawCoin * 10);
           if (drawCoin > 0 || drawBudget > 0) {
             if (match.homeTeam) {
-              await awardClubCoinsSafely(match._id, match.homeTeam, drawCoin, drawBudget);
+              await awardClubCoinsSafely(
+                match._id,
+                match.homeTeam,
+                drawCoin,
+                drawBudget,
+                undefined,
+                TEAM_COIN_CATEGORY.DRAW_MATCH,
+                "Match Draw Reward",
+                "Earned coins for drawing the match"
+              );
             }
             if (match.awayTeam) {
-              await awardClubCoinsSafely(match._id, match.awayTeam, drawCoin, drawBudget);
+              await awardClubCoinsSafely(
+                match._id,
+                match.awayTeam,
+                drawCoin,
+                drawBudget,
+                undefined,
+                TEAM_COIN_CATEGORY.DRAW_MATCH,
+                "Match Draw Reward",
+                "Earned coins for drawing the match"
+              );
             }
           }
         } else {
@@ -1791,7 +1868,16 @@ const updateMatchStatusInDB = async (
           const winCoin = Number(ce?.winMatch?.coin) || 0;
           const winBudget = Number(ce?.winMatch?.budgetValue) || (winCoin * 10);
           if (winnerId && (winCoin > 0 || winBudget > 0)) {
-            await awardClubCoinsSafely(match._id, winnerId, winCoin, winBudget);
+            await awardClubCoinsSafely(
+              match._id,
+              winnerId,
+              winCoin,
+              winBudget,
+              undefined,
+              TEAM_COIN_CATEGORY.WIN_MATCH,
+              "Match Victory Reward",
+              "Earned coins for winning the match"
+            );
           }
         }
         match.resultCoinAwarded = true;
@@ -2474,10 +2560,39 @@ const modifyMatchScoreInDB = async (
 
     // Apply new coin/MV allocations
     if (newHomeScore === newAwayScore) {
-      if (match.homeTeam) await awardClubCoinsSafely(match._id, match.homeTeam, drawCoin, drawMV);
-      if (match.awayTeam) await awardClubCoinsSafely(match._id, match.awayTeam, drawCoin, drawMV);
+      if (match.homeTeam)
+        await awardClubCoinsSafely(
+          match._id,
+          match.homeTeam,
+          drawCoin,
+          drawMV,
+          undefined,
+          TEAM_COIN_CATEGORY.DRAW_MATCH,
+          "Match Draw Reward",
+          "Earned coins for drawing the match (Score update)"
+        );
+      if (match.awayTeam)
+        await awardClubCoinsSafely(
+          match._id,
+          match.awayTeam,
+          drawCoin,
+          drawMV,
+          undefined,
+          TEAM_COIN_CATEGORY.DRAW_MATCH,
+          "Match Draw Reward",
+          "Earned coins for drawing the match (Score update)"
+        );
     } else if (newWinnerTeam) {
-      await awardClubCoinsSafely(match._id, newWinnerTeam, winCoin, winMV);
+      await awardClubCoinsSafely(
+        match._id,
+        newWinnerTeam,
+        winCoin,
+        winMV,
+        undefined,
+        TEAM_COIN_CATEGORY.WIN_MATCH,
+        "Match Victory Reward",
+        "Earned coins for winning the match (Score update)"
+      );
     }
   }
 

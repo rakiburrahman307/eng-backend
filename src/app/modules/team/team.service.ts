@@ -8,6 +8,8 @@ import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { USER_ROLES } from "../../../enums/user";
 import { Subscription } from "../subscription/subscription.model";
 import { League } from "../league/league.model";
+import { recordTeamCoinTransaction } from "../../../helpers/teamCoinLedgerHelper";
+import { TEAM_COIN_CATEGORY } from "../teamCoinTransaction/teamCoinTransaction.interface";
 
 // CREATE TEAM
 const createTeamToDB = async (payload: any) => {
@@ -346,14 +348,30 @@ const updateTeamCoinOrMarketValue = async (
   const updateData: Record<string, number> = {};
 
   if (payload.coin !== undefined) {
-    if (typeof payload.coin !== 'number' || payload.coin < 0) {
+    if (typeof payload.coin !== "number" || payload.coin < 0) {
       throw new Error("coin must be a non-negative number");
+    }
+    const currentCoin = Number(team.coin) || 0;
+    const delta = payload.coin - currentCoin;
+    if (delta !== 0) {
+      await recordTeamCoinTransaction({
+        teamId: team._id,
+        amount: delta,
+        category: TEAM_COIN_CATEGORY.ADMIN_ADJUSTMENT,
+        title: "Admin Coin Adjustment",
+        description:
+          delta > 0
+            ? `Admin credited ${delta.toLocaleString()} coins`
+            : `Admin deducted ${Math.abs(delta).toLocaleString()} coins`,
+        syncMarketValue: payload.marketValue === undefined,
+      });
     }
     updateData.coin = payload.coin;
     // Auto sync marketValue to coin using dynamic conversion rate
-    updateData.marketValue = payload.marketValue !== undefined ? payload.marketValue : (payload.coin * rate);
+    updateData.marketValue =
+      payload.marketValue !== undefined ? payload.marketValue : payload.coin * rate;
   } else if (payload.marketValue !== undefined) {
-    if (typeof payload.marketValue !== 'number' || payload.marketValue < 0) {
+    if (typeof payload.marketValue !== "number" || payload.marketValue < 0) {
       throw new Error("marketValue must be a non-negative number");
     }
     updateData.marketValue = payload.marketValue;

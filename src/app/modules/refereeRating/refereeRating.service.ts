@@ -4,6 +4,7 @@ import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { Match } from "../match/match.model";
 import { getEffectiveMatchSetting } from "../match/matchSetting.model";
 import { awardClubCoinsSafely, rollbackClubCoinsSafely } from "../match/match.service";
+import { TEAM_COIN_CATEGORY } from "../teamCoinTransaction/teamCoinTransaction.interface";
 import ApiError from "../../../errors/ApiErrors";
 import { StatusCodes } from "http-status-codes";
 import dayjs from "dayjs";
@@ -192,7 +193,16 @@ const createEvaluationIntoDB = async (payload: any) => {
       // Award new conduct coins
       const { coin, budgetValue } = await getConductReward(item.rating);
       if (coin > 0 || budgetValue > 0) {
-        await awardClubCoinsSafely(payload.match, item.teamId, coin, budgetValue);
+        await awardClubCoinsSafely(
+          payload.match,
+          item.teamId,
+          coin,
+          budgetValue,
+          undefined,
+          TEAM_COIN_CATEGORY.CONDUCT_RATING,
+          "Referee Conduct Rating",
+          `Referee conduct evaluation rating: ${item.rating}`
+        );
       }
     }
   }
