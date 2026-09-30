@@ -92,6 +92,9 @@ router.get("/", auth(false), PlayerController.getAllPlayers);
 // FILTER PLAYERS BY TEAM AND/OR POSITION
 router.get("/filter", auth(false), PlayerController.getFilteredPlayers);
 
+// DEDICATED PLAYER OVERVIEW / ANALYTICS
+router.get("/overview", auth(false), PlayerController.getPlayerOverview);
+
 // UPDATE PLAYER DATA (ADMIN & SUPER_ADMIN)
 router.patch(
   "/:id",

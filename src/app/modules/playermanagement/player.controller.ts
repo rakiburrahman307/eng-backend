@@ -190,6 +190,17 @@ const getAllPlayers = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getPlayerOverview = catchAsync(async (req: Request, res: Response) => {
+  const result = await PlayerService.getPlayerOverviewFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Player overview metrics retrieved successfully",
+    data: result,
+  });
+});
+
 const getFilteredPlayers = catchAsync(async (req: Request, res: Response) => {
   const result = await PlayerService.getFilteredPlayersFromDB(req.query, req.user);
 
@@ -266,6 +277,7 @@ export const PlayerController = {
   approvePlayerByAdmin,
   rejectPlayerByAdmin,
   getAllPlayers,
+  getPlayerOverview,
   getFilteredPlayers,
   updatePlayerByAdmin,
   deletePlayerByAdmin,

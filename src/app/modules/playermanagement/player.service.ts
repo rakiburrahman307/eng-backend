@@ -692,6 +692,54 @@ const getAllPlayersFromDB = async (
   };
 };
 
+// DEDICATED PLAYER OVERVIEW / ANALYTICS
+const getPlayerOverviewFromDB = async () => {
+  const activeSubUserIds = await Subscription.find({
+    status: "active",
+  }).distinct("user");
+
+  const baseFilter: any = {
+    role: {
+      $in: [
+        USER_ROLES.PLAYER,
+        USER_ROLES.OTHER_CLUBS,
+        USER_ROLES.TOURNAMENT_PLAYER,
+      ],
+    },
+    parentId: { $exists: true, $ne: null },
+    $or: [
+      { _id: { $in: activeSubUserIds } },
+      { isSubscribed: true },
+      { hasAccess: true },
+    ],
+    status: "APPROVED",
+  };
+
+  const [totalPlayers, assignedToSquads, stats] = await Promise.all([
+    User.countDocuments(baseFilter),
+    User.countDocuments({
+      ...baseFilter,
+      selectTeam: { $exists: true, $ne: null },
+    }),
+    User.aggregate([
+      { $match: baseFilter },
+      {
+        $group: {
+          _id: null,
+          totalCoins: { $sum: { $ifNull: ["$engCoine", 0] } },
+        },
+      },
+    ]),
+  ]);
+
+  return {
+    totalPlayers,
+    assignedToSquads,
+    activeSubscriptions: activeSubUserIds.length,
+    totalCoins: stats?.[0]?.totalCoins || 0,
+  };
+};
+
 const getFilteredPlayersFromDB = async (
   query: Record<string, any>,
   user?: JwtPayload | null,
@@ -880,6 +928,7 @@ export const PlayerService = {
   approvePlayerByAdminToDB,
   rejectPlayerByAdminToDB,
   getAllPlayersFromDB,
+  getPlayerOverviewFromDB,
   getFilteredPlayersFromDB,
   updatePlayerByAdminToDB,
   deletePlayerByAdminToDB,
