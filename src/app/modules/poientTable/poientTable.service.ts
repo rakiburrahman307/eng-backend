@@ -8,14 +8,84 @@ import mongoose from "mongoose";
 import ApiError from "../../../errors/ApiErrors";
 import { StatusCodes } from "http-status-codes";
 
+// Helper to match age group flexibly (e.g., 'u12', 'U12', 'Under 12', '12')
+const isAgeGroupMatch = (
+  teamOrMatchAge?: string | null,
+  targetAge?: string | null
+): boolean => {
+  if (!teamOrMatchAge || !targetAge) return false;
+  const t = teamOrMatchAge.toString().trim().toLowerCase();
+  const q = targetAge.toString().trim().toLowerCase();
+  if (t === q) return true;
+  const normT = t.replace(/^(u|under)[-\s]*/i, "u");
+  const normQ = q.replace(/^(u|under)[-\s]*/i, "u");
+  if (normT === normQ) return true;
+  const numT = t.match(/\d+/)?.[0];
+  const numQ = q.match(/\d+/)?.[0];
+  if (numT && numQ && numT === numQ) return true;
+  return false;
+};
+
 // Helper to calculate standings synchronously from prefetched teams & matches & manual overrides
 const computeStandings = (
   leagueTeams: any[],
   matches: any[],
-  manualOverrides: any[] = []
+  manualOverrides: any[] = [],
+  targetAgeGroup?: string
 ) => {
+  let effectiveLeagueTeams = leagueTeams;
+  let effectiveOverrides = manualOverrides;
+  let effectiveMatches = matches;
+
+  if (targetAgeGroup) {
+    // 1. Filter teams that match targetAgeGroup (or participated in matching matches)
+    effectiveLeagueTeams = leagueTeams.filter((lt) => {
+      const teamAge = lt.team?.ageGroup;
+      if (isAgeGroupMatch(teamAge, targetAgeGroup)) return true;
+      const tId = (lt.team?._id || lt.team)?.toString();
+      if (!tId) return false;
+      return matches.some(
+        (m) =>
+          isAgeGroupMatch(m.ageGroup, targetAgeGroup) &&
+          (m.homeTeam?.toString() === tId || m.awayTeam?.toString() === tId)
+      );
+    });
+
+    // 2. Filter overrides that match targetAgeGroup
+    effectiveOverrides = manualOverrides.filter((mo) => {
+      const teamAge = mo.team?.ageGroup;
+      if (isAgeGroupMatch(teamAge, targetAgeGroup)) return true;
+      const tId = (mo.team?._id || mo.team)?.toString();
+      if (!tId) return false;
+      return matches.some(
+        (m) =>
+          isAgeGroupMatch(m.ageGroup, targetAgeGroup) &&
+          (m.homeTeam?.toString() === tId || m.awayTeam?.toString() === tId)
+      );
+    });
+
+    // 3. Filter matches relevant to target age group
+    const teamIdSet = new Set(
+      effectiveLeagueTeams
+        .map((lt) => (lt.team?._id || lt.team)?.toString())
+        .filter(Boolean)
+    );
+
+    effectiveMatches = matches.filter((m) => {
+      if (m.ageGroup && !isAgeGroupMatch(m.ageGroup, targetAgeGroup)) {
+        return false;
+      }
+      if (m.ageGroup && isAgeGroupMatch(m.ageGroup, targetAgeGroup)) {
+        return true;
+      }
+      const homeId = m.homeTeam?.toString();
+      const awayId = m.awayTeam?.toString();
+      return (homeId && teamIdSet.has(homeId)) || (awayId && teamIdSet.has(awayId));
+    });
+  }
+
   // Sort matches chronologically
-  const sortedMatches = [...matches].sort((a, b) => {
+  const sortedMatches = [...effectiveMatches].sort((a, b) => {
     const dateA = new Date(a.matchDate || a.createdAt || 0).getTime();
     const dateB = new Date(b.matchDate || b.createdAt || 0).getTime();
     return dateA - dateB;
@@ -23,7 +93,7 @@ const computeStandings = (
 
   // Map manual overrides by teamId
   const overrideMap: Record<string, any> = {};
-  for (const mo of manualOverrides) {
+  for (const mo of effectiveOverrides) {
     const tId = (mo.team?._id || mo.team)?.toString();
     if (tId) {
       overrideMap[tId] = mo;
@@ -34,7 +104,7 @@ const computeStandings = (
   const buildRawTable = (matchList: any[], applyOverrides: boolean = false) => {
     const table: Record<string, any> = {};
 
-    for (const lt of leagueTeams) {
+    for (const lt of effectiveLeagueTeams) {
       if (!lt.team) continue;
       const team: any = lt.team;
       const teamId = team._id.toString();
@@ -226,13 +296,13 @@ const computeStandings = (
 // =========================
 // SINGLE LEAGUE CALC
 // =========================
-const calculateLeague = async (league: any) => {
+const calculateLeague = async (league: any, targetAgeGroup?: string) => {
   const leagueId = league._id.toString();
 
   const [leagueTeams, matches, overrides] = await Promise.all([
     LeagueTeam.find({ league: leagueId }).populate(
       "team",
-      "teamName shortName teamLogo",
+      "teamName shortName teamLogo ageGroup",
     ),
     Match.find({
       league: leagueId,
@@ -241,11 +311,11 @@ const calculateLeague = async (league: any) => {
     }),
     PointTable.find({ league: leagueId }).populate(
       "team",
-      "teamName shortName teamLogo",
+      "teamName shortName teamLogo ageGroup",
     ),
   ]);
 
-  return computeStandings(leagueTeams, matches, overrides);
+  return computeStandings(leagueTeams, matches, overrides, targetAgeGroup);
 };
 
 // =========================
@@ -268,6 +338,8 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     playerId,
     player,
     player_id,
+    ageGroup,
+    age_group,
   } = query;
 
   let targetTeamId = teamId || team || team_id || selectTeam;
@@ -299,6 +371,18 @@ const getPointTable = async (query: Record<string, any> = {}) => {
       return [];
     }
   }
+
+  // Parse and sanitize optional ageGroup
+  const rawAgeGroup = ageGroup || age_group;
+  const targetAgeGroup =
+    rawAgeGroup &&
+    typeof rawAgeGroup === "string" &&
+    rawAgeGroup.trim() !== "" &&
+    rawAgeGroup.trim().toUpperCase() !== "ALL" &&
+    rawAgeGroup.trim().toLowerCase() !== "null" &&
+    rawAgeGroup.trim().toLowerCase() !== "undefined"
+      ? rawAgeGroup.trim()
+      : undefined;
 
   if (targetTeamId) {
     const targetTeamObjId = new mongoose.Types.ObjectId(
@@ -346,11 +430,78 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     }
   }
 
-  if (season) {
+  // If ageGroup is provided, narrow down candidate leagues
+  if (targetAgeGroup) {
+    const cleanAge = targetAgeGroup.trim();
+    const numPart = cleanAge.match(/\d+/)?.[0];
+    const ageRegex = numPart
+      ? new RegExp(`(u|under|\\b)${numPart}\\b`, "i")
+      : new RegExp(cleanAge.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&"), "i");
+
+    const matchingTeams = await Team.find({ ageGroup: { $regex: ageRegex } })
+      .select("_id league")
+      .lean();
+    const teamIds = matchingTeams.map((t) => t._id);
+
+    const [ltLeagues, matchLeagues] = await Promise.all([
+      LeagueTeam.find({ team: { $in: teamIds } }).distinct("league"),
+      Match.find({
+        $or: [
+          { ageGroup: { $regex: ageRegex } },
+          { homeTeam: { $in: teamIds } },
+          { awayTeam: { $in: teamIds } },
+        ],
+      }).distinct("league"),
+    ]);
+
+    const directLeagues = matchingTeams
+      .map((t: any) => t.league)
+      .filter(Boolean);
+
+    const candidateLeagueIds = Array.from(
+      new Set(
+        [...ltLeagues, ...matchLeagues, ...directLeagues]
+          .filter(Boolean)
+          .map((lid: any) => lid.toString()),
+      ),
+    ).map((lid: any) => new mongoose.Types.ObjectId(lid));
+
+    if (candidateLeagueIds.length === 0) {
+      return [];
+    }
+
+    if (filter._id) {
+      const currentIds = Array.isArray(filter._id.$in)
+        ? filter._id.$in.map((lid: any) => lid.toString())
+        : [filter._id.toString()];
+      const intersected = currentIds.filter((lid: string) =>
+        candidateLeagueIds.some((cid) => cid.toString() === lid),
+      );
+      if (intersected.length === 0) {
+        return [];
+      }
+      filter._id = {
+        $in: intersected.map((lid: string) => new mongoose.Types.ObjectId(lid)),
+      };
+    } else {
+      filter._id = { $in: candidateLeagueIds };
+    }
+  }
+
+  // Season is completely OPTIONAL. Only filter if a valid, non-empty season string is provided.
+  if (
+    season &&
+    typeof season === "string" &&
+    season.trim() !== "" &&
+    season.trim().toUpperCase() !== "ALL" &&
+    season.trim().toLowerCase() !== "null" &&
+    season.trim().toLowerCase() !== "undefined"
+  ) {
     const escapedSeason = season
       .toString()
+      .trim()
       .replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
-    const pattern = escapedSeason.trim().replace(/\s+/g, "\\s+");
+    const pattern = escapedSeason.replace(/\s+/g, "\\s+");
     filter.season = { $regex: new RegExp(`^\\s*${pattern}\\s*$`, "i") };
   }
 
@@ -362,11 +513,17 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     filter.leagueName = { $regex: new RegExp(pattern, "i") };
   }
 
-  if (year) {
+  if (
+    year &&
+    typeof year === "string" &&
+    year.trim() !== "" &&
+    year.trim().toUpperCase() !== "ALL"
+  ) {
     const escapedYear = year
       .toString()
+      .trim()
       .replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
-    const pattern = escapedYear.trim().replace(/\s+/g, "\\s+");
+    const pattern = escapedYear.replace(/\s+/g, "\\s+");
     filter.season = { $regex: new RegExp(pattern, "i") };
   }
 
@@ -381,15 +538,15 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     await Promise.all([
       LeagueTeam.find({ league: { $in: leagueIds } }).populate(
         "team",
-        "teamName shortName teamLogo",
+        "teamName shortName teamLogo ageGroup",
       ),
       Team.find({ league: { $in: leagueIds } }).select(
-        "teamName shortName teamLogo league",
+        "teamName shortName teamLogo ageGroup league",
       ),
       Match.find({ league: { $in: leagueIds }, status: "finished" }),
       PointTable.find({ league: { $in: leagueIds } }).populate(
         "team",
-        "teamName shortName teamLogo",
+        "teamName shortName teamLogo ageGroup",
       ),
     ]);
 
@@ -441,7 +598,17 @@ const getPointTable = async (query: Record<string, any> = {}) => {
     const matches = matchesMap[lId] || [];
     const overrides = pointTableOverridesMap[lId] || [];
 
-    const standings = computeStandings(leagueTeams, matches, overrides);
+    const standings = computeStandings(
+      leagueTeams,
+      matches,
+      overrides,
+      targetAgeGroup,
+    );
+
+    // If targetAgeGroup is passed, skip leagues with no matching standings
+    if (targetAgeGroup && standings.length === 0) {
+      continue;
+    }
 
     // If targetTeamId is passed, ensure this league contains the target team
     if (targetTeamId) {
@@ -536,7 +703,7 @@ const updateSinglePointTable = async (payload: {
     { league, team },
     { $set: updateData },
     { upsert: true, new: true, setDefaultsOnInsert: true }
-  ).populate("team", "teamName shortName teamLogo");
+  ).populate("team", "teamName shortName teamLogo ageGroup");
 
   return result;
 };
