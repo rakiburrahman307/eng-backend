@@ -20,6 +20,13 @@ router.get(
   UserManagementController.getAllParents
 );
 
+// GET PARENTS OVERVIEW / ANALYTICS (DEDICATED)
+router.get(
+  "/parents/overview",
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  UserManagementController.getParentOverview
+);
+
 // GET INCOMPLETE USERS ANALYTICS/STATS
 router.get(
   "/incomplete/analytics",

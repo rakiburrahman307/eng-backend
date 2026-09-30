@@ -140,6 +140,18 @@ const getAllParents = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// GET PARENTS OVERVIEW
+const getParentOverview = catchAsync(async (req: Request, res: Response) => {
+  const result = await UserManagementService.getParentOverviewFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Parent overview metrics retrieved successfully",
+    data: result,
+  });
+});
+
 // ASSIGN TEAM TO USER / PLAYER BY ADMIN
 const assignTeamToUser = catchAsync(async (req: Request, res: Response) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
@@ -250,6 +262,7 @@ const updateJerseyNumber = catchAsync(async (req: Request, res: Response) => {
 export const UserManagementController = {
   getAllUsers,
   getAllParents,
+  getParentOverview,
   getIncompleteUsers,
   getIncompleteUsersAnalytics,
   assignTeamToUser,

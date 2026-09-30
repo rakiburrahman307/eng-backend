@@ -377,6 +377,67 @@ const getAllParentsFromDB = async (query: Record<string, any>) => {
   };
 };
 
+// GET PARENTS OVERVIEW / ANALYTICS (DEDICATED API)
+const getParentOverviewFromDB = async () => {
+  const parentIdsWithChildren = await User.find({
+    parentId: { $exists: true, $ne: null },
+  }).distinct("parentId");
+
+  const parentFilter = {
+    $or: [
+      { _id: { $in: parentIdsWithChildren } },
+      {
+        parentId: null,
+        email: { $exists: true, $ne: null },
+        role: {
+          $nin: [
+            USER_ROLES.ADMIN,
+            USER_ROLES.SUPER_ADMIN,
+            USER_ROLES.MANAGER,
+            USER_ROLES.REFEREE,
+          ],
+        },
+        position: { $in: [null, ""] },
+        dateOfBirth: null,
+      },
+    ],
+  };
+
+  const childFilter = {
+    parentId: { $exists: true, $ne: null },
+    role: {
+      $in: [
+        USER_ROLES.PLAYER,
+        USER_ROLES.OTHER_CLUBS,
+        USER_ROLES.TOURNAMENT_PLAYER,
+      ],
+    },
+  };
+
+  const activeSubUserIds = await Subscription.find({
+    status: "active",
+  }).distinct("user");
+
+  const [totalParents, totalLinkedChildren, subscribedChildren] = await Promise.all([
+    User.countDocuments(parentFilter),
+    User.countDocuments(childFilter),
+    User.countDocuments({
+      ...childFilter,
+      $or: [
+        { _id: { $in: activeSubUserIds } },
+        { isSubscribed: true },
+        { hasAccess: true },
+      ],
+    }),
+  ]);
+
+  return {
+    totalParents,
+    totalLinkedChildren,
+    subscribedChildren,
+  };
+};
+
 // ASSIGN TEAM TO USER / PLAYER BY ADMIN
 const assignTeamToUserToDB = async (
   userId: string,
@@ -921,6 +982,7 @@ const getIncompleteUsersAnalyticsFromDB = async () => {
 export const UserManagementService = {
   getAllUsersFromDB,
   getAllParentsFromDB,
+  getParentOverviewFromDB,
   getIncompleteUsersFromDB,
   getIncompleteUsersAnalyticsFromDB,
   assignTeamToUserToDB,
