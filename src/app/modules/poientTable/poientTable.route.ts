@@ -5,6 +5,9 @@ import { PointTableController } from './poientTable.controlle';
 
 const router = express.Router();
 
+// GET POINT TABLE OVERVIEW & ANALYTICS
+router.get('/overview', PointTableController.getPointTableOverview);
+
 // GET POINT TABLE, UPDATE/UPSERT MANUAL STANDING
 router
   .route('/')

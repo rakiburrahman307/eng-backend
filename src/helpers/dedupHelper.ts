@@ -40,6 +40,15 @@ export function isDuplicateNotification(key: string, ttlSeconds: number = 60): b
 }
 
 /**
+ * Clear a key from deduplication cache (e.g. if queueing failed)
+ */
+export function clearDuplicateNotification(key: string): void {
+  if (key) {
+    dedupCache.delete(key);
+  }
+}
+
+/**
  * Generate a deterministic deduplication key for a team notification
  */
 export function generateTeamNotificationDedupKey(options: {
@@ -62,7 +71,7 @@ export function generateTeamNotificationDedupKey(options: {
     options.action || "NONE",
   ];
 
-  return parts.join(":").replace(/[\s\r\n]+/g, "_");
+  return parts.join("_").replace(/[:\s\r\n]+/g, "_");
 }
 
 /**
@@ -82,5 +91,5 @@ export function generateUserNotificationDedupKey(options: {
     options.title ? Buffer.from(options.title).toString("base64").substring(0, 16) : "NONE",
   ];
 
-  return parts.join(":").replace(/[\s\r\n]+/g, "_");
+  return parts.join("_").replace(/[:\s\r\n]+/g, "_");
 }

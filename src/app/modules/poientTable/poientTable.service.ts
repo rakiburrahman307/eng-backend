@@ -731,8 +731,63 @@ const resetPointTable = async (payload: { league: string; team: string }) => {
   return result;
 };
 
+// =========================
+// POINT TABLE OVERVIEW & ANALYTICS
+// =========================
+const getPointTableOverview = async (query: Record<string, any>) => {
+  const { leagueId } = query;
+
+  const [totalLeagues, totalClubs, matchesPlayed, totalMatches, goalsAgg, manualOverrides] =
+    await Promise.all([
+      League.countDocuments(),
+      leagueId
+        ? LeagueTeam.countDocuments({ league: leagueId })
+        : LeagueTeam.countDocuments(),
+      Match.countDocuments({
+        ...(leagueId ? { league: leagueId } : {}),
+        status: "finished",
+      }),
+      Match.countDocuments(leagueId ? { league: leagueId } : {}),
+      Match.aggregate([
+        {
+          $match: {
+            ...(leagueId ? { league: new mongoose.Types.ObjectId(leagueId) } : {}),
+            status: "finished",
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalGoals: {
+              $sum: { $add: ["$homeScore", "$awayScore"] },
+            },
+          },
+        },
+      ]),
+      PointTable.countDocuments({
+        ...(leagueId ? { league: leagueId } : {}),
+        isManual: true,
+      }),
+    ]);
+
+  const totalGoals = goalsAgg[0]?.totalGoals || 0;
+  const avgGoalsPerMatch =
+    matchesPlayed > 0 ? Number((totalGoals / matchesPlayed).toFixed(2)) : 0;
+
+  return {
+    totalLeagues,
+    totalClubs,
+    matchesPlayed,
+    totalMatches,
+    totalGoals,
+    manualOverrides,
+    avgGoalsPerMatch,
+  };
+};
+
 export const PointTableService = {
   getPointTable,
+  getPointTableOverview,
   calculateLeague,
   updatePointTable,
   resetPointTable,

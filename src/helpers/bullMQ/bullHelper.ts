@@ -4,6 +4,7 @@ import { JobPriority, NotificationJobData } from './bullInterface';
 import { JobOptionsPresets } from './bullPreset';
 import { cleanupQueue, emailQueue, notificationQueue, smsQueue } from './bullQueueInstance';
 import {
+     clearDuplicateNotification,
      generateTeamNotificationDedupKey,
      generateUserNotificationDedupKey,
      isDuplicateNotification,
@@ -99,8 +100,9 @@ export class NotificationQueueHelper {
           reference?: string,
           referenceModel?: string,
      ) {
+          let dedupKey = '';
           try {
-               const dedupKey = generateUserNotificationDedupKey({
+               dedupKey = generateUserNotificationDedupKey({
                     userId,
                     type,
                     reference,
@@ -125,7 +127,7 @@ export class NotificationQueueHelper {
                          referenceModel,
                     },
                     {
-                         jobId: dedupKey,
+                         jobId: dedupKey ? dedupKey.replace(/[:\s\r\n]+/g, '_') : undefined,
                          priority: JobPriority.NORMAL,
                          attempts: 3,
                          backoff: {
@@ -141,8 +143,9 @@ export class NotificationQueueHelper {
                );
                return job.id;
           } catch (error) {
-               logger.error(colors.red('Failed to queue notification:'), error);
-               throw error;
+               clearDuplicateNotification(dedupKey);
+                logger.error(colors.red('Failed to queue notification:'), error);
+                return null;
           }
      }
 
@@ -190,8 +193,9 @@ export class NotificationQueueHelper {
           referenceModel?: string,
           data?: Record<string, any>,
      ) {
+          let dedupKey = '';
           try {
-               const dedupKey =
+               dedupKey =
                     data?.dedupKey ||
                     generateTeamNotificationDedupKey({
                          teamId,
@@ -223,7 +227,7 @@ export class NotificationQueueHelper {
                          },
                     },
                     {
-                         jobId: dedupKey,
+                         jobId: dedupKey ? dedupKey.replace(/[:\s\r\n]+/g, '_') : undefined,
                          priority: JobPriority.NORMAL,
                          attempts: 3,
                          backoff: {
@@ -239,8 +243,9 @@ export class NotificationQueueHelper {
                );
                return job.id;
           } catch (error) {
-               logger.error(colors.red(`Failed to queue team subscriber notification for team ${teamId}:`), error);
-               throw error;
+               clearDuplicateNotification(dedupKey);
+                logger.error(colors.red(`Failed to queue team subscriber notification for team ${teamId}:`), error);
+                return null;
           }
      }
 }

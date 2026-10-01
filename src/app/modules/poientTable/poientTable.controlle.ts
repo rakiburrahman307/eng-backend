@@ -37,8 +37,20 @@ const resetPointTable = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getPointTableOverview = catchAsync(async (req: Request, res: Response) => {
+  const result = await PointTableService.getPointTableOverview(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Point table overview retrieved successfully',
+    data: result,
+  });
+});
+
 export const PointTableController = {
   getPointTable,
+  getPointTableOverview,
   updatePointTable,
   resetPointTable,
 };
