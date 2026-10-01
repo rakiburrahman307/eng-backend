@@ -30,6 +30,8 @@ router
     )
     .get(auth(false), PackageController.getPackage)
 
+router.get("/overview", PackageController.getPackageOverview);
+
 router
     .route("/:id")
     .patch(

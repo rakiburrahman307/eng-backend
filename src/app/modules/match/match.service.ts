@@ -2307,7 +2307,7 @@ const addMatchReviewToDB = async (
         $inc: { coin: coinDelta, marketValue: valueDelta },
       });
     }
-    if (r.player && (coinDelta !== 0 || valueDelta !== 0)) {
+    if (r.player) {
       try {
         let opponentDesc = "";
         try {
@@ -2331,20 +2331,71 @@ const addMatchReviewToDB = async (
           }
         } catch (_) {}
 
-        await recordCoinTransaction({
-          userId: r.player,
-          amount: coinDelta,
+        // Adjust player balance by coinDelta (new rating coin - old rating coin)
+        let playerUser = await User.findById(r.player);
+        if (playerUser) {
+          if (coinDelta !== 0) {
+            const currentCoins = Number(playerUser.engCoine) || 0;
+            playerUser.engCoine = Math.max(0, currentCoins + coinDelta);
+          }
+          if (valueDelta !== 0) {
+            const pe = await PlayerEconomy.findOne();
+            const rate = Number(pe?.conversionRate) || 10;
+            const floorMV = Number(pe?.startingMarketValue) || 100000;
+            playerUser.marketValue = Math.max(floorMV, Number(playerUser.engCoine) * rate);
+          }
+          if (coinDelta !== 0 || valueDelta !== 0) {
+            await playerUser.save();
+          }
+        }
+
+        // Update or create CoinTransaction history
+        const existingRatingTxs = await CoinTransaction.find({
+          user: r.player,
+          match: match._id,
           category: COIN_TRANSACTION_CATEGORY.MATCH_RATING,
-          title: "Match Rating Reward",
-          description: `Manager match evaluation rating: ${r.rating}/10${opponentDesc}`,
-          matchId: match._id,
-          referenceId: match._id.toString(),
-        });
+        }).sort({ createdAt: 1 });
+
+        if (existingRatingTxs.length > 0) {
+          // Update the existing transaction with the latest rating and coin amount
+          const primaryTx = existingRatingTxs[0];
+          primaryTx.amount = r.coinImpact || 0;
+          primaryTx.type = "CREDIT";
+          primaryTx.title = "Match Rating Reward";
+          primaryTx.description = `Manager match evaluation rating: ${r.rating}/10${opponentDesc}`;
+          if (playerUser) {
+            primaryTx.balanceAfter = Number(playerUser.engCoine) || 0;
+          }
+          await primaryTx.save();
+
+          // Clean up any extra duplicate rating transactions from previous edits
+          if (existingRatingTxs.length > 1) {
+            const extraIds = existingRatingTxs.slice(1).map((t: any) => t._id);
+            await CoinTransaction.deleteMany({ _id: { $in: extraIds } });
+          }
+        } else if (r.coinImpact > 0) {
+          // First time rating that earned coins
+          const currentBalance = playerUser ? Number(playerUser.engCoine) || 0 : r.coinImpact;
+          await CoinTransaction.create({
+            user: r.player,
+            amount: r.coinImpact,
+            type: "CREDIT",
+            category: COIN_TRANSACTION_CATEGORY.MATCH_RATING,
+            title: "Match Rating Reward",
+            description: `Manager match evaluation rating: ${r.rating}/10${opponentDesc}`,
+            match: match._id,
+            referenceId: match._id.toString(),
+            balanceBefore: Math.max(0, currentBalance - r.coinImpact),
+            balanceAfter: currentBalance,
+          });
+        }
       } catch (coinErr) {
-        console.error("Error recording match review coin transaction:", coinErr);
-        await User.findByIdAndUpdate(r.player, {
-          $inc: { engCoine: coinDelta, marketValue: valueDelta },
-        });
+        console.error("Error updating match review coin transaction:", coinErr);
+        if (coinDelta !== 0 || valueDelta !== 0) {
+          await User.findByIdAndUpdate(r.player, {
+            $inc: { engCoine: coinDelta, marketValue: valueDelta },
+          });
+        }
       }
     }
   }

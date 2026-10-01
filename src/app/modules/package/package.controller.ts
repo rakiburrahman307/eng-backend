@@ -125,6 +125,17 @@ const getCheckoutUrl = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const getPackageOverview = catchAsync(async (req: Request, res: Response) => {
+    const result = await PackageService.getPackageOverviewFromDB(req.query);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: 'Package overview statistics retrieved successfully',
+        data: result,
+    });
+});
+
 export const PackageController = {
     createPackage,
     updatePackage,
@@ -134,4 +145,5 @@ export const PackageController = {
     togglePackageStatus,
     getActivePackages,
     getCheckoutUrl,
+    getPackageOverview,
 }

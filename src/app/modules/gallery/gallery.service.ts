@@ -119,10 +119,41 @@ const deleteGalleryFromDB = async (id: string): Promise<IGallery | null> => {
   return result;
 };
 
+const getGalleryOverviewFromDB = async (query: Record<string, any> = {}) => {
+  const filter: any = {};
+  if (query.category && query.category !== 'ALL') {
+    if (Types.ObjectId.isValid(query.category)) {
+      filter.category = new Types.ObjectId(query.category);
+    } else {
+      filter.category = query.category;
+    }
+  }
+
+  const [
+    totalPhotos,
+    activePhotos,
+    inactivePhotos,
+    totalCategories,
+  ] = await Promise.all([
+    Gallery.countDocuments(filter),
+    Gallery.countDocuments({ ...filter, status: 'active' }),
+    Gallery.countDocuments({ ...filter, status: { $ne: 'active' } }),
+    GalleryCategory.countDocuments(),
+  ]);
+
+  return {
+    totalPhotos,
+    activePhotos,
+    inactivePhotos,
+    totalCategories,
+  };
+};
+
 export const GalleryService = {
   createGalleryToDB,
   getAllGalleriesFromDB,
   getSingleGalleryFromDB,
   updateGalleryInDB,
   deleteGalleryFromDB,
+  getGalleryOverviewFromDB,
 };

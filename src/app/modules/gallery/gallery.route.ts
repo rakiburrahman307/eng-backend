@@ -6,6 +6,8 @@ import { GalleryController } from './gallery.controller';
 
 const router = express.Router();
 
+router.get('/overview', GalleryController.getGalleryOverview);
+
 router
   .route('/')
   .post(

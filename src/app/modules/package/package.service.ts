@@ -365,6 +365,38 @@ const getCheckoutUrlFromDB = async (packageId: string, userId: string, userEmail
     return { checkoutUrl: session.url };
 };
 
+const getPackageOverviewFromDB = async (query: Record<string, any> = {}) => {
+    const filter: any = {};
+    if (query.userType && query.userType !== 'ALL') {
+        filter.userType = query.userType;
+    }
+
+    const [
+        totalPackages,
+        activePackages,
+        deletedPackages,
+        allPackages,
+    ] = await Promise.all([
+        Package.countDocuments(filter),
+        Package.countDocuments({ ...filter, status: 'Active' }),
+        Package.countDocuments({ ...filter, status: { $in: ['Delete', 'Inactive'] } }),
+        Package.find(filter).select('price credit').lean(),
+    ]);
+
+    const maxCoins = allPackages.reduce((acc, p) => Math.max(acc, Number(p.credit || 0)), 0);
+    const avgPrice = allPackages.length > 0
+        ? Number((allPackages.reduce((acc, p) => acc + Number(p.price || 0), 0) / allPackages.length).toFixed(0))
+        : 0;
+
+    return {
+        totalPackages,
+        activePackages,
+        deletedPackages,
+        maxCoins,
+        avgPrice,
+    };
+};
+
 export const PackageService = {
     createPackageToDB,
     updatePackageToDB,
@@ -374,4 +406,5 @@ export const PackageService = {
     togglePackageStatusToDB,
     getActivePackagesFromDB,
     getCheckoutUrlFromDB,
+    getPackageOverviewFromDB,
 }

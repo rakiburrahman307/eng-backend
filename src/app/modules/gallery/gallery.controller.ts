@@ -104,10 +104,22 @@ const deleteGallery = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getGalleryOverview = catchAsync(async (req: Request, res: Response) => {
+  const result = await GalleryService.getGalleryOverviewFromDB(req.query);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Gallery overview statistics retrieved successfully',
+    data: result,
+  });
+});
+
 export const GalleryController = {
   createGallery,
   getAllGalleries,
   getSingleGallery,
   updateGallery,
   deleteGallery,
+  getGalleryOverview,
 };

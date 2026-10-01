@@ -75,8 +75,10 @@ export const recordCoinTransaction = async (
     // Penalties must strictly be deductions (negative amount)
     signedAmount = -Math.abs(signedAmount);
   } else if (REWARD_CATEGORIES.has(category)) {
-    // Rewards must strictly be credits (positive amount)
-    signedAmount = Math.abs(signedAmount);
+    // Rewards are credits if positive, but allow negative for adjustments/reversals
+    if (signedAmount > 0) {
+      signedAmount = Math.abs(signedAmount);
+    }
   }
 
   const balanceBefore = Number(user.engCoine) || 0;
