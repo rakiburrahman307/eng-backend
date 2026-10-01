@@ -203,48 +203,50 @@ const createMatchResultToDB = async (payload: any) => {
   // 10. UPDATE WINNER
   await updateMatchWinner(match);
 
-  // 11. SEND QUEUED NOTIFICATIONS TO PLAYERS
+  // 11. SEND QUEUED NOTIFICATIONS TO PLAYERS & TEAM SUBSCRIBERS
   try {
     const eventMeta = payload.eventMeta;
+    const resolvedMinute = payload.minute ?? eventMinute ?? minute ?? 1;
+    const resolvedTeam = team || payload.team || eventTeam;
 
     if (player) {
       let title = "Match Event Update";
-      let message = `A new event occurred at minute ${minute}.`;
+      let message = `A new event occurred at minute ${resolvedMinute}.`;
 
       if (eventType === "goal") {
         if (eventMeta?.goalType === "own_goal") {
           title = "Own Goal";
-          message = `An own goal was recorded at minute ${minute}.`;
+          message = `An own goal was recorded at minute ${resolvedMinute}.`;
         } else {
           title = "Goal Scored";
-          message = `Congratulations! You scored a goal at minute ${minute}.`;
+          message = `Congratulations! You scored a goal at minute ${resolvedMinute}.`;
         }
       } else if (eventType === "assist") {
         title = "Assist Recorded";
-        message = `Well done! You assisted a goal at minute ${minute}.`;
+        message = `Well done! You assisted a goal at minute ${resolvedMinute}.`;
       } else if (eventType === "yellow_card") {
         title = "Yellow Card Issued";
-        message = `You received a yellow card at minute ${minute}.`;
+        message = `You received a yellow card at minute ${resolvedMinute}.`;
       } else if (eventType === "red_card") {
         title = "Red Card Issued";
-        message = `You received a red card at minute ${minute}.`;
+        message = `You received a red card at minute ${resolvedMinute}.`;
       } else if (eventType === "substitution") {
         if (eventMeta?.substitutionType === "in") {
           title = "Subbed In";
-          message = `You were substituted in at minute ${minute}.`;
+          message = `You were substituted in at minute ${resolvedMinute}.`;
         } else if (eventMeta?.substitutionType === "out") {
           title = "Subbed Out";
-          message = `You were substituted out at minute ${minute}.`;
+          message = `You were substituted out at minute ${resolvedMinute}.`;
         }
       } else if (eventType === "clean_sheet") {
         title = "Clean Sheet Recorded";
-        message = `A clean sheet was recorded for you at minute ${minute}.`;
+        message = `A clean sheet was recorded for you at minute ${resolvedMinute}.`;
       } else if (eventType === "player_of_the_day") {
         title = "Player of the Day";
         message = `Congratulations! You have been named Player of the Day for this match.`;
       } else if (eventType === "foul") {
         title = "Foul Recorded";
-        message = `A foul was recorded for you at minute ${minute}.`;
+        message = `A foul was recorded for you at minute ${resolvedMinute}.`;
       }
 
       await NotificationQueueHelper.sendNotification(
@@ -259,16 +261,16 @@ const createMatchResultToDB = async (payload: any) => {
     if (eventType === "goal" && eventMeta?.assist) {
       await NotificationQueueHelper.sendNotification(
         String(eventMeta.assist),
-        `You assisted a goal at minute ${minute}.`,
+        `You assisted a goal at minute ${resolvedMinute}.`,
         "Assist Recorded",
         NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED
       );
     }
 
     // Notify all team subscribers about the player/team action in BullMQ background queue
-    if (team) {
+    if (resolvedTeam) {
       try {
-        const teamDoc = await Team.findById(team).select("teamName").lean();
+        const teamDoc = await Team.findById(resolvedTeam).select("teamName").lean();
         const playerDoc = player
           ? await User.findById(player).select("firstName lastName userName").lean()
           : null;
@@ -277,26 +279,40 @@ const createMatchResultToDB = async (payload: any) => {
               ? `${playerDoc.firstName} ${playerDoc.lastName || ""}`.trim()
               : playerDoc.userName)
           : "A player";
+        const tName = teamDoc?.teamName || "Team";
 
-        let subTitle = `${teamDoc?.teamName || "Team"} Match Update`;
-        let subMessage = `${playerName} recorded an action in the match.`;
+        let subTitle = `${tName} Match Update`;
+        let subMessage = `${playerName} recorded a match event at minute ${resolvedMinute}.`;
 
         if (eventType === "goal") {
-          subTitle = `Goal: ${teamDoc?.teamName || "Team"}`;
-          subMessage = `${playerName} scored for ${teamDoc?.teamName || "the team"} at minute ${minute}.`;
+          subTitle = `Goal: ${tName}`;
+          subMessage = `${playerName} scored for ${tName} at minute ${resolvedMinute}!`;
+        } else if (eventType === "yellow_card") {
+          subTitle = `Yellow Card: ${tName}`;
+          subMessage = `${playerName} received a yellow card at minute ${resolvedMinute}.`;
+        } else if (eventType === "red_card") {
+          subTitle = `Red Card: ${tName}`;
+          subMessage = `${playerName} received a red card at minute ${resolvedMinute}.`;
+        } else if (eventType === "substitution") {
+          const subDirection = eventMeta?.substitutionType === "out" ? "substituted out" : "substituted in";
+          subTitle = `Substitution: ${tName}`;
+          subMessage = `${playerName} was ${subDirection} at minute ${resolvedMinute}.`;
+        } else if (eventType === "foul") {
+          subTitle = `Foul: ${tName}`;
+          subMessage = `A foul was recorded for ${playerName} at minute ${resolvedMinute}.`;
         } else if (
           eventType === "player_of_the_day" ||
           eventType === "man_of_the_match"
         ) {
-          subTitle = `Player of the Day: ${teamDoc?.teamName || "Team"}`;
+          subTitle = `Player of the Day: ${tName}`;
           subMessage = `${playerName} has been named Player of the Day.`;
         } else if (eventType === "clean_sheet") {
-          subTitle = `Clean Sheet: ${teamDoc?.teamName || "Team"}`;
+          subTitle = `Clean Sheet: ${tName}`;
           subMessage = `${playerName} maintained a clean sheet.`;
         }
 
         await NotificationQueueHelper.notifyTeamSubscribers(
-          String(team),
+          String(resolvedTeam),
           subTitle,
           subMessage,
           "PLAYER_ACTION",
@@ -306,7 +322,7 @@ const createMatchResultToDB = async (payload: any) => {
             playerId: player ? String(player) : "",
             matchId: String(match),
             eventType,
-            minute: String(minute),
+            minute: String(resolvedMinute),
           }
         );
       } catch (subErr) {

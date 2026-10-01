@@ -8,18 +8,19 @@ import {
      smsQueue,
 } from '../helpers/bullMQ/bullQueueInstance';
 import { redisConnection } from '../helpers/bullMQ/redisConnection';
+import { QUEUE_NAMES } from '../helpers/bullMQ/bullInterface';
 
 export { redisConnection };
 
 // ==========================================
 // QUEUE EVENTS FOR MONITORING
 // ==========================================
-const emailQueueEvents = new QueueEvents('email-queue', { connection: redisConnection });
-const notificationQueueEvents = new QueueEvents('notification-queue', {
+const emailQueueEvents = new QueueEvents(QUEUE_NAMES.EMAIL, { connection: redisConnection });
+const notificationQueueEvents = new QueueEvents(QUEUE_NAMES.NOTIFICATION, {
      connection: redisConnection,
 });
-const smsQueueEvents = new QueueEvents('sms-queue', { connection: redisConnection });
-const cleanupQueueEvents = new QueueEvents('cleanup-queue', { connection: redisConnection });
+const smsQueueEvents = new QueueEvents(QUEUE_NAMES.SMS, { connection: redisConnection });
+const cleanupQueueEvents = new QueueEvents(QUEUE_NAMES.CLEANUP, { connection: redisConnection });
 
 // ==========================================
 // SETUP QUEUE EVENTS

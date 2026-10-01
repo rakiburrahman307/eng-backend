@@ -2066,6 +2066,34 @@ const updateMatchStatusInDB = async (
           "Match",
         );
       }
+
+      // Also notify all team subscribers when match kicks off / goes live
+      if (targetStatus === "live") {
+        const hName = homeTeam?.teamName || "Home Team";
+        const aName = awayTeam?.teamName || "Away Team";
+        if (match.homeTeam) {
+          await NotificationQueueHelper.notifyTeamSubscribers(
+            match.homeTeam.toString(),
+            `Match is Live: ${hName}`,
+            `The match ${hName} vs ${aName} has kicked off and is now live! Follow the action.`,
+            "MATCH_LIVE",
+            match._id.toString(),
+            "Match",
+            { matchId: match._id.toString() }
+          );
+        }
+        if (match.awayTeam) {
+          await NotificationQueueHelper.notifyTeamSubscribers(
+            match.awayTeam.toString(),
+            `Match is Live: ${aName}`,
+            `The match ${hName} vs ${aName} has kicked off and is now live! Follow the action.`,
+            "MATCH_LIVE",
+            match._id.toString(),
+            "Match",
+            { matchId: match._id.toString() }
+          );
+        }
+      }
     } catch (err) {
       console.error("Failed to send status update notification", err);
     }
@@ -3043,6 +3071,31 @@ const modifyMatchScoreInDB = async (
               `Well done! You assisted a goal at minute ${min}.`,
               "Assist Recorded",
               NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,
+            );
+          }
+
+          // Broadcast goal to all team subscribers (Bell Icon subscribers)
+          if (scorer.team) {
+            const scoringTeamDoc = await Team.findById(scorer.team).select("teamName").lean();
+            const playerDoc = await User.findById(scorer.player).select("firstName lastName userName").lean();
+            const pName = playerDoc
+              ? (playerDoc.firstName ? `${playerDoc.firstName} ${playerDoc.lastName || ""}`.trim() : playerDoc.userName)
+              : "A player";
+            const tName = scoringTeamDoc?.teamName || "Team";
+
+            await NotificationQueueHelper.notifyTeamSubscribers(
+              String(scorer.team),
+              `Goal: ${tName}`,
+              `${pName} scored for ${tName} at minute ${min}!`,
+              "PLAYER_ACTION",
+              match._id.toString(),
+              "Match",
+              {
+                playerId: String(scorer.player),
+                matchId: match._id.toString(),
+                eventType: "goal",
+                minute: String(min),
+              }
             );
           }
         } catch (err) {

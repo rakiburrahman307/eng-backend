@@ -207,11 +207,12 @@ export class NotificationQueueHelper {
                          action: data?.action,
                     });
 
-               // Deduplicate team notifications within 60 seconds
-               if (isDuplicateNotification(dedupKey, 60)) {
+               // Deduplicate rapid duplicate clicks within 15 seconds
+               if (isDuplicateNotification(dedupKey, 15)) {
                     return null;
                }
 
+               const cleanDedup = dedupKey ? dedupKey.replace(/[:\s\r\n]+/g, '_') : 'team_job';
                const job = await notificationQueue.add(
                     'team-subscriber-notification',
                     {
@@ -227,14 +228,14 @@ export class NotificationQueueHelper {
                          },
                     },
                     {
-                         jobId: dedupKey ? dedupKey.replace(/[:\s\r\n]+/g, '_') : undefined,
+                         jobId: `${cleanDedup}_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
                          priority: JobPriority.NORMAL,
                          attempts: 3,
                          backoff: {
                               type: 'exponential',
                               delay: 2000,
                          },
-                         removeOnComplete: { age: 3600 },
+                         removeOnComplete: { age: 300, count: 500 },
                     },
                );
 

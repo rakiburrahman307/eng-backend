@@ -57,8 +57,8 @@ export interface QueueStats {
 }
 
 export const QUEUE_NAMES = {
-     EMAIL: 'email-queue',
-     NOTIFICATION: 'notification-queue',
-     SMS: 'sms-queue',
-     CLEANUP: 'cleanup-queue',
+     EMAIL: 'eng-email-queue',
+     NOTIFICATION: 'eng-notification-queue',
+     SMS: 'eng-sms-queue',
+     CLEANUP: 'eng-cleanup-queue',
 } as const;

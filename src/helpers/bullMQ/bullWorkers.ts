@@ -11,6 +11,7 @@ import {
      CleanupJobData,
      EmailJobData,
      NotificationJobData,
+     QUEUE_NAMES,
      SMSJobData,
 } from './bullInterface';
 import { emailQueue, notificationQueue, smsQueue } from './bullQueueInstance';
@@ -20,7 +21,7 @@ import { NotificationHelper } from '../../app/builder/PushNotifications';
 // EMAIL WORKER
 // ==========================================
 export const emailWorker = new Worker<EmailJobData>(
-     'email-queue',
+     QUEUE_NAMES.EMAIL,
      async (job) => {
           try {
                const { template, to, data } = job.data;
@@ -67,7 +68,7 @@ export const emailWorker = new Worker<EmailJobData>(
 // NOTIFICATION WORKER
 // ==========================================
 export const notificationWorker = new Worker<NotificationJobData>(
-     'notification-queue',
+     QUEUE_NAMES.NOTIFICATION,
      async (job) => {
           try {
                const {
@@ -141,17 +142,14 @@ export const notificationWorker = new Worker<NotificationJobData>(
                          ),
                     );
 
-                    // 2. Exclude the trigger player / user so they do not receive a duplicate personal notification
-                    const excludedUserIds = new Set<string>(
-                         [
-                              data?.playerId,
-                              ...(data?.excludeUserIds || []),
-                         ]
-                              .filter(Boolean)
-                              .map((id: any) => String(id)),
-                    );
+                    // 2. Only exclude user IDs if explicitly requested via excludeUserIds or excludeTriggerPlayer
+                    const excludedList = [
+                         ...(data?.excludeUserIds || []),
+                         ...(data?.excludeTriggerPlayer ? [data?.playerId] : []),
+                    ].filter(Boolean).map((id: any) => String(id));
 
-                    if (excludedUserIds.size > 0) {
+                    if (excludedList.length > 0) {
+                         const excludedUserIds = new Set<string>(excludedList);
                          subscriberUserIds = subscriberUserIds.filter(
                               (uId: string) => !excludedUserIds.has(uId),
                          );
@@ -216,7 +214,7 @@ export const notificationWorker = new Worker<NotificationJobData>(
 // SMS WORKER
 // ==========================================
 export const smsWorker = new Worker<SMSJobData>(
-     'sms-queue',
+     QUEUE_NAMES.SMS,
      async (job) => {
           try {
                const { phone, message, countryCode } = job.data;
@@ -240,7 +238,7 @@ export const smsWorker = new Worker<SMSJobData>(
 // CLEANUP WORKER
 // ==========================================
 export const cleanupWorker = new Worker<CleanupJobData>(
-     'cleanup-queue',
+     QUEUE_NAMES.CLEANUP,
      async (job) => {
           try {
                const { type, olderThan } = job.data;
