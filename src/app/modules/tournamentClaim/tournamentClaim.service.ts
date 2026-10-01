@@ -113,7 +113,45 @@ const createClaimToDB = async (
 };
 
 const getAllClaimsFromDB = async (query: Record<string, any>) => {
-  const claimQuery = new QueryBuilder(TournamentClaim.find(), query)
+  const queryObj = { ...query };
+
+  // If status is 'ALL' or empty, don't filter by status
+  if (!queryObj.status || String(queryObj.status).toUpperCase() === 'ALL') {
+    delete queryObj.status;
+  }
+
+  const searchTerm = (queryObj.searchTerm || queryObj.search || queryObj.searchValue) as string;
+  let searchCondition: any = {};
+
+  if (searchTerm && searchTerm.trim()) {
+    const regex = new RegExp(searchTerm.trim(), 'i');
+
+    const [matchingUsers, matchingTournaments] = await Promise.all([
+      User.find({
+        $or: [
+          { userName: { $regex: regex } },
+          { email: { $regex: regex } },
+          { firstName: { $regex: regex } },
+          { lastName: { $regex: regex } },
+        ],
+      }).select('_id'),
+      Tournament.find({ title: { $regex: regex } }).select('_id'),
+    ]);
+
+    const userIds = matchingUsers.map((u) => u._id);
+    const tournamentIds = matchingTournaments.map((t) => t._id);
+
+    searchCondition = {
+      $or: [
+        { claimedPositionName: { $regex: regex } },
+        { proofNotes: { $regex: regex } },
+        ...(userIds.length > 0 ? [{ user: { $in: userIds } }] : []),
+        ...(tournamentIds.length > 0 ? [{ tournament: { $in: tournamentIds } }] : []),
+      ],
+    };
+  }
+
+  const claimQuery = new QueryBuilder(TournamentClaim.find(searchCondition), queryObj)
     .filter()
     .sort()
     .paginate()
