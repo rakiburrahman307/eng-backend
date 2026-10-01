@@ -114,7 +114,8 @@ export class NotificationQueueHelper {
                     return null;
                }
 
-               const job = await notificationQueue.add(
+               const cleanDedup = dedupKey ? dedupKey.replace(/[:\s\r\n]+/g, '_') : 'user_job';
+                const job = await notificationQueue.add(
                     'notification',
                     {
                          userId,
@@ -127,7 +128,7 @@ export class NotificationQueueHelper {
                          referenceModel,
                     },
                     {
-                         jobId: dedupKey ? dedupKey.replace(/[:\s\r\n]+/g, '_') : undefined,
+                         jobId: dedupKey ? cleanDedup + '_' + Date.now() + '_' + Math.floor(Math.random() * 1000) : undefined,
                          priority: JobPriority.NORMAL,
                          attempts: 3,
                          backoff: {
@@ -205,6 +206,7 @@ export class NotificationQueueHelper {
                          minute: data?.minute,
                          playerId: data?.playerId,
                          action: data?.action,
+                          period: data?.period,
                     });
 
                // Deduplicate rapid duplicate clicks within 15 seconds

@@ -47,6 +47,13 @@ export async function connectServices(): Promise<void> {
           errorLogger.error(colors.red('🤢 Failed to initialize BullMQ:'), bullMQError);
           throw bullMQError;
      }
+
+     // 5. Periodic background auto-finish monitor for matches whose timer elapsed
+     setInterval(() => {
+          import('../app/modules/match/match.service')
+               .then(({ checkAndFinishExpiredMatches }) => checkAndFinishExpiredMatches())
+               .catch(() => {});
+     }, 30000).unref();
 }
 
 export async function initSocketServer(server: http.Server): Promise<void> {

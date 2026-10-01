@@ -9,6 +9,7 @@ import { PlayerEconomy } from "../app/modules/coinAndBudget/playerEconomySchema.
 import { isUserPremiumPlayer } from "./packageHelper";
 import { recordCoinTransaction } from "./coinLedgerHelper";
 import { COIN_TRANSACTION_CATEGORY } from "../app/modules/coinTransaction/coinTransaction.interface";
+import { NotificationQueueHelper } from "./bullMQ/bullHelper";
 
 const isGKOrDefender = (positionStr?: string | null): boolean => {
   if (!positionStr) return false;
@@ -21,11 +22,17 @@ const isGKOrDefender = (positionStr?: string | null): boolean => {
     pos === "defender" ||
     pos === "defenders" ||
     pos === "centre back" ||
+    pos === "center back" ||
     pos === "cb" ||
     pos === "lb" ||
     pos === "rb" ||
     pos === "full back" ||
-    pos === "wing back"
+    pos === "wing back" ||
+    pos === "left back" ||
+    pos === "right back" ||
+    pos === "sweeper" ||
+    pos === "lwb" ||
+    pos === "rwb"
   );
 };
 
@@ -169,6 +176,7 @@ export const awardMatchCleanSheets = async (
         eventType: "clean_sheet",
         minute,
         league: match.league || undefined,
+        addedBy: (match as any).createdBy || player._id,
       });
 
       // 2. Increment PlayerStats cleanSheets
@@ -176,7 +184,7 @@ export const awardMatchCleanSheets = async (
         await PlayerStats.findOneAndUpdate(
           { player: player._id, league: match.league, team: csTeam.teamId },
           { $inc: { cleanSheets: 1 } },
-          { upsert: true, new: true }
+          { upsert: true, returnDocument: "after" }
         );
       }
 
@@ -194,8 +202,66 @@ export const awardMatchCleanSheets = async (
         });
       }
 
+      // 4. Send clean sheet notification to the player
+      try {
+        await NotificationQueueHelper.sendNotification(
+          player._id.toString(),
+          `Congratulations! You achieved a Clean Sheet against ${csTeam.opponentName} in match ${homeName} vs ${awayName}!`,
+          "Clean Sheet Awarded",
+          "CLEAN_SHEET",
+          undefined,
+          match._id.toString(),
+          "Match"
+        );
+      } catch (notifErr) {
+        console.error(`Failed to send clean sheet notification to player ${player._id}:`, notifErr);
+      }
+
+      // 5. Send clean sheet notification to player's parent if linked
+      try {
+        const playerDoc = await User.findById(player._id).select("parentId firstName lastName userName").lean();
+        if (playerDoc?.parentId) {
+          const childName = (playerDoc.firstName ? `${playerDoc.firstName} ${playerDoc.lastName || ""}` : playerDoc.userName).trim();
+          await NotificationQueueHelper.sendNotification(
+            String(playerDoc.parentId),
+            `Congratulations! Your child ${childName} kept a clean sheet against ${csTeam.opponentName}!`,
+            "Clean Sheet Awarded",
+            "CLEAN_SHEET",
+            undefined,
+            match._id.toString(),
+            "Match"
+          );
+        }
+      } catch (parentNotifErr) {
+        console.error(`Failed to send clean sheet notification to parent of ${player._id}:`, parentNotifErr);
+      }
+
       awardedCount++;
       recipients.push(`${player.name} (${player.position})`);
+    }
+
+    // 6. Notify subscribers of this team about the clean sheet
+    if (eligiblePlayers.length > 0) {
+      try {
+        const teamDoc = await Team.findById(csTeam.teamId).select("teamName").lean();
+        const teamName = teamDoc?.teamName || "Your Team";
+        const cleanSheetNames = eligiblePlayers.map((p) => p.name).join(", ");
+        await NotificationQueueHelper.notifyTeamSubscribers(
+          csTeam.teamId.toString(),
+          `Clean Sheet: ${teamName}`,
+          `${teamName} kept a clean sheet against ${csTeam.opponentName}! Superb defense by ${cleanSheetNames}!`,
+          "CLEAN_SHEET",
+          match._id.toString(),
+          "Match",
+          {
+            matchId: match._id.toString(),
+            teamId: csTeam.teamId.toString(),
+            eventType: "clean_sheet",
+          }
+        );
+      } catch (teamNotifErr) {
+        console.error(`Failed to notify team subscribers of clean sheet for team ${csTeam.teamId}:`, teamNotifErr);
+      }
     }
   }
 
@@ -297,13 +363,14 @@ export const manualAwardCleanSheet = async (
     eventType: "clean_sheet",
     minute,
     league: match.league || undefined,
+    addedBy: adminId,
   });
 
   if (match.league) {
     await PlayerStats.findOneAndUpdate(
       { player: player._id, league: match.league, team: teamId },
       { $inc: { cleanSheets: 1 } },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     );
   }
 
@@ -325,6 +392,36 @@ export const manualAwardCleanSheet = async (
       referenceId: match._id.toString(),
       createdBy: adminId,
     });
+  }
+
+  // Send notifications for manual award
+  try {
+    const homeName = (match.homeTeam as any)?.teamName || "Home";
+    const awayName = (match.awayTeam as any)?.teamName || "Away";
+    const playerName = (player.firstName ? `${player.firstName} ${player.lastName || ""}` : player.userName).trim();
+    await NotificationQueueHelper.sendNotification(
+      player._id.toString(),
+      `Congratulations! You were awarded a Clean Sheet for match ${homeName} vs ${awayName}!`,
+      "Clean Sheet Awarded",
+      "CLEAN_SHEET",
+      undefined,
+      match._id.toString(),
+      "Match"
+    );
+
+    if (player.parentId) {
+      await NotificationQueueHelper.sendNotification(
+        String(player.parentId),
+        `Congratulations! Your child ${playerName} was awarded a Clean Sheet for match ${homeName} vs ${awayName}!`,
+        "Clean Sheet Awarded",
+        "CLEAN_SHEET",
+        undefined,
+        match._id.toString(),
+        "Match"
+      );
+    }
+  } catch (err) {
+    console.error("Failed to send manual clean sheet notifications:", err);
   }
 
   return { success: true, message: "Clean sheet awarded successfully" };

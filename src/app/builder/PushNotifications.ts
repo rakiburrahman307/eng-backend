@@ -153,7 +153,7 @@ export class NotificationHelper {
           payload: INotificationPayload,
      ) {
           try {
-               let mappedType: NOTIFICATION_TYPE = NOTIFICATION_TYPE.GENERAL;
+               let mappedType: any = payload.type || NOTIFICATION_TYPE.GENERAL;
                if (payload.type && Object.values(NOTIFICATION_TYPE).includes(payload.type as NOTIFICATION_TYPE)) {
                     mappedType = payload.type as NOTIFICATION_TYPE;
                }

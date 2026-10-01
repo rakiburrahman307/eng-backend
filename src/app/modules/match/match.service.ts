@@ -256,6 +256,7 @@ const formatMatchVenue = async (matchItem: any) => {
       liveSeconds = halfTimeSeconds;
       timerStatus = matchObj.period === "second_half" ? "finished" : "paused";
       timerStartedAt = null;
+      const isFinishingNow = matchObj.period === "second_half" && matchObj.status !== "finished";
       if (matchObj.period === "second_half") {
         status = "finished";
       } else {
@@ -273,7 +274,14 @@ const formatMatchVenue = async (matchItem: any) => {
           matchObj.timerStatus = timerStatus;
           matchObj.timerStartedAt = null;
           matchObj.status = status;
-          matchObj.save().catch(() => {});
+          if (isFinishingNow && !matchObj.finishedAt) {
+            matchObj.finishedAt = new Date();
+          }
+          matchObj.save().then(async () => {
+            if (isFinishingNow) {
+              await processMatchCompletion(matchObj);
+            }
+          }).catch(() => {});
         }
       }
     }
@@ -1709,6 +1717,272 @@ const toggleMatchStatusToDB = async (id: string, userRole: string = "") => {
   );
 };
 
+export async function processMatchCompletion(matchDoc: any) {
+  const matchId = matchDoc._id?.toString() || matchDoc.toString();
+  const match = await Match.findById(matchId);
+  if (!match) return;
+
+  // 1. 🏆 Award Win / Draw coins according to ClubEconomy if not already awarded
+  if (!match.resultCoinAwarded) {
+    try {
+      const ce = await ClubEconomy.findOne();
+      const homeScore = Number(match.homeScore) || 0;
+      const awayScore = Number(match.awayScore) || 0;
+
+      if (homeScore === awayScore) {
+        const drawCoin = Number(ce?.drawMatch?.coin) || 0;
+        const drawBudget = Number(ce?.drawMatch?.budgetValue) || drawCoin * 10;
+        if (drawCoin > 0 || drawBudget > 0) {
+          if (match.homeTeam) {
+            await awardClubCoinsSafely(
+              match._id,
+              match.homeTeam,
+              drawCoin,
+              drawBudget,
+              undefined,
+              TEAM_COIN_CATEGORY.DRAW_MATCH,
+              "Match Draw Reward",
+              "Earned coins for drawing the match"
+            );
+          }
+          if (match.awayTeam) {
+            await awardClubCoinsSafely(
+              match._id,
+              match.awayTeam,
+              drawCoin,
+              drawBudget,
+              undefined,
+              TEAM_COIN_CATEGORY.DRAW_MATCH,
+              "Match Draw Reward",
+              "Earned coins for drawing the match"
+            );
+          }
+        }
+      } else {
+        const winnerId = homeScore > awayScore ? match.homeTeam : match.awayTeam;
+        match.winnerTeam = winnerId as any;
+        const winCoin = Number(ce?.winMatch?.coin) || 0;
+        const winBudget = Number(ce?.winMatch?.budgetValue) || winCoin * 10;
+        if (winnerId && (winCoin > 0 || winBudget > 0)) {
+          await awardClubCoinsSafely(
+            match._id,
+            winnerId,
+            winCoin,
+            winBudget,
+            undefined,
+            TEAM_COIN_CATEGORY.WIN_MATCH,
+            "Match Victory Reward",
+            "Earned coins for winning the match"
+          );
+        }
+      }
+      match.resultCoinAwarded = true;
+      await match.save();
+    } catch (err) {
+      console.error("Failed to award match finish win/draw coins to teams:", err);
+    }
+  }
+
+  // 2. Auto-award Clean Sheets to GK and Defenders if opponent conceded 0
+  try {
+    await awardMatchCleanSheets(match._id);
+  } catch (csErr) {
+    console.error("Failed to auto-award clean sheets on match finish:", csErr);
+  }
+
+  // 3. Auto-award Playing Match coins to participating players
+  try {
+    await awardMatchPlayerParticipation(match._id);
+  } catch (partErr) {
+    console.error("Failed to auto-award match playing coins on match finish:", partErr);
+  }
+
+  // 4. Notify subscribers of both teams about Full-Time match result via BullMQ
+  try {
+    const [homeTeamDoc, awayTeamDoc] = await Promise.all([
+      match.homeTeam ? Team.findById(match.homeTeam).select("teamName").lean() : null,
+      match.awayTeam ? Team.findById(match.awayTeam).select("teamName").lean() : null,
+    ]);
+
+    const hName = homeTeamDoc?.teamName || "Home Team";
+    const aName = awayTeamDoc?.teamName || "Away Team";
+    const hScore = match.homeScore || 0;
+    const aScore = match.awayScore || 0;
+    const fullTimeMsg = `Full-Time Result: ${hName} ${hScore} - ${aScore} ${aName}.`;
+
+    if (match.homeTeam) {
+      await NotificationQueueHelper.notifyTeamSubscribers(
+        match.homeTeam.toString(),
+        `Full Time: ${hName}`,
+        fullTimeMsg,
+        "MATCH_RESULT",
+        match._id.toString(),
+        "Match",
+        { matchId: match._id.toString(), homeScore: String(hScore), awayScore: String(aScore) }
+      );
+    }
+
+    if (match.awayTeam) {
+      await NotificationQueueHelper.notifyTeamSubscribers(
+        match.awayTeam.toString(),
+        `Full Time: ${aName}`,
+        fullTimeMsg,
+        "MATCH_RESULT",
+        match._id.toString(),
+        "Match",
+        { matchId: match._id.toString(), homeScore: String(hScore), awayScore: String(aScore) }
+      );
+    }
+  } catch (teamNotifErr) {
+    console.error("Failed to notify team subscribers of match finish:", teamNotifErr);
+  }
+}
+
+export async function notifyMatchHalfTime(matchDoc: any) {
+  try {
+    const matchId = matchDoc._id?.toString() || matchDoc.toString();
+    const match = await Match.findById(matchId);
+    if (!match) return;
+
+    const [homeTeam, awayTeam] = await Promise.all([
+      match.homeTeam ? Team.findById(match.homeTeam).select("teamName").lean() : null,
+      match.awayTeam ? Team.findById(match.awayTeam).select("teamName").lean() : null,
+    ]);
+
+    const hName = homeTeam?.teamName || "Home Team";
+    const aName = awayTeam?.teamName || "Away Team";
+    const hScore = Number(match.homeScore) || 0;
+    const aScore = Number(match.awayScore) || 0;
+    const title = `Half Time: ${hName} ${hScore} - ${aScore} ${aName}`;
+    const message = `Half-time interval for ${hName} vs ${aName}. Score: ${hName} ${hScore} - ${aScore} ${aName}.`;
+
+    if (match.homeTeam) {
+      await NotificationQueueHelper.notifyTeamSubscribers(
+        match.homeTeam.toString(),
+        title,
+        message,
+        "HALF_TIME",
+        match._id.toString(),
+        "Match",
+        { matchId: match._id.toString(), homeScore: String(hScore), awayScore: String(aScore), period: "half_time" }
+      );
+    }
+
+    if (match.awayTeam) {
+      await NotificationQueueHelper.notifyTeamSubscribers(
+        match.awayTeam.toString(),
+        title,
+        message,
+        "HALF_TIME",
+        match._id.toString(),
+        "Match",
+        { matchId: match._id.toString(), homeScore: String(hScore), awayScore: String(aScore), period: "half_time" }
+      );
+    }
+  } catch (err) {
+    console.error("Failed to notify half time:", err);
+  }
+}
+
+export async function notifyMatchSecondHalfLive(matchDoc: any) {
+  try {
+    const matchId = matchDoc._id?.toString() || matchDoc.toString();
+    const match = await Match.findById(matchId);
+    if (!match) return;
+
+    const [homeTeam, awayTeam] = await Promise.all([
+      match.homeTeam ? Team.findById(match.homeTeam).select("teamName").lean() : null,
+      match.awayTeam ? Team.findById(match.awayTeam).select("teamName").lean() : null,
+    ]);
+
+    const hName = homeTeam?.teamName || "Home Team";
+    const aName = awayTeam?.teamName || "Away Team";
+    const hScore = Number(match.homeScore) || 0;
+    const aScore = Number(match.awayScore) || 0;
+    const title = `Second Half Live: ${hName} vs ${aName}`;
+    const message = `The second half of ${hName} vs ${aName} has kicked off! Current score: ${hName} ${hScore} - ${aScore} ${aName}.`;
+
+    if (match.homeTeam) {
+      await NotificationQueueHelper.notifyTeamSubscribers(
+        match.homeTeam.toString(),
+        title,
+        message,
+        "MATCH_LIVE_2ND_HALF",
+        match._id.toString(),
+        "Match",
+        { matchId: match._id.toString(), period: "second_half", homeScore: String(hScore), awayScore: String(aScore) }
+      );
+    }
+
+    if (match.awayTeam) {
+      await NotificationQueueHelper.notifyTeamSubscribers(
+        match.awayTeam.toString(),
+        title,
+        message,
+        "MATCH_LIVE_2ND_HALF",
+        match._id.toString(),
+        "Match",
+        { matchId: match._id.toString(), period: "second_half", homeScore: String(hScore), awayScore: String(aScore) }
+      );
+    }
+  } catch (err) {
+    console.error("Failed to notify second half live:", err);
+  }
+}
+
+export async function checkAndFinishExpiredMatches() {
+  try {
+    const liveMatches = await Match.find({
+      status: "live",
+      timerStatus: "running",
+      period: "second_half",
+    });
+
+    if (!liveMatches || liveMatches.length === 0) return;
+
+    const now = Date.now();
+    for (const match of liveMatches) {
+      const durationMinutes = parseInt(match.durationMinutes) || 90;
+      const halfTimeSeconds = Math.floor((durationMinutes / 2) * 60);
+      let elapsed = match.elapsedSeconds || 0;
+      if (match.timerStartedAt) {
+        const diff = Math.floor((now - new Date(match.timerStartedAt).getTime()) / 1000);
+        if (diff > 0) elapsed += diff;
+      }
+
+      if (elapsed >= halfTimeSeconds) {
+        match.elapsedSeconds = halfTimeSeconds;
+        match.timerStatus = "finished";
+        match.timerStartedAt = null;
+        match.status = "finished";
+        if (!match.finishedAt) match.finishedAt = new Date();
+        await match.save();
+
+        await emitMatchUpdate(match._id.toString());
+
+        const io = (socketService as any).io;
+        if (io) {
+          io.emit(`match_${match._id.toString()}_timer`, {
+            matchId: match._id.toString(),
+            action: "FINISH",
+            timerStatus: "finished",
+            elapsedSeconds: halfTimeSeconds,
+            currentElapsedSeconds: halfTimeSeconds,
+            currentElapsedMinutes: Math.floor(halfTimeSeconds / 60),
+            timerStartedAt: null,
+            status: "finished",
+            durationMinutes: match.durationMinutes,
+          });
+        }
+
+        await processMatchCompletion(match);
+      }
+    }
+  } catch (err) {
+    console.error("Error in checkAndFinishExpiredMatches:", err);
+  }
+}
+
 const updateMatchStatusInDB = async (
   id: string,
   payload: any,
@@ -1865,119 +2139,7 @@ const updateMatchStatusInDB = async (
     match.timerStatus = "finished";
     match.timerStartedAt = null;
 
-    // 🏆 Award Win / Draw coins according to ClubEconomy if not already awarded
-    if (!match.resultCoinAwarded) {
-      try {
-        const ce = await ClubEconomy.findOne();
-        const homeScore = match.homeScore || 0;
-        const awayScore = match.awayScore || 0;
-
-        if (homeScore === awayScore) {
-          const drawCoin = Number(ce?.drawMatch?.coin) || 0;
-          const drawBudget = Number(ce?.drawMatch?.budgetValue) || (drawCoin * 10);
-          if (drawCoin > 0 || drawBudget > 0) {
-            if (match.homeTeam) {
-              await awardClubCoinsSafely(
-                match._id,
-                match.homeTeam,
-                drawCoin,
-                drawBudget,
-                undefined,
-                TEAM_COIN_CATEGORY.DRAW_MATCH,
-                "Match Draw Reward",
-                "Earned coins for drawing the match"
-              );
-            }
-            if (match.awayTeam) {
-              await awardClubCoinsSafely(
-                match._id,
-                match.awayTeam,
-                drawCoin,
-                drawBudget,
-                undefined,
-                TEAM_COIN_CATEGORY.DRAW_MATCH,
-                "Match Draw Reward",
-                "Earned coins for drawing the match"
-              );
-            }
-          }
-        } else {
-          const winnerId = homeScore > awayScore ? match.homeTeam : match.awayTeam;
-          match.winnerTeam = winnerId as any;
-          const winCoin = Number(ce?.winMatch?.coin) || 0;
-          const winBudget = Number(ce?.winMatch?.budgetValue) || (winCoin * 10);
-          if (winnerId && (winCoin > 0 || winBudget > 0)) {
-            await awardClubCoinsSafely(
-              match._id,
-              winnerId,
-              winCoin,
-              winBudget,
-              undefined,
-              TEAM_COIN_CATEGORY.WIN_MATCH,
-              "Match Victory Reward",
-              "Earned coins for winning the match"
-            );
-          }
-        }
-        match.resultCoinAwarded = true;
-      } catch (err) {
-        console.error("Failed to award match finish win/draw coins to teams:", err);
-      }
-    }
-
-    // Auto-award Clean Sheets to GK and Defenders if opponent conceded 0
-    try {
-      await awardMatchCleanSheets(match._id);
-    } catch (csErr) {
-      console.error("Failed to auto-award clean sheets on match finish:", csErr);
-    }
-
-    // Auto-award Playing Match coins to participating players
-    try {
-      await awardMatchPlayerParticipation(match._id);
-    } catch (partErr) {
-      console.error("Failed to auto-award match playing coins on match finish:", partErr);
-    }
-
-    // Notify subscribers of both teams about Full-Time match result via BullMQ
-    try {
-      const [homeTeamDoc, awayTeamDoc] = await Promise.all([
-        match.homeTeam ? Team.findById(match.homeTeam).select("teamName").lean() : null,
-        match.awayTeam ? Team.findById(match.awayTeam).select("teamName").lean() : null,
-      ]);
-
-      const hName = homeTeamDoc?.teamName || "Home Team";
-      const aName = awayTeamDoc?.teamName || "Away Team";
-      const hScore = match.homeScore || 0;
-      const aScore = match.awayScore || 0;
-      const fullTimeMsg = `Full-Time Result: ${hName} ${hScore} - ${aScore} ${aName}.`;
-
-      if (match.homeTeam) {
-        await NotificationQueueHelper.notifyTeamSubscribers(
-          match.homeTeam.toString(),
-          `Full Time: ${hName}`,
-          fullTimeMsg,
-          "MATCH_RESULT",
-          match._id.toString(),
-          "Match",
-          { matchId: match._id.toString(), homeScore: String(hScore), awayScore: String(aScore) }
-        );
-      }
-
-      if (match.awayTeam) {
-        await NotificationQueueHelper.notifyTeamSubscribers(
-          match.awayTeam.toString(),
-          `Full Time: ${aName}`,
-          fullTimeMsg,
-          "MATCH_RESULT",
-          match._id.toString(),
-          "Match",
-          { matchId: match._id.toString(), homeScore: String(hScore), awayScore: String(aScore) }
-        );
-      }
-    } catch (teamNotifErr) {
-      console.error("Failed to notify team subscribers of match finish:", teamNotifErr);
-    }
+    await processMatchCompletion(match);
   } else if (targetStatus === "cancelled") {
     match.status = "cancelled";
     match.timerStatus = "stopped";
@@ -2138,8 +2300,7 @@ const addMatchReviewToDB = async (
     await match.save();
 
     try {
-      await awardMatchCleanSheets(match._id);
-      await awardMatchPlayerParticipation(match._id);
+      await processMatchCompletion(match);
     } catch (e) {
       console.error("Failed to auto-award match completion rewards in review submission:", e);
     }
@@ -2506,15 +2667,22 @@ const updateMatchTimerInDB = async (
   const durationMinutes = parseInt(match.durationMinutes) || 90;
   const halfTimeSeconds = Math.floor((durationMinutes / 2) * 60);
 
-  if (elapsed >= halfTimeSeconds) {
+  // Auto-expire only if timer was actually running and elapsed has reached halfTimeSeconds
+  if (match.timerStatus === "running" && match.timerStartedAt && elapsed >= halfTimeSeconds) {
     elapsed = halfTimeSeconds;
     match.timerStatus = match.period === "second_half" ? "finished" : "paused";
     match.timerStartedAt = null;
     match.elapsedSeconds = elapsed;
     if (match.period === "second_half") {
       match.status = "finished";
+      if (!match.finishedAt) {
+        match.finishedAt = now;
+      }
     } else {
       match.status = "half_time";
+      if (!match.halfTimeAt) {
+        match.halfTimeAt = now;
+      }
     }
     await match.save();
     await emitMatchUpdate(matchId);
@@ -2534,6 +2702,12 @@ const updateMatchTimerInDB = async (
       });
     }
 
+    if (match.period === "second_half") {
+      await processMatchCompletion(match);
+    } else {
+      await notifyMatchHalfTime(match);
+    }
+
     const formatted = await formatMatchVenue(match);
     return {
       ...formatted,
@@ -2550,24 +2724,46 @@ const updateMatchTimerInDB = async (
           "A referee must be assigned to the match before starting the match timer",
         );
       }
-      match.timerStatus = "running";
-      match.timerStartedAt = now;
-      match.elapsedSeconds = 0;
-      match.status = "live";
+      if (match.status === "half_time" || match.period === "second_half") {
+        match.period = "second_half";
+        match.timerStatus = "running";
+        match.timerStartedAt = now;
+        match.elapsedSeconds = 0;
+        match.status = "live";
+        if (!match.secondHalfStartedAt) match.secondHalfStartedAt = now;
+        await notifyMatchSecondHalfLive(match);
+      } else {
+        match.period = "first_half";
+        match.timerStatus = "running";
+        match.timerStartedAt = now;
+        match.elapsedSeconds = 0;
+        match.status = "live";
+        if (!match.startedAt) match.startedAt = now;
+        if (!match.firstHalfStartedAt) match.firstHalfStartedAt = now;
+      }
       break;
 
     case "PAUSE":
       match.timerStatus = "paused";
       match.timerStartedAt = null;
       match.elapsedSeconds = elapsed;
-      match.status = "live";
       break;
 
     case "RESUME":
-      match.timerStatus = "running";
-      match.timerStartedAt = now;
-      match.elapsedSeconds = elapsed;
-      match.status = "live";
+      if (match.status === "half_time") {
+        match.period = "second_half";
+        match.timerStatus = "running";
+        match.timerStartedAt = now;
+        match.elapsedSeconds = 0;
+        match.status = "live";
+        if (!match.secondHalfStartedAt) match.secondHalfStartedAt = now;
+        await notifyMatchSecondHalfLive(match);
+      } else {
+        match.timerStatus = "running";
+        match.timerStartedAt = now;
+        match.elapsedSeconds = elapsed;
+        match.status = "live";
+      }
       break;
 
     case "FINISH":
@@ -2575,6 +2771,9 @@ const updateMatchTimerInDB = async (
       match.timerStartedAt = null;
       match.elapsedSeconds = elapsed;
       match.status = "finished";
+      if (!match.finishedAt) {
+        match.finishedAt = now;
+      }
       break;
 
     default:
@@ -2587,16 +2786,7 @@ const updateMatchTimerInDB = async (
   await match.save();
 
   if (action === "FINISH") {
-    try {
-      await awardMatchCleanSheets(matchId);
-    } catch (csErr) {
-      console.error("Failed to auto-award clean sheets on timer FINISH:", csErr);
-    }
-    try {
-      await awardMatchPlayerParticipation(matchId);
-    } catch (pErr) {
-      console.error("Failed to auto-award playing match coins on timer FINISH:", pErr);
-    }
+    await processMatchCompletion(match);
   }
 
   // Calculate live current elapsed for instant response & socket emit
@@ -3074,6 +3264,22 @@ const modifyMatchScoreInDB = async (
             );
           }
 
+          // If scorer has a parent account registered, notify parent
+          try {
+            const scorerUser = await User.findById(scorer.player).select("parentId firstName lastName userName").lean();
+            if (scorerUser?.parentId) {
+              const childName = (scorerUser.firstName ? `${scorerUser.firstName} ${scorerUser.lastName || ""}` : scorerUser.userName).trim();
+              await NotificationQueueHelper.sendNotification(
+                String(scorerUser.parentId),
+                `Congratulations! Your child ${childName} scored a goal at minute ${min}!`,
+                "Goal Scored",
+                NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED,
+              );
+            }
+          } catch (pErr) {
+            // safe ignore
+          }
+
           // Broadcast goal to all team subscribers (Bell Icon subscribers)
           if (scorer.team) {
             const scoringTeamDoc = await Team.findById(scorer.team).select("teamName").lean();
@@ -3257,7 +3463,7 @@ const modifyMatchScoreInDB = async (
   return await formatMatchVenue(match);
 };
 
-export const emitMatchUpdate = async (matchId: string) => {
+export async function emitMatchUpdate(matchId: string) {
   try {
     const match = await Match.findById(matchId)
       .populate("league")

@@ -64,7 +64,7 @@ const createMatchResultToDB = async (payload: any) => {
   }
 
   // 4️⃣ CHECK MATCH STATUS (Admins have master override to record/adjust match events anytime)
-  if (!payload.isAdmin && matchData.status !== "live") {
+  if (!payload.isAdmin && matchData.status !== "live" && matchData.status !== "half_time") {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Match is not running");
   }
 
@@ -98,7 +98,8 @@ const createMatchResultToDB = async (payload: any) => {
       );
       if (diff > 0) liveSeconds += diff;
     }
-    eventMinute = Math.floor(liveSeconds / 60) || 1;
+    const calculatedMinute = Math.floor(liveSeconds / 60);
+    eventMinute = calculatedMinute || 1;
     payload.minute = eventMinute;
   } else {
     eventMinute = Number(eventMinute);
@@ -255,6 +256,26 @@ const createMatchResultToDB = async (payload: any) => {
         title,
         NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED
       );
+
+      // Also notify registered parent if player has a parent account linked
+      try {
+        const playerWithParent = await User.findById(player).select("parentId firstName lastName userName").lean();
+        if (playerWithParent?.parentId) {
+          const childName = (playerWithParent.firstName ? `${playerWithParent.firstName} ${playerWithParent.lastName || ""}` : playerWithParent.userName).trim();
+          let parentMsg = `Your child ${childName}: ${message}`;
+          if (eventType === "goal") {
+            parentMsg = `Congratulations! Your child ${childName} scored a goal at minute ${resolvedMinute}!`;
+          }
+          await NotificationQueueHelper.sendNotification(
+            String(playerWithParent.parentId),
+            parentMsg,
+            title,
+            NOTIFICATION_TYPE.MATCH_RESULT_PUBLISHED
+          );
+        }
+      } catch (pErr) {
+        // safe ignore
+      }
     }
 
     // Assist player notification
@@ -323,6 +344,7 @@ const createMatchResultToDB = async (payload: any) => {
             matchId: String(match),
             eventType,
             minute: String(resolvedMinute),
+            period: matchData.period || "first_half",
           }
         );
       } catch (subErr) {

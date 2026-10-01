@@ -59,6 +59,7 @@ export function generateTeamNotificationDedupKey(options: {
   minute?: string | number;
   playerId?: string;
   action?: string;
+  period?: string;
 }): string {
   const parts = [
     "team_notif",
@@ -68,6 +69,7 @@ export function generateTeamNotificationDedupKey(options: {
     options.referenceId || "NONE",
     options.playerId || "NONE",
     options.minute !== undefined && options.minute !== "" ? `m${options.minute}` : "NONE",
+    options.period || "NONE",
     options.action || "NONE",
   ];
 
