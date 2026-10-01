@@ -100,13 +100,23 @@ const getAllLeagueWithTeams = catchAsync(async (req, res) => {
     data: result,
   });
 });
+const getLeagueTeamOverview = catchAsync(async (req: Request, res: Response) => {
+  const result = await LeagueTeamService.getLeagueTeamOverviewFromDB();
 
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'League team overview statistics retrieved successfully',
+    data: result,
+  });
+});
 
 export const LeagueTeamController = {
   addTeamToLeague,
   getLeagueTeams,
   removeTeamFromLeague,
   getTeamsByLeague,
-    removeSingleTeamFromLeague,
-  getAllLeagueWithTeams
+  removeSingleTeamFromLeague,
+  getAllLeagueWithTeams,
+  getLeagueTeamOverview,
 };

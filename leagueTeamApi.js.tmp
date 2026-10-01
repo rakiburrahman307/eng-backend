@@ -1,0 +1,64 @@
+import { baseApi } from "../../utils/apiBaseQuery";
+
+export const leagueTeamApi = baseApi.injectEndpoints({
+  endpoints: (builder) => ({
+    createLeagueTeam: builder.mutation({
+      query: (data) => ({
+        url: "/league-team",
+        method: "POST",
+        body: data,
+      }),
+      invalidatesTags: ["leagueTeam"],
+    }),
+
+    getAllLeagueTeam: builder.query({
+      query: (pageNumber) => ({
+        url: `/league-team/all?page=${pageNumber}`,
+        method: "GET",
+      }),
+      providesTags: ["leagueTeam"],
+    }),
+
+    getLeagueTeamOverview: builder.query({
+      query: () => ({
+        url: "/league-team/overview",
+        method: "GET",
+      }),
+      providesTags: ["leagueTeam"],
+    }),
+
+    getSingleLeagueTeam: builder.query({
+      query: (leagueId) => ({
+        url: `/league-team/league/${leagueId}`,
+        method: "GET",
+      }),
+      providesTags: ["leagueTeam"],
+    }),
+
+    deleteLeagueTeam: builder.mutation({
+      query: ({ leagueId, teamId }) => ({
+        url: `/league-team/league/${leagueId}/teams/${teamId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["leagueTeam"],
+    }),
+
+    // Delete the entire league entry (all teams under the league)
+    deleteLeagueEntry: builder.mutation({
+      query: (leagueId) => ({
+        url: `/league-team/league/${leagueId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["leagueTeam"],
+    }),
+  }),
+});
+
+export const {
+  useCreateLeagueTeamMutation,
+  useGetAllLeagueTeamQuery,
+  useGetLeagueTeamOverviewQuery,
+  useGetSingleLeagueTeamQuery,
+  useDeleteLeagueTeamMutation,
+  useDeleteLeagueEntryMutation,
+} = leagueTeamApi;

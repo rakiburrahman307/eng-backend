@@ -148,11 +148,56 @@ const getAllLeagueWithTeamsFromDB = async (): Promise<IGroupedLeagueWithTeams[]>
 };
 
 
+const getLeagueTeamOverviewFromDB = async () => {
+  const [
+    distinctLeagueIds,
+    totalAssignments,
+    distinctTeamIds,
+    totalAllLeagues,
+  ] = await Promise.all([
+    LeagueTeam.distinct('league'),
+    LeagueTeam.countDocuments(),
+    LeagueTeam.distinct('team'),
+    League.countDocuments(),
+  ]);
+
+  const totalLeagues = distinctLeagueIds.length;
+  const distinctTeams = distinctTeamIds.length;
+
+  let activeSeasons = 0;
+  if (distinctLeagueIds.length > 0) {
+    const leaguesWithSeason = await League.find({
+      _id: { $in: distinctLeagueIds },
+      season: { $exists: true, $ne: '' },
+    }).select('season');
+
+    const seasonSet = new Set(
+      leaguesWithSeason
+        .map((l) => String(l.season).trim())
+        .filter(Boolean)
+    );
+    activeSeasons = seasonSet.size;
+  }
+
+  const avgTeams =
+    totalLeagues > 0 ? Number((totalAssignments / totalLeagues).toFixed(1)) : 0;
+
+  return {
+    totalLeagues,
+    totalAllLeagues,
+    totalAllocatedTeams: totalAssignments,
+    distinctTeams,
+    activeSeasons,
+    avgTeamsPerLeague: avgTeams,
+  };
+};
+
 export const LeagueTeamService = {
   addTeamToLeagueToDB,
   getLeagueTeamsFromDB,
   removeTeamFromLeagueToDB,
   getTeamsByLeagueFromDB,
   removeSingleTeamFromLeague,
-  getAllLeagueWithTeamsFromDB
+  getAllLeagueWithTeamsFromDB,
+  getLeagueTeamOverviewFromDB,
 };

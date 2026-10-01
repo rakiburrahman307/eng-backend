@@ -15,7 +15,14 @@ router
   .get(auth(), LeagueTeamController.getLeagueTeams);
 
 
-  router.route("/all").get(LeagueTeamController.getAllLeagueWithTeams);
+router.get(
+  '/overview',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  LeagueTeamController.getLeagueTeamOverview
+);
+
+router.route("/all").get(LeagueTeamController.getAllLeagueWithTeams);
+
 // REMOVE
 router
   .route('/:id')
