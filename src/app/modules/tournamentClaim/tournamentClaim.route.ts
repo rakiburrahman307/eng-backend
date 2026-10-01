@@ -17,6 +17,12 @@ router
   );
 
 router.get(
+  '/overview',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  TournamentClaimController.getClaimOverview
+);
+
+router.get(
   '/my-claims',
   auth(USER_ROLES.PLAYER, USER_ROLES.TOURNAMENT_PLAYER),
   TournamentClaimController.getMyClaims

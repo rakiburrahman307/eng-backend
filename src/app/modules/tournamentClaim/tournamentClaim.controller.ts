@@ -59,9 +59,21 @@ const reviewClaim = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getClaimOverview = catchAsync(async (req: Request, res: Response) => {
+  const result = await TournamentClaimService.getTournamentClaimOverviewFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Tournament claim overview statistics retrieved successfully',
+    data: result,
+  });
+});
+
 export const TournamentClaimController = {
   createClaim,
   getAllClaims,
   getMyClaims,
   reviewClaim,
+  getClaimOverview,
 };

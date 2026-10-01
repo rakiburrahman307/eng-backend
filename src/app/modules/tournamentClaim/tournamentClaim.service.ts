@@ -231,9 +231,34 @@ const reviewClaimInDB = async (
   return claim;
 };
 
+const getTournamentClaimOverviewFromDB = async () => {
+  const [
+    totalClaims,
+    pendingClaims,
+    approvedClaims,
+    rejectedClaims,
+    totalTournaments,
+  ] = await Promise.all([
+    TournamentClaim.countDocuments(),
+    TournamentClaim.countDocuments({ status: 'pending' }),
+    TournamentClaim.countDocuments({ status: 'approved' }),
+    TournamentClaim.countDocuments({ status: 'rejected' }),
+    Tournament.countDocuments(),
+  ]);
+
+  return {
+    totalClaims,
+    pendingClaims,
+    approvedClaims,
+    rejectedClaims,
+    totalTournaments,
+  };
+};
+
 export const TournamentClaimService = {
   createClaimToDB,
   getAllClaimsFromDB,
   getMyClaimsFromDB,
   reviewClaimInDB,
+  getTournamentClaimOverviewFromDB,
 };
