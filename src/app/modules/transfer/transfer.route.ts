@@ -43,9 +43,14 @@ router.get(
   TransferController.getMyTransfers
 );
 
-//
+// OVERVIEW (ADMIN / SUPER_ADMIN)
+router.get(
+  '/overview',
+  auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+  TransferController.getTransferOverview
+);
+
 // SINGLE TRANSFER
-//
 router.get(
   '/:id',
   auth(),

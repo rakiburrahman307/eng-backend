@@ -183,11 +183,43 @@ const getAllTransfersFromDB = async (query: Record<string, any>) => {
 
   const filter: any = {};
 
-  if (query.status) {
-    filter.status = query.status;
-  } else {
-    // Default: show both PENDING and MANAGER_APPROVED requests needing Admin action
-    filter.status = { $in: ["PENDING", "MANAGER_APPROVED"] };
+  if (query.status && query.status !== "ALL") {
+    if (query.status === "ACTION_REQUIRED") {
+      filter.status = { $in: ["PENDING", "MANAGER_APPROVED"] };
+    } else {
+      filter.status = query.status;
+    }
+  }
+
+  const searchTerm = (query.searchTerm || query.search || query.searchValue) as string;
+  if (searchTerm && searchTerm.trim()) {
+    const regex = new RegExp(searchTerm.trim(), "i");
+    const [matchingUsers, matchingTeams] = await Promise.all([
+      User.find({
+        $or: [
+          { userName: { $regex: regex } },
+          { email: { $regex: regex } },
+          { firstName: { $regex: regex } },
+          { lastName: { $regex: regex } },
+        ],
+      }).select("_id"),
+      Team.find({ teamName: { $regex: regex } }).select("_id"),
+    ]);
+
+    const userIds = matchingUsers.map((u) => u._id);
+    const teamIds = matchingTeams.map((t) => t._id);
+
+    filter.$and = filter.$and || [];
+    filter.$and.push({
+      $or: [
+        ...(userIds.length > 0
+          ? [{ player: { $in: userIds } }, { requestedBy: { $in: userIds } }]
+          : []),
+        ...(teamIds.length > 0
+          ? [{ fromTeam: { $in: teamIds } }, { toTeam: { $in: teamIds } }]
+          : []),
+      ],
+    });
   }
 
   const [transfers, total] = await Promise.all([
@@ -997,6 +1029,28 @@ const getManagerTransferRequestsFromDB = async (
   return result;
 };
 
+const getTransferOverviewFromDB = async () => {
+  const [total, pending, managerApproved, approved, rejected, withdrawn] =
+    await Promise.all([
+      Transfer.countDocuments(),
+      Transfer.countDocuments({ status: "PENDING" }),
+      Transfer.countDocuments({ status: "MANAGER_APPROVED" }),
+      Transfer.countDocuments({ status: "APPROVED" }),
+      Transfer.countDocuments({ status: "REJECTED" }),
+      Transfer.countDocuments({ status: "WITHDRAWN" }),
+    ]);
+
+  return {
+    totalTransfers: total,
+    pendingTransfers: pending,
+    managerApprovedTransfers: managerApproved,
+    actionRequiredTransfers: pending + managerApproved,
+    approvedTransfers: approved,
+    rejectedTransfers: rejected,
+    withdrawnTransfers: withdrawn,
+  };
+};
+
 export const TransferService = {
   createTransferToDB,
   getAllTransfersFromDB,
@@ -1007,4 +1061,5 @@ export const TransferService = {
   withdrawTransferToDB,
   getAvailablePlayersFromDB,
   getManagerTransferRequestsFromDB,
+  getTransferOverviewFromDB,
 };

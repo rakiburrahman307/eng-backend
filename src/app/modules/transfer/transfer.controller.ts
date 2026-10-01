@@ -144,6 +144,17 @@ const getManagerTransferRequests = catchAsync(
   }
 );
 
+const getTransferOverview = catchAsync(async (req: Request, res: Response) => {
+  const result = await TransferService.getTransferOverviewFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Transfer overview statistics retrieved successfully',
+    data: result,
+  });
+});
+
 export const TransferController = {
   createTransfer,
   getAllTransfers,
@@ -151,7 +162,8 @@ export const TransferController = {
   getSingleTransfer,
   approveTransfer,
   rejectTransfer,
-    withdrawTransfer,
-    getAvailablePlayers,
-  getManagerTransferRequests
+  withdrawTransfer,
+  getAvailablePlayers,
+  getManagerTransferRequests,
+  getTransferOverview,
 };
