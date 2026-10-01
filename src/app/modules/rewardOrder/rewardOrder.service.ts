@@ -339,11 +339,30 @@ const rejectRewardOrderToDB = async (
       throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
     }
 
+    const userCoinBefore = user.engCoine || 0;
     // Refund points to user's ENG Coins (primary) and reward points (legacy)
-    user.engCoine = (user.engCoine || 0) + order.pointUsed;
+    user.engCoine = userCoinBefore + order.pointUsed;
     user.rewardPoint = (user.rewardPoint || 0) + order.pointUsed;
 
     await user.save({ session });
+
+    // Record Coin Transaction Ledger for refund
+    await CoinTransaction.create(
+      [
+        {
+          user: user._id,
+          type: "CREDIT",
+          amount: order.pointUsed,
+          balanceBefore: userCoinBefore,
+          balanceAfter: user.engCoine,
+          category: COIN_TRANSACTION_CATEGORY.ROLLBACK,
+          title: "Order Refund",
+          description: `Refunded ${order.pointUsed.toLocaleString()} ENG Coins for rejected order #${order._id.toString().slice(-6)}`,
+          referenceId: order._id.toString(),
+        },
+      ],
+      { session },
+    );
 
     // UPDATE ORDER
     order.status = "rejected";

@@ -27,6 +27,10 @@ import {
   manualAwardCleanSheet,
   manualRevokeCleanSheet,
 } from "../../../helpers/matchCleanSheetHelper";
+import {
+  awardMatchPlayerParticipation,
+  revokeMatchPlayerParticipation,
+} from "../../../helpers/matchPlayerParticipationHelper";
 import { recordCoinTransaction } from "../../../helpers/coinLedgerHelper";
 import { recordTeamCoinTransaction } from "../../../helpers/teamCoinLedgerHelper";
 import { TEAM_COIN_CATEGORY } from "../teamCoinTransaction/teamCoinTransaction.interface";
@@ -1541,6 +1545,13 @@ const deleteMatchFromDB = async (id: string) => {
     }
   }
 
+  // 4.1. Rollback match player participation coins
+  try {
+    await revokeMatchPlayerParticipation(id);
+  } catch (partRollbackErr) {
+    console.error("Error rolling back match player participation coins:", partRollbackErr);
+  }
+
   // 4.5. Rollback feedback/reviews given by manager (matchReview)
   if (match.matchReview && match.matchReview.length > 0) {
     try {
@@ -1921,6 +1932,13 @@ const updateMatchStatusInDB = async (
       console.error("Failed to auto-award clean sheets on match finish:", csErr);
     }
 
+    // Auto-award Playing Match coins to participating players
+    try {
+      await awardMatchPlayerParticipation(match._id);
+    } catch (partErr) {
+      console.error("Failed to auto-award match playing coins on match finish:", partErr);
+    }
+
     // Notify subscribers of both teams about Full-Time match result via BullMQ
     try {
       const [homeTeamDoc, awayTeamDoc] = await Promise.all([
@@ -2090,6 +2108,13 @@ const addMatchReviewToDB = async (
     match.timerStatus = "finished";
     match.timerStartedAt = null;
     await match.save();
+
+    try {
+      await awardMatchCleanSheets(match._id);
+      await awardMatchPlayerParticipation(match._id);
+    } catch (e) {
+      console.error("Failed to auto-award match completion rewards in review submission:", e);
+    }
   }
 
   if (setting.isFeedbackWindowRestricted && setting.feedbackWindowHours > 0) {
@@ -2197,15 +2222,12 @@ const addMatchReviewToDB = async (
         }
         const isPro = await isUserPremiumPlayer(r.player);
         if (isPro) {
-          // 1. Manager Rating Reward from PlayerEconomy (Elite: 300, Great: 200, Good: 100)
+          // Manager Rating Reward from PlayerEconomy (Elite: 300, Great: 200, Good: 100)
           const ratingReward = getPlayerReward(numRating);
 
-          // 2. Playing a Match Reward from PlayerEconomy
-          const playingCoin = Number(pe?.playingMatch?.coin) || 0;
-          const playingMV = Number(pe?.playingMatch?.marketValue) || (playingCoin * (pe?.conversionRate ?? 10));
-
-          coinImpact = ratingReward.coin + playingCoin;
-          valueImpact = ratingReward.marketValue + playingMV;
+          // Playing a match appearance bonus is awarded strictly once upon match completion
+          coinImpact = ratingReward.coin;
+          valueImpact = ratingReward.marketValue;
         } else {
           // Non-professional / free players receive NO coins
           coinImpact = 0;
@@ -2490,6 +2512,11 @@ const updateMatchTimerInDB = async (
       await awardMatchCleanSheets(matchId);
     } catch (csErr) {
       console.error("Failed to auto-award clean sheets on timer FINISH:", csErr);
+    }
+    try {
+      await awardMatchPlayerParticipation(matchId);
+    } catch (pErr) {
+      console.error("Failed to auto-award playing match coins on timer FINISH:", pErr);
     }
   }
 
@@ -3008,15 +3035,17 @@ const modifyMatchScoreInDB = async (
           { player: oldMOTM },
           { $inc: { playerOfTheDay: -1 } },
         );
-        if (potdCoin > 0 || potdMV > 0) {
-          const oldMOTMUser = await User.findById(oldMOTM);
-          if (oldMOTMUser) {
-            const isProOld = await isUserPremiumPlayer(oldMOTM);
-            const minFloorCoin = getMinFloorCoin(pe, isProOld);
-            const updatedCoin = Math.max(minFloorCoin, (oldMOTMUser.engCoine ?? 0) - potdCoin);
-            const updatedMV = Math.max(minFloorMV, (oldMOTMUser.marketValue ?? 0) - potdMV);
-            await User.findByIdAndUpdate(oldMOTM, {
-              $set: { engCoine: updatedCoin, marketValue: updatedMV },
+        if (potdCoin > 0) {
+          const isProOld = await isUserPremiumPlayer(oldMOTM);
+          if (isProOld) {
+            await recordCoinTransaction({
+              userId: oldMOTM,
+              amount: -potdCoin,
+              category: COIN_TRANSACTION_CATEGORY.ROLLBACK,
+              title: "Player of the Day Revoked",
+              description: `Player of the Day award was reassigned${fixtureStr ? ` in ${fixtureStr}` : ""}`,
+              matchId: match._id,
+              referenceId: `${match._id.toString()}_motm_revoked`,
             });
           }
         }
@@ -3056,15 +3085,23 @@ const modifyMatchScoreInDB = async (
       const vsMotm = motmOpponent ? ` vs ${motmOpponent}` : (fixtureStr ? ` in ${fixtureStr}` : " in match");
 
       if (potdCoin > 0) {
-        await recordCoinTransaction({
-          userId: targetMOTM,
-          amount: potdCoin,
+        const alreadyAwarded = await CoinTransaction.findOne({
+          match: match._id,
+          user: targetMOTM,
           category: COIN_TRANSACTION_CATEGORY.PLAYER_OF_THE_DAY,
-          title: "Player of the Day Bonus",
-          description: `Player of the Day reward${vsMotm}`,
-          matchId: match._id,
-          referenceId: `${match._id.toString()}_motm`,
-        });
+        }).lean();
+
+        if (!alreadyAwarded) {
+          await recordCoinTransaction({
+            userId: targetMOTM,
+            amount: potdCoin,
+            category: COIN_TRANSACTION_CATEGORY.PLAYER_OF_THE_DAY,
+            title: "Player of the Day Bonus",
+            description: `Player of the Day reward${vsMotm}`,
+            matchId: match._id,
+            referenceId: `${match._id.toString()}_motm`,
+          });
+        }
       }
     }
 

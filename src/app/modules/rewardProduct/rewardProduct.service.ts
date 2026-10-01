@@ -8,6 +8,8 @@ import { User } from '../user/user.model';
 import { Subscription } from '../subscription/subscription.model';
 import { isPremiumPlayerPackage } from '../../../helpers/packageHelper';
 import { PlayerEconomy } from '../coinAndBudget/playerEconomySchema.model';
+import { recordCoinTransaction } from '../../../helpers/coinLedgerHelper';
+import { COIN_TRANSACTION_CATEGORY } from '../coinTransaction/coinTransaction.interface';
 
 // CREATE
 const createRewardProductToDB = async (
@@ -322,9 +324,23 @@ const redeemCoffeeRewardInDB = async (
   const awardPoints = Number(rewardProduct.point) || 0;
   const currentCoins = Number(user.engCoine) || 0;
 
-  // ♾️ NO USER LIMITATION! Unlimited redemptions permitted!
+  // ♾️ Unlimited redemptions permitted, but guard against rapid double-taps / concurrent scans within 10 seconds
   if (!rewardProduct.redeemedUsers) {
     rewardProduct.redeemedUsers = [];
+  }
+
+  const tenSecondsAgo = Date.now() - 10000;
+  const hasRecentRedeem = rewardProduct.redeemedUsers.some(
+    (ru: any) =>
+      ru.user?.toString() === finalPlayerId.toString() &&
+      new Date(ru.redeemedAt).getTime() > tenSecondsAgo
+  );
+
+  if (hasRecentRedeem) {
+    throw new ApiError(
+      StatusCodes.TOO_MANY_REQUESTS,
+      "Duplicate scan detected. Please wait a few seconds before scanning again."
+    );
   }
 
   const playerObjectId = new Types.ObjectId(finalPlayerId);
@@ -337,12 +353,26 @@ const redeemCoffeeRewardInDB = async (
 
   await rewardProduct.save();
 
-  // 💰 ADD (+) COINS & UPDATE MARKET VALUE FOR THE PLAYER (Coffee reward awards coins)
-  const pe = await PlayerEconomy.findOne();
-  const rate = pe?.conversionRate ?? 10;
-  user.engCoine = currentCoins + awardPoints;
-  user.marketValue = (user.engCoine || 0) * rate;
-  await user.save();
+  // 💰 ADD (+) COINS & UPDATE MARKET VALUE FOR THE PLAYER THROUGH LEDGER
+  if (awardPoints > 0) {
+    try {
+      await recordCoinTransaction({
+        userId: finalPlayerId,
+        amount: awardPoints,
+        category: COIN_TRANSACTION_CATEGORY.PRODUCT_PURCHASE,
+        title: "Reward Point Earned",
+        description: `Earned ${awardPoints.toLocaleString()} ENG Coins for redeeming "${rewardProduct.brand || rewardProduct.title}"`,
+        referenceId: rewardProduct._id.toString(),
+      });
+    } catch (e) {
+      console.error("Failed to record coin transaction for reward product:", e);
+      const pe = await PlayerEconomy.findOne();
+      const rate = pe?.conversionRate ?? 10;
+      user.engCoine = currentCoins + awardPoints;
+      user.marketValue = (user.engCoine || 0) * rate;
+      await user.save();
+    }
+  }
 
   const getValidEmail = (val?: string | null) =>
     val && typeof val === 'string' && val.includes('@') ? val : '';

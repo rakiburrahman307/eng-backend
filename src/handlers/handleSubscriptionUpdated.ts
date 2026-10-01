@@ -7,6 +7,8 @@ import { Package } from '../app/modules/package/package.model';
 import { NOTIFICATION_TYPE } from '../app/modules/notification/notification.interface';
 import { USER_ROLES } from '../enums/user';
 import { NotificationQueueHelper } from '../helpers/bullMQ/bullHelper';
+import { recordCoinTransaction } from '../helpers/coinLedgerHelper';
+import { COIN_TRANSACTION_CATEGORY } from '../app/modules/coinTransaction/coinTransaction.interface';
 
 export const handleSubscriptionUpdated = async (data: any) => {
   const subscription = await stripe.subscriptions.retrieve(data.id);
@@ -106,20 +108,27 @@ export const handleSubscriptionUpdated = async (data: any) => {
       updateData.blueTick = true;
     }
 
-    // When package is updated/switched, add new package's coins and value to player
-    if (isPackageChanged && subscription.status === 'active') {
-      const incData: any = { engCoine: creditToAdd };
-      if (isPlayerRole) {
-        incData.marketValue = marketValueToAdd;
+    await User.findByIdAndUpdate(targetUser._id, {
+      $set: updateData,
+    });
+
+    // When package is updated/switched, add new package's coins and value to player through ledger
+    if (isPackageChanged && subscription.status === 'active' && creditToAdd > 0) {
+      try {
+        await recordCoinTransaction({
+          userId: targetUser._id,
+          amount: creditToAdd,
+          category: COIN_TRANSACTION_CATEGORY.SUBSCRIPTION_BONUS,
+          title: "Subscription Bonus",
+          description: `Credited ${creditToAdd.toLocaleString()} ENG Coins from "${pkg.title}" package update`,
+          referenceId: subscription.id,
+        });
+      } catch (coinErr) {
+        console.error("Error recording subscription coin transaction:", coinErr);
+        const incData: any = { engCoine: creditToAdd };
+        if (isPlayerRole) incData.marketValue = marketValueToAdd;
+        await User.findByIdAndUpdate(targetUser._id, { $inc: incData });
       }
-      await User.findByIdAndUpdate(targetUser._id, {
-        $set: updateData,
-        $inc: incData,
-      });
-    } else {
-      await User.findByIdAndUpdate(targetUser._id, {
-        $set: updateData,
-      });
     }
 
     // Ensure Parent account also has active access
@@ -176,14 +185,27 @@ export const handleSubscriptionUpdated = async (data: any) => {
   if (isPlayerRole) {
     updateData.blueTick = true;
   }
-  const incData: any = { engCoine: creditToAdd };
-  if (isPlayerRole) {
-    incData.marketValue = marketValueToAdd;
-  }
   await User.findByIdAndUpdate(targetUser._id, {
     $set: updateData,
-    $inc: incData,
   });
+
+  if (creditToAdd > 0) {
+    try {
+      await recordCoinTransaction({
+        userId: targetUser._id,
+        amount: creditToAdd,
+        category: COIN_TRANSACTION_CATEGORY.SUBSCRIPTION_BONUS,
+        title: "Subscription Bonus",
+        description: `Credited ${creditToAdd.toLocaleString()} ENG Coins from "${pkg.title}" package subscription`,
+        referenceId: subscription.id,
+      });
+    } catch (coinErr) {
+      console.error("Error recording subscription coin transaction:", coinErr);
+      const incData: any = { engCoine: creditToAdd };
+      if (isPlayerRole) incData.marketValue = marketValueToAdd;
+      await User.findByIdAndUpdate(targetUser._id, { $inc: incData });
+    }
+  }
 
   // Ensure Parent account also has active access
   if (existingUser._id.toString() !== targetUser._id.toString()) {
