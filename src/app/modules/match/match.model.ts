@@ -212,6 +212,14 @@ const matchSchema = new Schema(
         },
       },
     ],
+    oneDayReminderSent: {
+      type: Boolean,
+      default: false,
+    },
+    oneDayReminderSentAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -220,6 +228,7 @@ const matchSchema = new Schema(
 
 matchSchema.index({ league: 1, status: 1 });
 matchSchema.index({ matchDate: 1 });
+matchSchema.index({ status: 1, oneDayReminderSent: 1, matchDate: 1 });
 matchSchema.index({ homeTeam: 1 });
 matchSchema.index({ awayTeam: 1 });
 matchSchema.index({ referee: 1 });

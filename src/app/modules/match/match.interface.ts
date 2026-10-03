@@ -30,6 +30,9 @@ export interface IMatch {
   referee: Types.ObjectId;
 
   status: 'upcoming' | 'live' | 'half_time' | 'finished' | 'cancelled';
+  scheduledAt?: Date | null;
+  startedAt?: Date | null;
+  finishedAt?: Date | null;
 
   timerStatus?: 'stopped' | 'running' | 'paused' | 'finished';
 
@@ -59,4 +62,6 @@ export interface IMatch {
   clubCoinsAwarded?: Map<string, number> | Record<string, number>;
 
   notes?: string | null;
+  oneDayReminderSent?: boolean;
+  oneDayReminderSentAt?: Date | null;
 }

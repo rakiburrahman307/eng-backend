@@ -34,7 +34,7 @@ export interface SMSJobData {
 }
 
 export interface CleanupJobData {
-     type: 'old-notifications' | 'completed-jobs' | 'failed-jobs' | 'all-notifications' | 'subscription-sync' | 'unverified-users' | 'scheduled-news-sync';
+     type: 'old-notifications' | 'completed-jobs' | 'failed-jobs' | 'all-notifications' | 'subscription-sync' | 'unverified-users' | 'scheduled-news-sync' | 'upcoming-match-reminders';
      olderThan?: number; // Days
 }
 

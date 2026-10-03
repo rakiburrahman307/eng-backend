@@ -59,6 +59,17 @@ export async function connectServices(): Promise<void> {
      import('./playerTransferStatsHelper')
           .then(({ syncAllApprovedTransfersStats }) => syncAllApprovedTransfersStats())
           .catch((err) => errorLogger.error('Failed to sync transfer stats on startup:', err));
+
+     // 7. Check and send 1-day advance push notifications for upcoming matches
+     import('./matchReminderHelper')
+          .then(({ checkAndSendUpcomingMatchReminders }) => checkAndSendUpcomingMatchReminders())
+          .catch((err) => errorLogger.error('Failed to run initial match reminders:', err));
+
+     setInterval(() => {
+          import('./matchReminderHelper')
+               .then(({ checkAndSendUpcomingMatchReminders }) => checkAndSendUpcomingMatchReminders())
+               .catch(() => {});
+     }, 10 * 60 * 1000).unref();
 }
 
 export async function initSocketServer(server: http.Server): Promise<void> {

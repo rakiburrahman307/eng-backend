@@ -44,6 +44,7 @@ export const emailWorker = new Worker<EmailJobData>(
                          });
                          break;
 
+
                     default:
                          throw new Error(`Unknown email template: ${template}`);
                }
@@ -376,6 +377,14 @@ export const cleanupWorker = new Worker<CleanupJobData>(
                          }
                          if (overdueNews.length > 0) {
                               logger.info(colors.green(`[BullMQ] Published and notified ${overdueNews.length} overdue scheduled news articles`));
+                         }
+                         break;
+
+                    case 'upcoming-match-reminders':
+                         const { checkAndSendUpcomingMatchReminders: runMatchReminders } = require('../matchReminderHelper');
+                         const reminderStats = await runMatchReminders();
+                         if (reminderStats.processedMatches > 0) {
+                              logger.info(colors.green(`[BullMQ] Upcoming match reminders: ${reminderStats.processedMatches} matches, ${reminderStats.totalRecipients} notifications dispatched`));
                          }
                          break;
 
