@@ -905,8 +905,9 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
   }
 
   // Match Type Filter
-  if (query.matchType) {
-    if (query.matchType === "league") {
+  if (query.matchType && query.matchType !== "ALL") {
+    const targetType = String(query.matchType).toLowerCase().trim();
+    if (targetType === "league") {
       andConditions.push({
         $or: [
           { matchType: "league" },
@@ -915,7 +916,7 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
         ],
       });
     } else {
-      andConditions.push({ matchType: query.matchType });
+      andConditions.push({ matchType: targetType });
     }
   }
 
@@ -998,7 +999,7 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
   const totalPage = Math.ceil(total / limitNumber) || 1;
 
   // Sorting
-  const sortField = (sort as string) || "matchDate";
+  const sortField = (sort as string) || "-createdAt";
 
   const matches = await Match.find(initialFilter)
     .sort(sortField)
