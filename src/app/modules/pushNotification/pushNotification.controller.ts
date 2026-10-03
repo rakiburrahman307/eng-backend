@@ -82,6 +82,91 @@ const clearAllNotifications = catchAsync(async (req: Request, res: Response) => 
   });
 });
 
+const getMatchReminderSettings = catchAsync(async (req: Request, res: Response) => {
+  const { getEffectiveMatchSetting } = await import("../match/matchSetting.model");
+  const result = await getEffectiveMatchSetting();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Match reminder settings retrieved successfully",
+    data: result,
+  });
+});
+
+const updateMatchReminderSettings = catchAsync(async (req: Request, res: Response) => {
+  const { getEffectiveMatchSetting } = await import("../match/matchSetting.model");
+  const setting = (await getEffectiveMatchSetting()) as any;
+
+  if (req.body.isMatchReminderEnabled !== undefined) {
+    setting.isMatchReminderEnabled = Boolean(req.body.isMatchReminderEnabled);
+  }
+  if (req.body.matchReminderHours !== undefined) {
+    setting.matchReminderHours = Math.max(1, Math.min(168, Number(req.body.matchReminderHours) || 24));
+  }
+  if (req.body.matchReminderAudience !== undefined) {
+    setting.matchReminderAudience = req.body.matchReminderAudience === "ALL" ? "ALL" : "STAKEHOLDERS";
+  }
+  if (req.body.customReminderTitle !== undefined) {
+    setting.customReminderTitle = String(req.body.customReminderTitle).trim();
+  }
+  if (req.body.customReminderMessage !== undefined) {
+    setting.customReminderMessage = String(req.body.customReminderMessage).trim();
+  }
+  if (req.body.timezone !== undefined) {
+    setting.timezone = String(req.body.timezone).trim() || "Europe/London";
+  }
+
+  await setting.save();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Match reminder settings updated successfully",
+    data: setting,
+  });
+});
+
+const getUpcomingMatchesPreview = catchAsync(async (req: Request, res: Response) => {
+  const { getUpcomingMatchesForAdminPreview } = await import("../../../helpers/matchReminderHelper");
+  const result = await getUpcomingMatchesForAdminPreview({
+    limit: Number(req.query.limit) || 20,
+    page: Number(req.query.page) || 1,
+    status: req.query.status as string,
+  });
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Upcoming matches preview retrieved successfully",
+    data: result,
+  });
+});
+
+const triggerMatchRemindersNow = catchAsync(async (req: Request, res: Response) => {
+  const { checkAndSendUpcomingMatchReminders } = await import("../../../helpers/matchReminderHelper");
+  const result = await checkAndSendUpcomingMatchReminders();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: `Match reminder check complete: ${result.processedMatches} matches processed, ${result.totalRecipients} notifications dispatched.`,
+    data: result,
+  });
+});
+
+const sendSingleMatchReminderNow = catchAsync(async (req: Request, res: Response) => {
+  const { sendSingleMatchReminder } = await import("../../../helpers/matchReminderHelper");
+  const result = await sendSingleMatchReminder(String(req.params.matchId), { force: true });
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: result.message,
+    data: result,
+  });
+});
+
 export const NotificationController = {
   sendNotification,
   cancelScheduledNotification,
@@ -89,4 +174,9 @@ export const NotificationController = {
   getNotifications,
   deleteNotification,
   clearAllNotifications,
+  getMatchReminderSettings,
+  updateMatchReminderSettings,
+  getUpcomingMatchesPreview,
+  triggerMatchRemindersNow,
+  sendSingleMatchReminderNow,
 };
