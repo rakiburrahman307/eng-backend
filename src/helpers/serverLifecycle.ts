@@ -54,6 +54,11 @@ export async function connectServices(): Promise<void> {
                .then(({ checkAndFinishExpiredMatches }) => checkAndFinishExpiredMatches())
                .catch(() => {});
      }, 30000).unref();
+
+     // 6. Sync transferred players historical stats to ensure all past and present transfers carry forward
+     import('./playerTransferStatsHelper')
+          .then(({ syncAllApprovedTransfersStats }) => syncAllApprovedTransfersStats())
+          .catch((err) => errorLogger.error('Failed to sync transfer stats on startup:', err));
 }
 
 export async function initSocketServer(server: http.Server): Promise<void> {

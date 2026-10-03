@@ -13,6 +13,7 @@ import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
 import { recordTeamCoinTransaction } from "../../../helpers/teamCoinLedgerHelper";
 import { TEAM_COIN_CATEGORY } from "../teamCoinTransaction/teamCoinTransaction.interface";
+import { carryForwardPlayerStats } from "../../../helpers/playerTransferStatsHelper";
 
 // CREATE
 const createTransferToDB = async (payload: any, userId: string) => {
@@ -622,6 +623,9 @@ const approveTransferToDB = async (id: string, user: any) => {
       }
     }
     await userDetails.save();
+
+    // 5. Carry forward all player stats (PlayerStats, MatchResult events) to the new team
+    await carryForwardPlayerStats(userDetails._id, transfer.toTeam);
 
     transfer.status = "APPROVED";
     transfer.approvedBy = userId as any;

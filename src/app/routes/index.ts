@@ -64,6 +64,7 @@ const apiRoutes = [
     { path: "/match-result", route: MatchResultRoute },
     { path: "/point-table", route: PointTableRoute },
     { path: "/player-stats", route: PlayerStatsRoutes },
+    { path: "/playerStats", route: PlayerStatsRoutes },
     { path: "/video", route: VideoRoutes },
     { path: "/league", route: LeagueRoute },
     { path: "/league-team", route: LeagueTeamRoute },

@@ -6,6 +6,7 @@ import { User } from "../user/user.model";
 import { Subscription } from "../subscription/subscription.model";
 import { ManagerTeam } from "../managerTeam/managerTeam.model";
 import { PlayerEconomy } from "../coinAndBudget/playerEconomySchema.model";
+import { carryForwardPlayerStats } from "../../../helpers/playerTransferStatsHelper";
 
 // GET ALL USERS
 const getAllUsersFromDB = async (query: Record<string, any>) => {
@@ -453,6 +454,10 @@ const assignTeamToUserToDB = async (
     { $set: { selectTeam: selectTeam || null } },
     { new: true },
   ).populate("selectTeam", "teamName shortName teamLogo");
+
+  if (selectTeam) {
+    await carryForwardPlayerStats(userId, selectTeam);
+  }
 
   return updated;
 };

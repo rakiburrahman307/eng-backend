@@ -17,6 +17,7 @@ import { getPlayerStatsSummary } from "../../../helpers/playerStatsHelper";
 import { isUserPremiumPlayer } from "../../../helpers/packageHelper";
 import { recordCoinTransaction } from "../../../helpers/coinLedgerHelper";
 import { COIN_TRANSACTION_CATEGORY } from "../coinTransaction/coinTransaction.interface";
+import { carryForwardPlayerStats } from "../../../helpers/playerTransferStatsHelper";
 
 const createAdminToDB = async (payload: any): Promise<IUser> => {
   // check admin is exist or not;
@@ -257,6 +258,10 @@ const updateChieldInfoToDB = async (id: string, payload: any) => {
     { new: true, runValidators: true },
   );
 
+  if (payload.selectTeam) {
+    await carryForwardPlayerStats(id, payload.selectTeam);
+  }
+
   return result;
 };
 
@@ -377,6 +382,10 @@ const updatePlayerByUserId = async (userId: string, payload: any) => {
     new: true,
     runValidators: true,
   });
+
+  if (payload.selectTeam) {
+    await carryForwardPlayerStats(userId, payload.selectTeam);
+  }
 
   return result;
 };
