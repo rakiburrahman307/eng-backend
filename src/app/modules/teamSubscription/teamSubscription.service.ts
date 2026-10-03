@@ -3,6 +3,8 @@ import { StatusCodes } from "http-status-codes";
 import ApiError from "../../../errors/ApiErrors";
 import { Team } from "../team/team.model";
 import { User } from "../user/user.model";
+import { ManagerTeam } from "../managerTeam/managerTeam.model";
+import { USER_ROLES } from "../../../enums/user";
 import { TeamSubscription } from "./teamSubscription.model";
 import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
 import { NotificationHelper } from "../../builder/PushNotifications";
@@ -205,16 +207,41 @@ const notifyTeamSubscribers = async (
 
     setImmediate(async () => {
       try {
-        const subs = await TeamSubscription.find({
-          team: teamIdStr,
-          isBellActive: true,
-        })
-          .select("user")
-          .lean();
+        const [subs, managerTeams, directManagers] = await Promise.all([
+          TeamSubscription.find({
+            team: teamIdStr,
+            isBellActive: true,
+          })
+            .select("user")
+            .lean(),
+          ManagerTeam.find({
+            team: teamIdStr,
+          })
+            .select("manager")
+            .lean(),
+          User.find({
+            role: USER_ROLES.MANAGER,
+            selectTeam: teamIdStr,
+          })
+            .select("_id")
+            .lean(),
+        ]);
 
-        const userIds = Array.from(
-          new Set(subs.map((s: any) => s.user.toString()).filter(Boolean))
-        ).filter(
+        const recipientSet = new Set<string>();
+
+        (subs || []).forEach((s: any) => {
+          if (s.user) recipientSet.add(s.user.toString());
+        });
+
+        (managerTeams || []).forEach((m: any) => {
+          if (m.manager) recipientSet.add(m.manager.toString());
+        });
+
+        (directManagers || []).forEach((u: any) => {
+          if (u._id) recipientSet.add(u._id.toString());
+        });
+
+        const userIds = Array.from(recipientSet).filter(
           (id) => !payload.metadata?.playerId || id !== payload.metadata.playerId.toString()
         );
         if (userIds.length > 0) {

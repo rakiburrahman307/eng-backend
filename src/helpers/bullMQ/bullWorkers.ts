@@ -142,20 +142,44 @@ export const notificationWorker = new Worker<NotificationJobData>(
                if (job.name === 'team-subscriber-notification' || (job.data.teamId && !userId)) {
                     const teamId = job.data.teamId;
                     const { TeamSubscription } = require('../../app/modules/teamSubscription/teamSubscription.model');
+                    const { ManagerTeam } = require('../../app/modules/managerTeam/managerTeam.model');
+                    const { User } = require('../../app/modules/user/user.model');
+                    const { USER_ROLES } = require('../../enums/user');
 
-                    const subscribers = await TeamSubscription.find({
-                         team: teamId,
-                         isBellActive: true,
-                    }).select('user').lean();
+                    // Fetch both bell icon subscribers AND assigned team managers
+                    const [subscribers, managerTeams, directManagers] = await Promise.all([
+                         TeamSubscription.find({
+                              team: teamId,
+                              isBellActive: true,
+                         }).select('user').lean(),
+                         ManagerTeam.find({
+                              team: teamId,
+                         }).select('manager').lean(),
+                         User.find({
+                              role: USER_ROLES.MANAGER,
+                              selectTeam: teamId,
+                         }).select('_id').lean(),
+                    ]);
 
-                    // 1. Strictly deduplicate subscriber user IDs
-                    let subscriberUserIds: string[] = Array.from(
-                         new Set<string>(
-                              (subscribers || [])
-                                   .map((s: any) => s.user?.toString())
-                                   .filter(Boolean),
-                         ),
-                    );
+                    // 1. Strictly deduplicate recipient user IDs (subscribers + managers)
+                    const recipientSet = new Set<string>();
+
+                    (subscribers || []).forEach((s: any) => {
+                         const id = s.user?.toString();
+                         if (id) recipientSet.add(id);
+                    });
+
+                    (managerTeams || []).forEach((m: any) => {
+                         const id = m.manager?.toString();
+                         if (id) recipientSet.add(id);
+                    });
+
+                    (directManagers || []).forEach((u: any) => {
+                         const id = u._id?.toString();
+                         if (id) recipientSet.add(id);
+                    });
+
+                    let subscriberUserIds: string[] = Array.from(recipientSet);
 
                     // 2. Only exclude user IDs if explicitly requested via excludeUserIds or excludeTriggerPlayer
                     const excludedList = [
@@ -170,7 +194,7 @@ export const notificationWorker = new Worker<NotificationJobData>(
                          );
                     }
 
-                    logger.info(colors.cyan(`[Team Notification] Found ${subscriberUserIds.length} unique subscribers for team ${teamId}`));
+                    logger.info(colors.cyan(`[Team Notification] Found ${subscriberUserIds.length} recipients (subscribers + managers) for team ${teamId}`));
 
                     if (subscriberUserIds.length > 0) {
                          const CHUNK_SIZE = 500;
