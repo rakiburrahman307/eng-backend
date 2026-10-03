@@ -97,13 +97,25 @@ function formatTemplate(
   venue: string,
   relativeDay: string = 'tomorrow'
 ): string {
+  const venueTrimmed = venue ? venue.trim() : '';
+
   let result = template
     .replace(/\{homeTeam\}/gi, hName)
     .replace(/\{awayTeam\}/gi, aName)
     .replace(/\{date\}/gi, dateStr)
     .replace(/\{time\}/gi, timeStr)
-    .replace(/\{venue\}/gi, venue ? ` at ${venue}` : '')
     .replace(/\{relativeDay\}/gi, relativeDay);
+
+  // Safe {venue} injection (prevents double "at at")
+  if (venueTrimmed) {
+    if (/at\s+\{venue\}/i.test(result)) {
+      result = result.replace(/at\s+\{venue\}/gi, `at ${venueTrimmed}`);
+    } else {
+      result = result.replace(/\{venue\}/gi, ` at ${venueTrimmed}`);
+    }
+  } else {
+    result = result.replace(/\s*at\s*\{venue\}/gi, '').replace(/\{venue\}/gi, '');
+  }
 
   // If the user's template contains the word "tomorrow", automatically adjust if the match is today
   if (relativeDay === 'today') {
@@ -112,7 +124,13 @@ function formatTemplate(
     result = result.replace(/\btomorrow\b/gi, relativeDay);
   }
 
-  return result.trim();
+  // Absolute fail-safe: Ensure no raw 24-char ObjectId is ever sent to users
+  if (/[0-9a-fA-F]{24}/.test(result)) {
+    result = result.replace(/\s*at\s*[0-9a-fA-F]{24}/gi, venueTrimmed ? ` at ${venueTrimmed}` : '');
+    result = result.replace(/[0-9a-fA-F]{24}/gi, '');
+  }
+
+  return result.replace(/\s+/g, ' ').trim();
 }
 
 /**
