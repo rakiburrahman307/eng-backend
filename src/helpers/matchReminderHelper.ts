@@ -94,15 +94,25 @@ function formatTemplate(
   aName: string,
   dateStr: string,
   timeStr: string,
-  venue: string
+  venue: string,
+  relativeDay: string = 'tomorrow'
 ): string {
-  return template
+  let result = template
     .replace(/\{homeTeam\}/gi, hName)
     .replace(/\{awayTeam\}/gi, aName)
     .replace(/\{date\}/gi, dateStr)
     .replace(/\{time\}/gi, timeStr)
     .replace(/\{venue\}/gi, venue ? ` at ${venue}` : '')
-    .trim();
+    .replace(/\{relativeDay\}/gi, relativeDay);
+
+  // If the user's template contains the word "tomorrow", automatically adjust if the match is today
+  if (relativeDay === 'today') {
+    result = result.replace(/\btomorrow\b/gi, 'today');
+  } else if (relativeDay.startsWith('in ') && !template.includes('{relativeDay}')) {
+    result = result.replace(/\btomorrow\b/gi, relativeDay);
+  }
+
+  return result.trim();
 }
 
 /**
@@ -248,13 +258,33 @@ export async function sendSingleMatchReminder(
     dateStr = matchTime.toISOString().slice(0, 10);
   }
 
+  // Calculate calendar day difference in target timezone
+  let relativeDay = 'tomorrow';
+  try {
+    const now = new Date();
+    const nowDateStr = now.toLocaleDateString('en-CA', { timeZone: targetTz }); // YYYY-MM-DD
+    const matchDateStr = matchTime.toLocaleDateString('en-CA', { timeZone: targetTz }); // YYYY-MM-DD
+    const msDiff = new Date(matchDateStr).getTime() - new Date(nowDateStr).getTime();
+    const dayDiff = Math.round(msDiff / (1000 * 60 * 60 * 24));
+
+    if (dayDiff === 0) {
+      relativeDay = 'today';
+    } else if (dayDiff === 1) {
+      relativeDay = 'tomorrow';
+    } else if (dayDiff > 1) {
+      relativeDay = `in ${dayDiff} days`;
+    }
+  } catch {
+    relativeDay = 'tomorrow';
+  }
+
   const rawTitle = setting.customReminderTitle || 'Match Reminder: {homeTeam} vs {awayTeam}';
   const rawBody =
     setting.customReminderMessage ||
     'Upcoming match: {homeTeam} vs {awayTeam} kicks off tomorrow ({date}) at {time}{venue}. Don\'t miss it!';
 
-  const title = formatTemplate(rawTitle, hName, aName, dateStr, timeStr, venue);
-  const body = formatTemplate(rawBody, hName, aName, dateStr, timeStr, venue);
+  const title = formatTemplate(rawTitle, hName, aName, dateStr, timeStr, venue, relativeDay);
+  const body = formatTemplate(rawBody, hName, aName, dateStr, timeStr, venue, relativeDay);
 
   const recipientIds = await resolveMatchRecipients(match, setting.matchReminderAudience);
 
