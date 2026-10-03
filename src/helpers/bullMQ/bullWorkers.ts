@@ -123,6 +123,21 @@ export const notificationWorker = new Worker<NotificationJobData>(
                     return { success: true, pushNotificationId, status: 'SENT' };
                }
 
+               // Handle scheduled news article publish & broadcast
+               if (job.name === 'scheduled-news-publish' || job.data.newsId) {
+                    const { News } = require('../../app/modules/news/news.model');
+                    const { broadcastNewsPublishedNotification } = require('../../app/modules/news/news.service');
+                    const newsId = job.data.newsId;
+                    const newsDoc = await News.findById(newsId);
+                    if (newsDoc && !newsDoc.isNotificationSent) {
+                         newsDoc.status = 'publish';
+                         await newsDoc.save();
+                         await broadcastNewsPublishedNotification(newsDoc);
+                         logger.info(colors.green(`[BullMQ] Scheduled news ${newsId} published and broadcasted successfully`));
+                    }
+                    return { success: true, newsId, status: 'PUBLISHED' };
+               }
+
                // Handle Team Subscriber Notifications (Bell Icon subscribers)
                if (job.name === 'team-subscriber-notification' || (job.data.teamId && !userId)) {
                     const teamId = job.data.teamId;
@@ -320,6 +335,24 @@ export const cleanupWorker = new Worker<CleanupJobData>(
                               createdAt: { $lt: cutoffDate },
                          });
                          logger.info(colors.cyan(`[BullMQ] Deleted ${delRes.deletedCount || 0} unverified accounts`));
+                         break;
+
+                    case 'scheduled-news-sync':
+                         const { News: NewsModel } = require('../../app/modules/news/news.model');
+                         const { broadcastNewsPublishedNotification: broadcastNews } = require('../../app/modules/news/news.service');
+                         const overdueNews = await NewsModel.find({
+                              status: 'schedule',
+                              publishDateTime: { $lte: new Date() },
+                              isNotificationSent: { $ne: true },
+                         });
+                         for (const item of overdueNews) {
+                              item.status = 'publish';
+                              await item.save();
+                              await broadcastNews(item);
+                         }
+                         if (overdueNews.length > 0) {
+                              logger.info(colors.green(`[BullMQ] Published and notified ${overdueNews.length} overdue scheduled news articles`));
+                         }
                          break;
 
                     default:

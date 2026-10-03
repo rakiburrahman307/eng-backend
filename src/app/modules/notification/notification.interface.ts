@@ -30,6 +30,9 @@ export enum NOTIFICATION_TYPE {
   CLEAN_SHEET = "CLEAN_SHEET",
   TEAM_UPDATE = "TEAM_UPDATE",
 
+  // News
+  NEWS_PUBLISHED = "NEWS_PUBLISHED",
+
   // General
   GENERAL = "GENERAL",
 }

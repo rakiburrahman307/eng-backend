@@ -40,9 +40,11 @@ const createNews = catchAsync(async (req: Request, res: Response) => {
 
 
 
-  // 🔥 auto publish logic
+  // Auto publish logic & schedule date handling
   if (payload.status === 'publish') {
     payload.publishDateTime = new Date();
+  } else if (payload.status === 'schedule' && data.publishDateTime) {
+    payload.publishDateTime = new Date(data.publishDateTime);
   } else {
     payload.publishDateTime = null;
   }
@@ -146,11 +148,15 @@ const updateNews = catchAsync(async (req: Request, res: Response) => {
       .split('uploads')[1];
   }
 
-
+  if (payload.status === 'publish') {
+    payload.publishDateTime = new Date();
+  } else if (payload.status === 'schedule' && data.publishDateTime) {
+    payload.publishDateTime = new Date(data.publishDateTime);
+  }
 
   const result = await NewsService.updateNewsToDB(
     id,
-    userId,
+    user,
     payload
   );
 
@@ -168,7 +174,7 @@ const deleteNews = catchAsync(async (req: Request, res: Response) => {
 
   const result = await NewsService.deleteNewsFromDB(
     req.params.id as string,
-    user._id
+    user
   );
 
   sendResponse(res, {

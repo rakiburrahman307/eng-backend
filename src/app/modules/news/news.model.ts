@@ -40,6 +40,10 @@ const newsSchema = new Schema<INews, NewsModel>(
       type: Number,
       default: 0,
     },
+    isNotificationSent: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

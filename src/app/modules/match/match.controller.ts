@@ -281,6 +281,17 @@ const manualRevokeCleanSheet = catchAsync(async (req: Request, res: Response) =>
   });
 });
 
+const getMatchOverview = catchAsync(async (req: Request, res: Response) => {
+  const result = await MatchService.getMatchOverviewFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Match overview analytics retrieved successfully",
+    data: result,
+  });
+});
+
 export const MatchController = {
   createMatch,
   getAllMatches,
@@ -300,4 +311,5 @@ export const MatchController = {
   getMatchCleanSheets,
   manualAwardCleanSheet,
   manualRevokeCleanSheet,
+  getMatchOverview,
 };

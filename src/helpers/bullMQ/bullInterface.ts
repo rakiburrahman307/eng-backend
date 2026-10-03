@@ -24,6 +24,7 @@ export interface NotificationJobData {
      pushNotificationId?: string;
      targetRole?: string;
      teamId?: string;
+     newsId?: string;
 }
 
 export interface SMSJobData {
@@ -33,7 +34,7 @@ export interface SMSJobData {
 }
 
 export interface CleanupJobData {
-     type: 'old-notifications' | 'completed-jobs' | 'failed-jobs' | 'all-notifications' | 'subscription-sync' | 'unverified-users';
+     type: 'old-notifications' | 'completed-jobs' | 'failed-jobs' | 'all-notifications' | 'subscription-sync' | 'unverified-users' | 'scheduled-news-sync';
      olderThan?: number; // Days
 }
 

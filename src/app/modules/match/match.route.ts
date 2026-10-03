@@ -50,6 +50,8 @@ router.patch(
   MatchController.addMatchReview,
 );
 
+router.get("/overview", MatchController.getMatchOverview);
+
 // SINGLE + UPDATE + DELETE
 router
   .route("/:id")

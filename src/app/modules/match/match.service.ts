@@ -3680,6 +3680,25 @@ const manualRevokeCleanSheetInDB = async (
   return await manualRevokeCleanSheet(matchId, playerId, adminId, reason);
 };
 
+const getMatchOverviewFromDB = async () => {
+  const [total, upcoming, live, halfTime, finished, cancelled] = await Promise.all([
+    Match.countDocuments(),
+    Match.countDocuments({ status: { $in: ["upcoming", "scheduled"] } }),
+    Match.countDocuments({ status: "live" }),
+    Match.countDocuments({ status: "half_time" }),
+    Match.countDocuments({ status: "finished" }),
+    Match.countDocuments({ status: "cancelled" }),
+  ]);
+
+  return {
+    totalMatches: total,
+    upcomingMatches: upcoming,
+    liveMatches: live + halfTime,
+    finishedMatches: finished,
+    cancelledMatches: cancelled,
+  };
+};
+
 export const MatchService = {
   createMatchToDB,
   getAllMatchesFromDB,
@@ -3699,4 +3718,5 @@ export const MatchService = {
   getMatchCleanSheetsFromDB,
   manualAwardCleanSheetInDB,
   manualRevokeCleanSheetInDB,
+  getMatchOverviewFromDB,
 };

@@ -9,6 +9,7 @@ export type INews = {
   status: 'draft' | 'publish' | 'schedule';
   publishDateTime?: Date | null;
   order?: number;
+  isNotificationSent?: boolean;
   updatedAt?: Date;
 };
 
