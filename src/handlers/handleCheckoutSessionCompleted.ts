@@ -90,18 +90,27 @@ export const handleCheckoutSessionCompleted = async (session: any) => {
   );
 
   // 6. Create new active subscription in DB linked to targetUser (Player)
-  const newSub = await Subscription.create({
-    customerId: customerId || subscription.customer,
-    price: price || pkg.price,
-    user: targetUser._id,
-    package: pkg._id,
-    trxId,
-    subscriptionId,
-    currentPeriodStart,
-    currentPeriodEnd,
-    remaining: 0,
-    status: 'active',
-  });
+  let newSub;
+  try {
+    newSub = await Subscription.create({
+      customerId: customerId || subscription.customer,
+      price: price || pkg.price,
+      user: targetUser._id,
+      package: pkg._id,
+      trxId,
+      subscriptionId,
+      currentPeriodStart,
+      currentPeriodEnd,
+      remaining: 0,
+      status: 'active',
+    });
+  } catch (err: any) {
+    if (err?.code === 11000) {
+      newSub = await Subscription.findOne({ subscriptionId });
+    } else {
+      throw err;
+    }
+  }
 
   const creditToAdd = Number(pkg.credit) || 0;
   const marketValueToAdd = creditToAdd * 100;

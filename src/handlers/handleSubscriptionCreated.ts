@@ -85,20 +85,29 @@ export const handleSubscriptionCreated = async (data: any) => {
     { status: "cancel" }
   );
 
-  const newSub = await Subscription.create({
-    customerId: customer.id,
-    price: subscription.items.data[0]?.price?.unit_amount
-      ? subscription.items.data[0].price.unit_amount / 100
-      : pkg.price,
-    user: targetUser._id,
-    package: pkg._id,
-    trxId,
-    subscriptionId: subscription.id,
-    currentPeriodStart,
-    currentPeriodEnd,
-    remaining: 0,
-    status: "active",
-  });
+  let newSub;
+  try {
+    newSub = await Subscription.create({
+      customerId: customer.id,
+      price: subscription.items.data[0]?.price?.unit_amount
+        ? subscription.items.data[0].price.unit_amount / 100
+        : pkg.price,
+      user: targetUser._id,
+      package: pkg._id,
+      trxId,
+      subscriptionId: subscription.id,
+      currentPeriodStart,
+      currentPeriodEnd,
+      remaining: 0,
+      status: "active",
+    });
+  } catch (err: any) {
+    if (err?.code === 11000) {
+      newSub = await Subscription.findOne({ subscriptionId: subscription.id });
+    } else {
+      throw err;
+    }
+  }
 
   const isPremium = await isPremiumPlayerPackage(pkg);
 

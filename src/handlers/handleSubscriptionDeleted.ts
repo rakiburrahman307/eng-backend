@@ -7,47 +7,60 @@ import { sendNotification } from '../helpers/notificationsHelper';
 import { NOTIFICATION_TYPE } from '../app/modules/notification/notification.interface';
 
 export const handleSubscriptionDeleted = async (data: any) => {
-
     // Retrieve the subscription from Stripe
     const subscription = await stripe.subscriptions.retrieve(data.id);
 
-    // Find the current active subscription
-    const userSubscription = await Subscription.findOne({
-        customerId: subscription.customer,
+    // Find the current active subscription(s)
+    const userSubscriptions = await Subscription.find({
+        $or: [
+            { subscriptionId: subscription.id },
+            { customerId: subscription.customer },
+        ],
         status: 'active',
     });
 
-    if (userSubscription) {
-
-        // Cancel the subscription
-        await Subscription.findByIdAndUpdate(
-            userSubscription._id,
-            { status: 'cancel' },
-            { new: true }
+    if (userSubscriptions.length > 0) {
+        // Cancel all matching subscriptions
+        await Subscription.updateMany(
+            {
+                $or: [
+                    { subscriptionId: subscription.id },
+                    { customerId: subscription.customer },
+                ],
+                status: 'active',
+            },
+            { status: 'cancel' }
         );
-    
+
         // Find the user associated with the subscription
-        const existingUser = await User.findById(userSubscription?.user);
-    
-        if (existingUser) {
-            await User.findByIdAndUpdate(
-                existingUser._id,
-                { hasAccess: false },
-                { new: true },
-            );
+        const userIds = [...new Set(userSubscriptions.map((s) => s.user?.toString()).filter(Boolean))];
+        for (const userId of userIds) {
+            const existingUser = await User.findById(userId);
+            if (existingUser) {
+                // Check if user still has another active subscription
+                const hasOtherActive = await Subscription.exists({
+                    user: existingUser._id,
+                    status: 'active',
+                });
 
-            // 🔔 Send notification to User about subscription cancellation
-            await sendNotification({
-                receiver: existingUser._id.toString(),
-                title: "Subscription Cancelled",
-                message: "Your subscription has been cancelled/deleted. You no longer have access to premium features.",
-                type: NOTIFICATION_TYPE.SUBSCRIPTION_CANCELLED,
-            });
+                if (!hasOtherActive) {
+                    await User.findByIdAndUpdate(
+                        existingUser._id,
+                        { hasAccess: false, isSubscribed: false },
+                        { new: true },
+                    );
+                }
 
-        } else {
-            throw new ApiError(StatusCodes.NOT_FOUND, `User not found.`);
+                // 🔔 Send notification to User about subscription cancellation
+                await sendNotification({
+                    receiver: existingUser._id.toString(),
+                    title: "Subscription Cancelled",
+                    message: "Your subscription has been cancelled. You no longer have access to premium features.",
+                    type: NOTIFICATION_TYPE.SUBSCRIPTION_CANCELLED,
+                });
+            }
         }
     } else {
-        throw new ApiError(StatusCodes.NOT_FOUND, `Subscription not found.`);
+        console.warn(`⚠️ Subscription not found for cancellation: ${subscription.id}`);
     }
-}
+};

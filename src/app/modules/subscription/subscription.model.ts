@@ -28,7 +28,8 @@ const subscriptionSchema = new Schema<ISubscription, SubscriptionModel>(
         },
         subscriptionId: {
             type: String,
-            required: true
+            required: true,
+            unique: true,
         },
         currentPeriodStart: {
             type: String,

@@ -6,8 +6,14 @@ import { USER_ROLES } from "../../../enums/user";
 import { ServerHealthServices } from "../serverHealth/serverHealth.service";
 
 const getOverviewFromDB = async () => {
+  const now = new Date().toISOString();
   const activeSubUserIds = await Subscription.find({
     status: "active",
+    $or: [
+      { currentPeriodEnd: { $gte: now } },
+      { currentPeriodEnd: { $exists: false } },
+      { currentPeriodEnd: null },
+    ],
   }).distinct("user");
 
   const playerRoles = [
@@ -98,8 +104,8 @@ const getOverviewFromDB = async () => {
       status: "upcoming",
     }),
 
-    Subscription.countDocuments({
-      status: "active",
+    User.countDocuments({
+      _id: { $in: activeSubUserIds },
     }),
 
     ServerHealthServices.serverHealth(),
