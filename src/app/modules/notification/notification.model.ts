@@ -39,6 +39,12 @@ const notificationSchema = new Schema<INotification>(
 notificationSchema.index({ receiver: 1, createdAt: -1 });
 notificationSchema.index({ receiver: 1, isRead: 1 });
 
+// Auto-delete notifications older than 30 days (TTL Index: 30 days = 2,592,000 seconds)
+notificationSchema.index(
+  { createdAt: 1 },
+  { expireAfterSeconds: 30 * 24 * 60 * 60 }
+);
+
 export const Notification = model<INotification>(
   "Notification",
   notificationSchema
