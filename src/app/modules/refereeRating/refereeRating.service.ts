@@ -78,7 +78,7 @@ const getConductReward = async (rating: number): Promise<{ coin: number; budgetV
 };
 
 // CREATE EVALUATION
-const createEvaluationIntoDB = async (payload: any) => {
+const createEvaluationIntoDB = async (payload: any, userRole?: string) => {
   if (!payload.match) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Match ID is required");
   }
@@ -111,7 +111,12 @@ const createEvaluationIntoDB = async (payload: any) => {
     }
   }
 
-  if (setting.isFeedbackWindowRestricted && setting.feedbackWindowHours > 0) {
+  const isAdmin =
+    userRole === "ADMIN" ||
+    userRole === "SUPER_ADMIN" ||
+    payload.isAdminOverride;
+
+  if (!isAdmin && setting.isFeedbackWindowRestricted && setting.feedbackWindowHours > 0) {
     const finishTime = match.finishedAt || (match as any).updatedAt || match.matchDate;
     if (finishTime) {
       const targetTz = setting.timezone || "Europe/London";
@@ -320,29 +325,49 @@ const createEvaluationIntoDB = async (payload: any) => {
 };
 
 // GET ALL
-const getAllEvaluationsFromDB = async () => {
-  return await MatchEvaluation.find()
+const getAllEvaluationsFromDB = async (query?: Record<string, any>) => {
+  const filter: any = {};
+  if (query?.match) filter.match = query.match;
+  if (query?.referee) filter.referee = query.referee;
+  if (query?.team) {
+    filter.$or = [{ homeTeam: query.team }, { awayTeam: query.team }];
+  }
+
+  return await MatchEvaluation.find(filter)
     .populate('match')
-    .populate('referee', 'name email')
-    .populate('homeTeam', 'teamName teamLogo')
-    .populate('awayTeam', 'teamName teamLogo')
-    .populate('manOfTheMatch', 'name image')
-    .populate('winningTeam', 'teamName teamLogo');
+    .populate('referee', 'name email firstName lastName profile')
+    .populate('homeTeam', 'teamName teamLogo shortName')
+    .populate('awayTeam', 'teamName teamLogo shortName')
+    .populate('manOfTheMatch', 'name image firstName lastName userName profile')
+    .populate('winningTeam', 'teamName teamLogo shortName')
+    .sort({ createdAt: -1 });
+};
+
+// GET EVALUATION BY MATCH ID
+const getEvaluationByMatchIdFromDB = async (matchId: string) => {
+  return await MatchEvaluation.findOne({ match: matchId })
+    .populate('match')
+    .populate('referee', 'name email firstName lastName profile')
+    .populate('homeTeam', 'teamName teamLogo shortName')
+    .populate('awayTeam', 'teamName teamLogo shortName')
+    .populate('manOfTheMatch', 'name image firstName lastName userName profile')
+    .populate('winningTeam', 'teamName teamLogo shortName');
 };
 
 // GET SINGLE
 const getSingleEvaluationFromDB = async (id: string) => {
   return await MatchEvaluation.findById(id)
     .populate('match')
-    .populate('referee', 'name email')
-    .populate('homeTeam', 'teamName teamLogo')
-    .populate('awayTeam', 'teamName teamLogo')
-    .populate('manOfTheMatch', 'name image')
-    .populate('winningTeam', 'teamName teamLogo');
+    .populate('referee', 'name email firstName lastName profile')
+    .populate('homeTeam', 'teamName teamLogo shortName')
+    .populate('awayTeam', 'teamName teamLogo shortName')
+    .populate('manOfTheMatch', 'name image firstName lastName userName profile')
+    .populate('winningTeam', 'teamName teamLogo shortName');
 };
 
 export const MatchEvaluationService = {
   createEvaluationIntoDB,
   getAllEvaluationsFromDB,
+  getEvaluationByMatchIdFromDB,
   getSingleEvaluationFromDB,
 };

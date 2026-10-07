@@ -13,8 +13,11 @@ router.post(
   MatchEvaluationController.createEvaluation
 );
 
-// GET ALL
+// GET ALL (supports ?match=matchId)
 router.get('/', MatchEvaluationController.getAllEvaluations);
+
+// GET EVALUATION BY MATCH ID
+router.get('/match/:matchId', MatchEvaluationController.getEvaluationByMatch);
 
 // GET SINGLE
 router.get('/:id', MatchEvaluationController.getSingleEvaluation);

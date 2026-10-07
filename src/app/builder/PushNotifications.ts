@@ -72,78 +72,97 @@ export class NotificationHelper {
      private static async sendToFCM(tokens: string[], payload: INotificationPayload) {
           try {
                if (!firebaseAdmin) return;
-               tokens = [...new Set(tokens)];
+               tokens = [...new Set(tokens.filter(t => typeof t === 'string' && t.trim().length > 0))];
                if (!tokens.length) return;
 
-               const message: any = {
-                    tokens: tokens,
-                    notification: {
-                         title: payload.title,
-                         body: payload.body,
-                    },
-                    data: payload.data || {},
-                    android: {
-                         priority: 'high',
+               // Firebase FCM allows maximum 500 tokens per sendEachForMulticast call
+               const CHUNK_SIZE = 500;
+               const tokenChunks: string[][] = [];
+               for (let i = 0; i < tokens.length; i += CHUNK_SIZE) {
+                    tokenChunks.push(tokens.slice(i, i + CHUNK_SIZE));
+               }
+
+               const allFailedTokens: string[] = [];
+               let totalSuccess = 0;
+               let totalFailure = 0;
+
+               for (const chunk of tokenChunks) {
+                    const message: any = {
+                         tokens: chunk,
                          notification: {
-                              channelId: 'default_channel',
-                              priority: 'high',
-                              sound: 'default',
-                              defaultSound: true,
-                              defaultVibrateTimings: true,
-                              defaultLightSettings: true,
+                              title: payload.title,
+                              body: payload.body,
                          },
-                    },
-                    apns: {
-                         payload: {
-                              aps: {
+                         data: payload.data || {},
+                         android: {
+                              priority: 'high',
+                              notification: {
+                                   channelId: 'default_channel',
+                                   priority: 'high',
                                    sound: 'default',
-                                   badge: 1,
-                                   contentAvailable: true,
+                                   defaultSound: true,
+                                   defaultVibrateTimings: true,
+                                   defaultLightSettings: true,
                               },
                          },
-                         headers: {
-                              'apns-priority': '10',
+                         apns: {
+                              payload: {
+                                   aps: {
+                                        sound: 'default',
+                                        badge: 1,
+                                        contentAvailable: true,
+                                   },
+                              },
+                              headers: {
+                                   'apns-priority': '10',
+                              },
                          },
-                    },
-               };
+                    };
 
-               const response = await firebaseAdmin.messaging().sendEachForMulticast(message);
+                    try {
+                         const response = await firebaseAdmin.messaging().sendEachForMulticast(message);
+                         totalSuccess += response.successCount;
+                         totalFailure += response.failureCount;
 
-               // Clean up failed/expired tokens if failureCount > 0
-               if (response.failureCount > 0) {
-                    const failedTokens: string[] = [];
-                    response.responses.forEach((resp: any, idx: number) => {
-                         if (!resp.success) {
-                              const errCode = resp.error?.code;
-                              if (
-                                   errCode === 'messaging/registration-token-not-registered' ||
-                                   errCode === 'messaging/invalid-registration-token' ||
-                                   errCode === 'messaging/mismatched-credential'
-                              ) {
-                                   failedTokens.push(tokens[idx]);
-                              }
+                         if (response.failureCount > 0) {
+                              response.responses.forEach((resp: any, idx: number) => {
+                                   if (!resp.success) {
+                                        const errCode = resp.error?.code;
+                                        if (
+                                             errCode === 'messaging/registration-token-not-registered' ||
+                                             errCode === 'messaging/invalid-registration-token' ||
+                                             errCode === 'messaging/mismatched-credential'
+                                        ) {
+                                             allFailedTokens.push(chunk[idx]);
+                                        }
+                                   }
+                              });
                          }
-                    });
-                    if (failedTokens.length > 0) {
-                         await User.updateMany(
-                              { fcmToken: { $in: failedTokens } },
-                              { $set: { fcmToken: null } }
-                         );
-                         logger.info(
-                              colors.yellow(
-                                   `🗑️ Removed ${failedTokens.length} invalid FCM tokens from users`,
-                              ),
-                         );
+                    } catch (chunkErr: any) {
+                         logger.error(colors.red('❌ FCM Chunk Send Error:'), chunkErr?.message || chunkErr);
                     }
+               }
+
+               // Clean up failed/expired tokens if any
+               if (allFailedTokens.length > 0) {
+                    await User.updateMany(
+                         { fcmToken: { $in: allFailedTokens } },
+                         { $set: { fcmToken: null } }
+                    );
+                    logger.info(
+                         colors.yellow(
+                              `🗑️ Removed ${allFailedTokens.length} invalid FCM tokens from users`,
+                         ),
+                    );
                }
 
                logger.info(
                     colors.green(
-                         `📱 FCM sent: ${response.successCount} success, ${response.failureCount} failed out of ${tokens.length} tokens`,
+                         `📲 FCM Multicast Completed: ${totalSuccess} success, ${totalFailure} failed out of ${tokens.length} total tokens`,
                     ),
                );
           } catch (error) {
-               logger.error(colors.red('FCM Send Error:'), error);
+               logger.error(colors.red('❌ FCM Send Error:'), error);
           }
      }
 

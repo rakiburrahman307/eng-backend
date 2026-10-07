@@ -8,6 +8,7 @@ import { ClubEconomy } from "../coinAndBudget/clubEconomySchema.model";
 import { USER_ROLES } from "../../../enums/user";
 import { Subscription } from "../subscription/subscription.model";
 import { League } from "../league/league.model";
+import { Match } from "../match/match.model";
 import { recordTeamCoinTransaction } from "../../../helpers/teamCoinLedgerHelper";
 import { TEAM_COIN_CATEGORY } from "../teamCoinTransaction/teamCoinTransaction.interface";
 
@@ -286,6 +287,40 @@ const getSingleTeamFromDB = async (id: string) => {
   const leagueLinks = await LeagueTeam.find({ team: id }).populate("league", "leagueName name");
   const teamLeagueObjs = leagueLinks.map((l) => l.league).filter(Boolean);
 
+  // ⚽ RECENT MATCHES & TEAM FORM (Last 5 finished matches)
+  const [finishedMatches, upcomingMatch] = await Promise.all([
+    Match.find({
+      $or: [{ homeTeam: teamObjectId }, { awayTeam: teamObjectId }],
+      status: "finished",
+    })
+      .sort({ matchDate: -1, createdAt: -1 })
+      .limit(5)
+      .populate("homeTeam", "teamName teamLogo shortName")
+      .populate("awayTeam", "teamName teamLogo shortName")
+      .populate("league", "leagueName name")
+      .lean(),
+    Match.findOne({
+      $or: [{ homeTeam: teamObjectId }, { awayTeam: teamObjectId }],
+      status: { $in: ["upcoming", "scheduled"] },
+    })
+      .sort({ matchDate: 1 })
+      .populate("homeTeam", "teamName teamLogo shortName")
+      .populate("awayTeam", "teamName teamLogo shortName")
+      .populate("league", "leagueName name")
+      .lean(),
+  ]);
+
+  const form: string[] = (finishedMatches || []).map((m: any) => {
+    const isHome = m.homeTeam?._id?.toString() === teamObjectId.toString();
+    const teamGoals = isHome ? (Number(m.homeScore) || 0) : (Number(m.awayScore) || 0);
+    const oppGoals = isHome ? (Number(m.awayScore) || 0) : (Number(m.homeScore) || 0);
+    if (teamGoals > oppGoals) return "W";
+    if (teamGoals < oppGoals) return "L";
+    return "D";
+  }).reverse(); // chronological order: e.g. ['W', 'D', 'L', 'W', 'W']
+
+  const formString = form.length > 0 ? form.join(" - ") : "N/A";
+
   return {
     ...team.toObject(),
     members,
@@ -296,6 +331,10 @@ const getSingleTeamFromDB = async (id: string) => {
     league: teamLeagueObjs[0] || null,
     totalMembers: members.length,
     totalManagers: managers.length,
+    form,
+    formString,
+    recentMatches: finishedMatches,
+    upcomingFixture: upcomingMatch,
   };
 };
 

@@ -5,6 +5,8 @@ import { League } from "../league/league.model";
 import { LeagueTeam } from "../leagueTeam/leagueTeam.model";
 import { User } from "../user/user.model";
 import { Team } from "../team/team.model";
+import { News } from "../news/news.model";
+import { Video } from "../video/video.model";
 
 import { USER_ROLES } from "../../../enums/user";
 import { getBatchPlayerStatsSummary, IPlayerStatsDetails } from "../../../helpers/playerStatsHelper";
@@ -297,8 +299,8 @@ const getLeagueSummaryFromDB = async (query?: Record<string, any>) => {
   const topCleanSheetPlayer = topCleanSheetList[0] || defaultPlayer;
   const topOverallPlayer = topOverallList[0] || defaultPlayer;
 
-  // 2. Team Stats for League
-  const [topGoalTeam, topAssistTeam] = await Promise.all([
+  // 2. Team Stats for League & Related Media (Articles & Videos)
+  const [topGoalTeam, topAssistTeam, articles, videos] = await Promise.all([
     MatchResult.aggregate([
       {
         $match: {
@@ -377,6 +379,16 @@ const getLeagueSummaryFromDB = async (query?: Record<string, any>) => {
         },
       },
     ]),
+    News.find({ status: "publish" })
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .select("title category description image createdAt")
+      .lean(),
+    Video.find()
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .select("title description videoUrl thumbnail duration createdAt")
+      .lean(),
   ]);
 
   return {
@@ -396,6 +408,8 @@ const getLeagueSummaryFromDB = async (query?: Record<string, any>) => {
       teamName: "",
       teamLogo: "",
     },
+    articles,
+    videos,
   };
 };
 
@@ -594,10 +608,93 @@ const getSeasonLeaderboardFromDB = async (season?: string) => {
 /**
  * Common helper to get enriched players with stats and team info
  */
+const attachRankAndMovement = (
+  sortedList: any[],
+  baselineCompareFn: (a: any, b: any) => number,
+  limit: number
+) => {
+  const baselineList = [...sortedList].sort(baselineCompareFn);
+  const prevRankMap = new Map<string, number>();
+  baselineList.forEach((p, idx) => {
+    prevRankMap.set(p._id.toString(), idx + 1);
+  });
+
+  return sortedList.slice(0, limit).map((player, idx) => {
+    const rank = idx + 1;
+    const previousRank = prevRankMap.get(player._id.toString()) || rank;
+    const rankDelta = previousRank - rank; // > 0 means climbed up (e.g. was 5, now 3 -> delta +2)
+    let rankChange: "up" | "down" | "same" = "same";
+    let arrow: "green" | "red" | "neutral" = "neutral";
+
+    if (rankDelta > 0) {
+      rankChange = "up";
+      arrow = "green";
+    } else if (rankDelta < 0) {
+      rankChange = "down";
+      arrow = "red";
+    }
+
+    return {
+      rank,
+      previousRank,
+      rankChange,
+      rankDelta,
+      arrow,
+      ...player,
+    };
+  });
+};
+
+/**
+ * Common helper to get enriched players with stats, team info, and timeframe filtering
+ */
 const getEnrichedPlayersWithStats = async (query?: Record<string, any>) => {
-  const { ageGroup, teamId, search, leagueName, leagueId, league, season, searchTerm } = query || {};
+  const {
+    ageGroup,
+    teamId,
+    search,
+    leagueName,
+    leagueId,
+    league,
+    season,
+    searchTerm,
+    timeframe,
+    period,
+  } = query || {};
   const playerSearch = (search || searchTerm) as string;
   const directLeagueId = leagueId || (league && mongoose.Types.ObjectId.isValid(league as string) ? league : null);
+
+  // 🕒 TIMEFRAME DATE BOUNDARIES (Overall, This Month, This Week)
+  const tf = (timeframe || period || "overall").toString().toLowerCase();
+  let timeFilter: any = null;
+  let prevTimeFilter: any = null;
+
+  const now = new Date();
+  if (tf === "this_week" || tf === "week" || tf === "weekly") {
+    const day = now.getDay() || 7;
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - day + 1);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const startOfPrevWeek = new Date(startOfWeek);
+    startOfPrevWeek.setDate(startOfPrevWeek.getDate() - 7);
+
+    timeFilter = { createdAt: { $gte: startOfWeek } };
+    prevTimeFilter = { createdAt: { $gte: startOfPrevWeek, $lt: startOfWeek } };
+  } else if (tf === "this_month" || tf === "month" || tf === "monthly") {
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    startOfPrevMonth.setHours(0, 0, 0, 0);
+
+    timeFilter = { createdAt: { $gte: startOfMonth } };
+    prevTimeFilter = { createdAt: { $gte: startOfPrevMonth, $lt: startOfMonth } };
+  } else {
+    // Overall: Baseline comparison with stats from 7 days prior for rank delta arrows
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    prevTimeFilter = { createdAt: { $lt: sevenDaysAgo } };
+  }
 
   const matchedLeagueIds: mongoose.Types.ObjectId[] = [];
   if (directLeagueId && mongoose.Types.ObjectId.isValid(directLeagueId as string)) {
@@ -651,16 +748,25 @@ const getEnrichedPlayersWithStats = async (query?: Record<string, any>) => {
       return [];
     }
 
+    const baseMatchFilter: any = {
+      $or: [
+        { league: { $in: matchedLeagueIds } },
+        { match: { $in: matchIds } },
+      ],
+    };
+    if (timeFilter) {
+      Object.assign(baseMatchFilter, timeFilter);
+    }
+
     matchFilterOptions = {
-      matchFilter: {
-        $or: [
-          { league: { $in: matchedLeagueIds } },
-          { match: { $in: matchIds } },
-        ],
-      },
+      matchFilter: baseMatchFilter,
       matchEvaluationFilter: {
         match: { $in: matchIds },
       },
+    };
+  } else if (timeFilter) {
+    matchFilterOptions = {
+      matchFilter: timeFilter,
     };
   }
 
@@ -697,13 +803,15 @@ const getEnrichedPlayersWithStats = async (query?: Record<string, any>) => {
 
   if (playerSearch && playerSearch.trim()) {
     const searchRegex = new RegExp(playerSearch.trim(), "i");
-    userFilter.$and.push({
-      $or: [
-        { firstName: searchRegex },
-        { lastName: searchRegex },
-        { userName: searchRegex },
-      ],
-    });
+    userFilter.$and = [
+      {
+        $or: [
+          { firstName: searchRegex },
+          { lastName: searchRegex },
+          { userName: searchRegex },
+        ],
+      },
+    ];
   }
 
   const players = await User.find(userFilter)
@@ -721,10 +829,38 @@ const getEnrichedPlayersWithStats = async (query?: Record<string, any>) => {
   }
 
   const playerIds = players.map((p) => p._id);
-  const statsMap = await getBatchPlayerStatsSummary(playerIds, matchFilterOptions);
+
+  // Baseline filter for rank movements
+  const prevMatchFilterOptions: any = prevTimeFilter
+    ? {
+        matchFilter: {
+          ...(matchFilterOptions?.matchFilter || {}),
+          ...prevTimeFilter,
+        },
+        matchEvaluationFilter: matchFilterOptions?.matchEvaluationFilter,
+      }
+    : undefined;
+
+  const [statsMap, prevStatsMap] = await Promise.all([
+    getBatchPlayerStatsSummary(playerIds, matchFilterOptions),
+    prevMatchFilterOptions
+      ? getBatchPlayerStatsSummary(playerIds, prevMatchFilterOptions)
+      : Promise.resolve(new Map<string, IPlayerStatsDetails>()),
+  ]);
 
   return players.map((p: any) => {
     const stats: IPlayerStatsDetails = statsMap.get(p._id.toString()) || {
+      goals: 0,
+      assists: 0,
+      cleanSheets: 0,
+      playerOfTheDay: 0,
+      yellowCards: 0,
+      redCards: 0,
+      totalMatches: 0,
+      matchesPlayed: 0,
+    };
+
+    const prevStats: IPlayerStatsDetails = prevStatsMap.get(p._id.toString()) || {
       goals: 0,
       assists: 0,
       cleanSheets: 0,
@@ -766,58 +902,74 @@ const getEnrichedPlayersWithStats = async (query?: Record<string, any>) => {
       totalCleanSheets: stats.cleanSheets,
       playerOfTheDay: stats.playerOfTheDay,
       totalPlayerOfTheDay: stats.playerOfTheDay,
+      timeframe: tf,
       score,
       stats: {
         ...stats,
         score,
       },
+      prevStats,
     };
   });
 };
 
-// 1. ⚽ TOP 20 GOAL SCORERS
+// 1. ⚽ TOP GOAL SCORERS (Supports limit=100 for sections, Top 20 for Home, Rank Movement Arrows)
 const getTopGoalScorersFromDB = async (query?: Record<string, any>) => {
-  const limit = parseInt(query?.limit as string) || 20;
+  const isHome = query?.isHome === "true" || query?.home === "true";
+  const defaultLimit = isHome ? 20 : 100;
+  const limit = parseInt(query?.limit as string) || defaultLimit;
   const enriched = await getEnrichedPlayersWithStats(query);
 
-  const sorted = enriched
-    .sort((a, b) => {
-      if (b.goals !== a.goals) return b.goals - a.goals;
-      if (b.playerOfTheDay !== a.playerOfTheDay) return b.playerOfTheDay - a.playerOfTheDay;
-      return b.marketValue - a.marketValue;
-    })
-    .slice(0, limit)
-    .map((player, idx) => ({
-      rank: idx + 1,
-      ...player,
-    }));
+  const sorted = [...enriched].sort((a, b) => {
+    if (b.goals !== a.goals) return b.goals - a.goals;
+    if (b.playerOfTheDay !== a.playerOfTheDay) return b.playerOfTheDay - a.playerOfTheDay;
+    return b.marketValue - a.marketValue;
+  });
 
-  return sorted;
+  const baselineCompareFn = (a: any, b: any) => {
+    const aPrev = a.prevStats?.goals ?? 0;
+    const bPrev = b.prevStats?.goals ?? 0;
+    if (bPrev !== aPrev) return bPrev - aPrev;
+    const aPOTD = a.prevStats?.playerOfTheDay ?? 0;
+    const bPOTD = b.prevStats?.playerOfTheDay ?? 0;
+    if (bPOTD !== aPOTD) return bPOTD - aPOTD;
+    return (b.marketValue || 0) - (a.marketValue || 0);
+  };
+
+  return attachRankAndMovement(sorted, baselineCompareFn, limit);
 };
 
-// 2. 👟 TOP 20 ASSIST PLAYERS
+// 2. 👟 TOP ASSIST PLAYERS (Supports limit=100 for sections, Top 20 for Home, Rank Movement Arrows)
 const getTopAssistsFromDB = async (query?: Record<string, any>) => {
-  const limit = parseInt(query?.limit as string) || 20;
+  const isHome = query?.isHome === "true" || query?.home === "true";
+  const defaultLimit = isHome ? 20 : 100;
+  const limit = parseInt(query?.limit as string) || defaultLimit;
   const enriched = await getEnrichedPlayersWithStats(query);
 
-  const sorted = enriched
-    .sort((a, b) => {
-      if (b.assists !== a.assists) return b.assists - a.assists;
-      if (b.playerOfTheDay !== a.playerOfTheDay) return b.playerOfTheDay - a.playerOfTheDay;
-      return b.marketValue - a.marketValue;
-    })
-    .slice(0, limit)
-    .map((player, idx) => ({
-      rank: idx + 1,
-      ...player,
-    }));
+  const sorted = [...enriched].sort((a, b) => {
+    if (b.assists !== a.assists) return b.assists - a.assists;
+    if (b.playerOfTheDay !== a.playerOfTheDay) return b.playerOfTheDay - a.playerOfTheDay;
+    return b.marketValue - a.marketValue;
+  });
 
-  return sorted;
+  const baselineCompareFn = (a: any, b: any) => {
+    const aPrev = a.prevStats?.assists ?? 0;
+    const bPrev = b.prevStats?.assists ?? 0;
+    if (bPrev !== aPrev) return bPrev - aPrev;
+    const aPOTD = a.prevStats?.playerOfTheDay ?? 0;
+    const bPOTD = b.prevStats?.playerOfTheDay ?? 0;
+    if (bPOTD !== aPOTD) return bPOTD - aPOTD;
+    return (b.marketValue || 0) - (a.marketValue || 0);
+  };
+
+  return attachRankAndMovement(sorted, baselineCompareFn, limit);
 };
 
-// 3. 🧤 TOP 20 CLEAN SHEETS (Goalkeepers Only)
+// 3. 🧤 TOP CLEAN SHEETS (Goalkeepers Only, Supports limit=100 for sections, Top 20 for Home, Rank Movement Arrows)
 const getTopCleanSheetsFromDB = async (query?: Record<string, any>) => {
-  const limit = parseInt(query?.limit as string) || 20;
+  const isHome = query?.isHome === "true" || query?.home === "true";
+  const defaultLimit = isHome ? 20 : 100;
+  const limit = parseInt(query?.limit as string) || defaultLimit;
   const enriched = await getEnrichedPlayersWithStats(query);
 
   // 🧤 Filter ONLY Goalkeepers (position: Goalkeeper / GK / Goal Keeper)
@@ -829,44 +981,51 @@ const getTopCleanSheetsFromDB = async (query?: Record<string, any>) => {
     );
   });
 
-  const sorted = goalkeepers
-    .sort((a, b) => {
-      if (b.cleanSheets !== a.cleanSheets) return b.cleanSheets - a.cleanSheets;
-      if (b.playerOfTheDay !== a.playerOfTheDay) return b.playerOfTheDay - a.playerOfTheDay;
-      return (b.marketValue || 0) - (a.marketValue || 0);
-    })
-    .slice(0, limit)
-    .map((player, idx) => ({
-      rank: idx + 1,
-      ...player,
-    }));
+  const sorted = [...goalkeepers].sort((a, b) => {
+    if (b.cleanSheets !== a.cleanSheets) return b.cleanSheets - a.cleanSheets;
+    if (b.playerOfTheDay !== a.playerOfTheDay) return b.playerOfTheDay - a.playerOfTheDay;
+    return (b.marketValue || 0) - (a.marketValue || 0);
+  });
 
-  return sorted;
+  const baselineCompareFn = (a: any, b: any) => {
+    const aPrev = a.prevStats?.cleanSheets ?? 0;
+    const bPrev = b.prevStats?.cleanSheets ?? 0;
+    if (bPrev !== aPrev) return bPrev - aPrev;
+    const aPOTD = a.prevStats?.playerOfTheDay ?? 0;
+    const bPOTD = b.prevStats?.playerOfTheDay ?? 0;
+    if (bPOTD !== aPOTD) return bPOTD - aPOTD;
+    return (b.marketValue || 0) - (a.marketValue || 0);
+  };
+
+  return attachRankAndMovement(sorted, baselineCompareFn, limit);
 };
 
-// 4. 🌟 TOP 20 OVERALL BEST PLAYERS (Max Coin / engCoine Wise ONLY)
+// 4. 🌟 TOP OVERALL BEST PLAYERS (Max Coin / engCoine Wise, Supports limit=100 for sections, Top 20 for Home, Rank Movement Arrows)
 const getTopOverallPlayersFromDB = async (query?: Record<string, any>) => {
-  const limit = parseInt(query?.limit as string) || 20;
+  const isHome = query?.isHome === "true" || query?.home === "true";
+  const defaultLimit = isHome ? 20 : 100;
+  const limit = parseInt(query?.limit as string) || defaultLimit;
   const enriched = await getEnrichedPlayersWithStats(query);
 
-  // 🌟 Sorted strictly and purely by MAX COINS (engCoine) descending
-  const sorted = enriched
-    .sort((a, b) => {
-      const aCoins = Number(a.engCoine) || 0;
-      const bCoins = Number(b.engCoine) || 0;
-      if (bCoins !== aCoins) return bCoins - aCoins;
+  // 🌟 Sorted strictly by MAX COINS (engCoine) descending, then marketValue
+  const sorted = [...enriched].sort((a, b) => {
+    const aCoins = Number(a.engCoine) || 0;
+    const bCoins = Number(b.engCoine) || 0;
+    if (bCoins !== aCoins) return bCoins - aCoins;
 
-      const aMarket = Number(a.marketValue) || 0;
-      const bMarket = Number(b.marketValue) || 0;
-      return bMarket - aMarket;
-    })
-    .slice(0, limit)
-    .map((player, idx) => ({
-      rank: idx + 1,
-      ...player,
-    }));
+    const aMarket = Number(a.marketValue) || 0;
+    const bMarket = Number(b.marketValue) || 0;
+    return bMarket - aMarket;
+  });
 
-  return sorted;
+  const baselineCompareFn = (a: any, b: any) => {
+    const aPrevScore = (a.prevStats?.goals ?? 0) * 4 + (a.prevStats?.assists ?? 0) * 3;
+    const bPrevScore = (b.prevStats?.goals ?? 0) * 4 + (b.prevStats?.assists ?? 0) * 3;
+    if (bPrevScore !== aPrevScore) return bPrevScore - aPrevScore;
+    return (b.marketValue || 0) - (a.marketValue || 0);
+  };
+
+  return attachRankAndMovement(sorted, baselineCompareFn, limit);
 };
 
 export const StatisticService = {

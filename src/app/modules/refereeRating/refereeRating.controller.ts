@@ -5,26 +5,40 @@ import sendResponse from '../../../shared/sendResponse';
 import { MatchEvaluationService } from './refereeRating.service';
 
 
-// CREATE
+// CREATE OR UPDATE
 const createEvaluation = catchAsync(async (req: Request, res: Response) => {
-  const result = await MatchEvaluationService.createEvaluationIntoDB(req.body);
+  const userRole = (req.user as any)?.role;
+  const result = await MatchEvaluationService.createEvaluationIntoDB(req.body, userRole);
 
   sendResponse(res, {
     success: true,
-    statusCode: StatusCodes.CREATED,
-    message: 'Match evaluation created successfully',
+    statusCode: StatusCodes.OK,
+    message: 'Match evaluation saved successfully',
     data: result,
   });
 });
 
 // GET ALL
 const getAllEvaluations = catchAsync(async (req: Request, res: Response) => {
-  const result = await MatchEvaluationService.getAllEvaluationsFromDB();
+  const result = await MatchEvaluationService.getAllEvaluationsFromDB(req.query);
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
     message: 'All match evaluations retrieved successfully',
+    data: result,
+  });
+});
+
+// GET BY MATCH ID
+const getEvaluationByMatch = catchAsync(async (req: Request, res: Response) => {
+  const matchId = req.params.matchId as string;
+  const result = await MatchEvaluationService.getEvaluationByMatchIdFromDB(matchId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Match evaluation retrieved successfully',
     data: result,
   });
 });
@@ -46,5 +60,6 @@ const getSingleEvaluation = catchAsync(async (req: Request, res: Response) => {
 export const MatchEvaluationController = {
   createEvaluation,
   getAllEvaluations,
+  getEvaluationByMatch,
   getSingleEvaluation,
 };
