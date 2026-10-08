@@ -93,19 +93,69 @@ const updatePackageToDB = async (id: string, payload: IPackage): Promise<IPackag
         throw new ApiError(StatusCodes.NOT_FOUND, "Package not found");
     }
 
-    // Check if price or duration is changed
+    // Normalization
+    if (payload.userType) {
+        payload.userType = normalizeUserType(payload.userType);
+    }
+    if (payload.duration) {
+        payload.duration = normalizeDuration(payload.duration);
+    }
+    if (payload.price !== undefined) {
+        payload.price = Number(payload.price);
+    }
+    if (payload.credit !== undefined) {
+        payload.credit = Number(payload.credit);
+    }
+    if (!payload.paymentType && payload.duration) {
+        payload.paymentType = payload.duration === '1 year' ? 'Yearly' : 'Monthly';
+    } else if (payload.paymentType) {
+        payload.paymentType = payload.paymentType.toString().toLowerCase().includes('year') ? 'Yearly' : 'Monthly';
+    }
+
+    let stripeProductId = existingPackage.stripeProductId;
+    let stripeProductExists = false;
+
+    // Verify if stripeProductId exists in current Stripe account
+    if (stripeProductId) {
+        try {
+            const product = await stripe.products.retrieve(stripeProductId);
+            if (product && !product.deleted) {
+                stripeProductExists = true;
+            }
+        } catch (err: any) {
+            stripeProductExists = false;
+        }
+    }
+
+    const newTitle = payload.title || existingPackage.title;
+    const newDescription = payload.description || existingPackage.description;
+    const newPriceVal = payload.price !== undefined ? Number(payload.price) : Number(existingPackage.price);
+    const newDuration = payload.duration !== undefined ? payload.duration : existingPackage.duration;
+
+    // Auto-create product in Stripe if missing or deleted
+    if (!stripeProductExists) {
+        const createdProduct = await stripe.products.create({
+            name: newTitle,
+            description: newDescription,
+        });
+        stripeProductId = createdProduct.id;
+        payload.stripeProductId = stripeProductId;
+    } else if (payload.title || payload.description) {
+        try {
+            await stripe.products.update(stripeProductId, {
+                name: newTitle,
+                description: newDescription,
+            });
+        } catch (err) {
+            // non-fatal
+        }
+    }
+
+    // Check if price or duration is changed OR if product was recreated
     const isPriceChanged = payload.price !== undefined && Number(payload.price) !== Number(existingPackage.price);
     const isDurationChanged = payload.duration !== undefined && payload.duration !== existingPackage.duration;
 
-    if (isPriceChanged || isDurationChanged) {
-        const stripeProductId = existingPackage.stripeProductId;
-        if (!stripeProductId) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, "Stripe Product ID not found for this package");
-        }
-
-        const newPriceVal = payload.price !== undefined ? Number(payload.price) : Number(existingPackage.price);
-        const newDuration = payload.duration !== undefined ? payload.duration : existingPackage.duration;
-
+    if (isPriceChanged || isDurationChanged || !stripeProductExists) {
         let interval: 'month' | 'year' = 'month';
         let intervalCount = 1;
 
@@ -134,7 +184,7 @@ const updatePackageToDB = async (id: string, payload: IPackage): Promise<IPackag
         // Create new Price in Stripe under the existing Product
         const stripePrice = await stripe.prices.create({
             product: stripeProductId,
-            unit_amount: newPriceVal * 100,
+            unit_amount: Math.round(newPriceVal * 100),
             currency: 'gbp',
             recurring: {
                 interval,
