@@ -1,33 +1,34 @@
-import express from 'express';
-import { USER_ROLES } from '../../../enums/user';
-import auth from '../../middlewares/auth';
-import { LeagueController } from './league.controller';
+import express from "express";
+import { USER_ROLES } from "../../../enums/user";
+import auth from "../../middlewares/auth";
+import { LeagueController } from "./league.controller";
 
 const router = express.Router();
 
 // CREATE + GET ALL
 router
-  .route('/')
+  .route("/")
   .post(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    LeagueController.createLeague
+    LeagueController.createLeague,
   )
-  .get( LeagueController.getAllLeagues);
+  .get(LeagueController.getAllLeagues);
 
-router.get('/analytics', LeagueController.getLeagueAnalytics);
-router.get('/seasons', LeagueController.getUniqueSeasons);
+router.get("/analytics", LeagueController.getLeagueAnalytics);
+router.get("/seasons", LeagueController.getUniqueSeasons);
+router.get("/age-groups", LeagueController.getUniqueAgeGroups);
 
 // SINGLE + UPDATE + DELETE
 router
-  .route('/:id')
+  .route("/:id")
   .get(auth(), LeagueController.getSingleLeague)
   .patch(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    LeagueController.updateLeague
+    LeagueController.updateLeague,
   )
   .delete(
     auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
-    LeagueController.deleteLeague
+    LeagueController.deleteLeague,
   );
 
 export default router;

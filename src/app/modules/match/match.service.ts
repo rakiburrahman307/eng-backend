@@ -959,6 +959,9 @@ const getAllMatchesFromDB = async (query: Record<string, any>) => {
       }).select("_id"),
       League.find({
         $or: [
+          { ageGroup: exactRegex },
+          { ageGroup: wordRegex },
+          { ageGroup: underRegex },
           { leagueName: exactRegex },
           { leagueName: wordRegex },
           { leagueName: underRegex },

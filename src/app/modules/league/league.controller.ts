@@ -91,12 +91,23 @@ const getUniqueSeasons = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getLeagueAnalytics = catchAsync(async (req: Request, res: Response) => {
-  const result = await LeagueService.getLeagueAnalyticsFromDB();
+  const result = await LeagueService.getLeagueAnalyticsFromDB(req.query);
 
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
     message: 'League analytics retrieved successfully',
+    data: result,
+  });
+});
+
+const getUniqueAgeGroups = catchAsync(async (req: Request, res: Response) => {
+  const result = await LeagueService.getUniqueAgeGroupsFromDB();
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: 'Unique age groups retrieved successfully',
     data: result,
   });
 });
@@ -108,5 +119,6 @@ export const LeagueController = {
   updateLeague,
   deleteLeague,
   getUniqueSeasons,
+  getUniqueAgeGroups,
   getLeagueAnalytics,
 };

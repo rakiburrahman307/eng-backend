@@ -20,7 +20,7 @@ const createLeagueToDB = async (
 
 // GET ALL
 const getAllLeaguesFromDB = async (query: Record<string, any>) => {
-  const { status, ...restQuery } = query;
+  const { status, ageGroup, ...restQuery } = query;
   const now = new Date();
 
   const filterConditions: Record<string, any> = {};
@@ -33,11 +33,34 @@ const getAllLeaguesFromDB = async (query: Record<string, any>) => {
     filterConditions.endDate = { $lt: now };
   }
 
+  if (
+    ageGroup &&
+    ageGroup !== 'ALL' &&
+    ageGroup !== 'all' &&
+    ageGroup !== 'null' &&
+    ageGroup !== 'undefined'
+  ) {
+    const trimmedAge = (ageGroup as string).trim();
+    const exactRegex = new RegExp(`^${trimmedAge}$`, 'i');
+    const wordRegex = new RegExp(`\\b${trimmedAge}\\b`, 'i');
+    const numMatch = trimmedAge.match(/\d+/);
+    const numPart = numMatch ? numMatch[0] : '';
+    const underRegex = numPart
+      ? new RegExp(`(u|under\\s*)${numPart}\\b`, 'i')
+      : wordRegex;
+
+    filterConditions.$or = [
+      { ageGroup: exactRegex },
+      { ageGroup: wordRegex },
+      { ageGroup: underRegex },
+    ];
+  }
+
   const leagueQuery = new QueryBuilder(
     League.find(filterConditions),
     restQuery
   )
-    .search(['leagueName', 'season'])
+    .search(['leagueName', 'season', 'ageGroup'])
     .filter()
     .sort()
     .paginate()
@@ -123,19 +146,52 @@ const getUniqueSeasonsFromDB = async () => {
   return await League.distinct('season');
 };
 
-const getLeagueAnalyticsFromDB = async () => {
+const getUniqueAgeGroupsFromDB = async () => {
+  const groups = await League.distinct('ageGroup');
+  return groups.filter((g) => g && typeof g === 'string' && g.trim().length > 0);
+};
+
+const getLeagueAnalyticsFromDB = async (query: Record<string, any> = {}) => {
+  const { ageGroup } = query;
   const now = new Date();
 
+  const baseFilter: Record<string, any> = {};
+  if (
+    ageGroup &&
+    ageGroup !== 'ALL' &&
+    ageGroup !== 'all' &&
+    ageGroup !== 'null' &&
+    ageGroup !== 'undefined'
+  ) {
+    const trimmedAge = (ageGroup as string).trim();
+    const exactRegex = new RegExp(`^${trimmedAge}$`, 'i');
+    const wordRegex = new RegExp(`\\b${trimmedAge}\\b`, 'i');
+    const numMatch = trimmedAge.match(/\d+/);
+    const numPart = numMatch ? numMatch[0] : '';
+    const underRegex = numPart
+      ? new RegExp(`(u|under\\s*)${numPart}\\b`, 'i')
+      : wordRegex;
+
+    baseFilter.$or = [
+      { ageGroup: exactRegex },
+      { ageGroup: wordRegex },
+      { ageGroup: underRegex },
+    ];
+  }
+
   const [total, running, upcoming, finished] = await Promise.all([
-    League.countDocuments(),
+    League.countDocuments(baseFilter),
     League.countDocuments({
+      ...baseFilter,
       startDate: { $lte: now },
       endDate: { $gte: now },
     }),
     League.countDocuments({
+      ...baseFilter,
       startDate: { $gt: now },
     }),
     League.countDocuments({
+      ...baseFilter,
       endDate: { $lt: now },
     }),
   ]);
@@ -155,5 +211,6 @@ export const LeagueService = {
   updateLeagueToDB,
   deleteLeagueFromDB,
   getUniqueSeasonsFromDB,
+  getUniqueAgeGroupsFromDB,
   getLeagueAnalyticsFromDB,
 };

@@ -14,6 +14,13 @@ const leagueSchema = new Schema(
       trim: true,
     },
 
+    ageGroup: {
+      type: String,
+      required: true,
+      trim: true,
+      index: true,
+    },
+
     startDate: {
       type: Date,
       required: true,

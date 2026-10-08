@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 export interface ILeague {
   leagueName: string;
   season: string;
+  ageGroup: string;
 
   startDate: Date;
   endDate: Date;

@@ -443,7 +443,7 @@ const getPointTable = async (query: Record<string, any> = {}) => {
       .lean();
     const teamIds = matchingTeams.map((t) => t._id);
 
-    const [ltLeagues, matchLeagues] = await Promise.all([
+    const [ltLeagues, matchLeagues, directAgeLeagues] = await Promise.all([
       LeagueTeam.find({ team: { $in: teamIds } }).distinct("league"),
       Match.find({
         $or: [
@@ -452,6 +452,7 @@ const getPointTable = async (query: Record<string, any> = {}) => {
           { awayTeam: { $in: teamIds } },
         ],
       }).distinct("league"),
+      League.find({ ageGroup: { $regex: ageRegex } }).distinct("_id"),
     ]);
 
     const directLeagues = matchingTeams
@@ -460,7 +461,7 @@ const getPointTable = async (query: Record<string, any> = {}) => {
 
     const candidateLeagueIds = Array.from(
       new Set(
-        [...ltLeagues, ...matchLeagues, ...directLeagues]
+        [...ltLeagues, ...matchLeagues, ...directLeagues, ...directAgeLeagues]
           .filter(Boolean)
           .map((lid: any) => lid.toString()),
       ),
