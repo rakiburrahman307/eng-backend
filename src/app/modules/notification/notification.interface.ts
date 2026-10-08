@@ -38,11 +38,19 @@ export enum NOTIFICATION_TYPE {
   GENERAL = "GENERAL",
 }
 
+export enum NOTIFICATION_CATEGORY {
+  GENERAL_NEWS = "GENERAL_NEWS",
+  TRANSFERS_GOSSIP = "TRANSFERS_GOSSIP",
+  PLAYER_OF_THE_WEEK = "PLAYER_OF_THE_WEEK",
+  MATCH_UPDATE = "MATCH_UPDATE",
+}
+
 export type INotification = {
   receiver: Types.ObjectId;   // কে পাবে (User _id)
   title: string;
   message: string;
   type: NOTIFICATION_TYPE;
+  category: NOTIFICATION_CATEGORY;
   isRead: boolean;
   metadata?: Record<string, any>; // extra data (optional)
 };

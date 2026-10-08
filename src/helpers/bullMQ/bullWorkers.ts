@@ -77,6 +77,7 @@ export const notificationWorker = new Worker<NotificationJobData>(
                     title,
                     message,
                     type,
+                    category,
                     channels,
                     data,
                     reference,
@@ -113,6 +114,7 @@ export const notificationWorker = new Worker<NotificationJobData>(
                               title: notifDoc.title,
                               body: notifDoc.message,
                               type: 'SYSTEM',
+                              category: notifDoc.category,
                          });
                     }
 
@@ -225,6 +227,7 @@ export const notificationWorker = new Worker<NotificationJobData>(
                          title: title || 'Notification',
                          body: message,
                          type: type || 'SYSTEM',
+                         category,
                          receiverRole,
                          reference,
                          referenceModel,

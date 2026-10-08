@@ -1,5 +1,5 @@
 import { Schema, model } from "mongoose";
-import { INotification, NOTIFICATION_TYPE } from "./notification.interface";
+import { INotification, NOTIFICATION_CATEGORY, NOTIFICATION_TYPE } from "./notification.interface";
 
 const notificationSchema = new Schema<INotification>(
   {
@@ -20,6 +20,11 @@ const notificationSchema = new Schema<INotification>(
       type: String,
       required: true,
       default: NOTIFICATION_TYPE.GENERAL,
+    },
+    category: {
+      type: String,
+      enum: Object.values(NOTIFICATION_CATEGORY),
+      default: NOTIFICATION_CATEGORY.GENERAL_NEWS,
     },
     isRead: {
       type: Boolean,

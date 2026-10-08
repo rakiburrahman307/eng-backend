@@ -23,6 +23,7 @@ export interface NotificationJobData {
      receiverRole?: 'SUPER_ADMIN' | 'ADMIN' | 'USER' | 'PLAYER' | 'TOURNAMENT_PLAYER';
      pushNotificationId?: string;
      targetRole?: string;
+     category?: string;
      teamId?: string;
      newsId?: string;
 }

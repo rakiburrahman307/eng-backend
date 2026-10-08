@@ -9,6 +9,8 @@ import { NotificationQueueHelper } from "../../../helpers/bullMQ/bullHelper";
 import { notificationQueue } from "../../../helpers/bullMQ/bullQueueInstance";
 import { NotificationHelper } from "../../builder/PushNotifications";
 import { PushNotification } from "./pushNotification.model";
+import { NOTIFICATION_CATEGORY } from "../notification/notification.interface";
+import { getNotificationCategory } from "../../../helpers/notificationsHelper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -20,6 +22,7 @@ interface SendNotificationPayload {
   message: string;
   user?: string; // optional single user ID
   targetRole?: string; // "ALL" | "PLAYER" | "PARENT" | "REFEREE" | "COACH"
+  category?: NOTIFICATION_CATEGORY | string;
   isScheduled?: boolean;
   scheduledAt?: string; // e.g. "2026-09-27 15:30" or ISO string
   adminId?: string;
@@ -84,7 +87,7 @@ export const resolveNotificationRecipients = async (
 };
 
 const sendNotificationToUsers = async (payload: SendNotificationPayload) => {
-  const { title, message, user, targetRole = "ALL", isScheduled, scheduledAt, adminId } = payload;
+  const { title, message, user, targetRole = "ALL", category, isScheduled, scheduledAt, adminId } = payload;
 
   if (!title || !title.trim()) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Notification title is required");
@@ -92,6 +95,8 @@ const sendNotificationToUsers = async (payload: SendNotificationPayload) => {
   if (!message || !message.trim()) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Notification message is required");
   }
+
+  const resolvedCategory = getNotificationCategory(undefined, category);
 
   // ----------------------------------------------------
   // CASE A: SCHEDULED NOTIFICATION (BULLMQ + UK TIMEZONE)
@@ -128,6 +133,7 @@ const sendNotificationToUsers = async (payload: SendNotificationPayload) => {
       message: message.trim(),
       user: user || null,
       targetRole: targetRole || "ALL",
+      category: resolvedCategory,
       isScheduled: true,
       scheduledAt: scheduledDateUtc,
       scheduledAtUK: formattedUkTime,
@@ -145,6 +151,7 @@ const sendNotificationToUsers = async (payload: SendNotificationPayload) => {
         message: message.trim(),
         targetRole,
         userId: user,
+        category: resolvedCategory,
       },
       {
         delay: delayMs,
@@ -166,6 +173,7 @@ const sendNotificationToUsers = async (payload: SendNotificationPayload) => {
     message: message.trim(),
     user: user || null,
     targetRole: targetRole || "ALL",
+    category: resolvedCategory,
     isScheduled: false,
     scheduledAt: null,
     scheduledAtUK: null,
@@ -182,6 +190,7 @@ const sendNotificationToUsers = async (payload: SendNotificationPayload) => {
       title: title.trim(),
       body: message.trim(),
       type: "SYSTEM",
+      category: resolvedCategory,
     });
   }
 
@@ -254,6 +263,7 @@ const sendScheduledNowFromDB = async (id: string) => {
       title: notification.title,
       body: notification.message,
       type: "SYSTEM",
+      category: notification.category || NOTIFICATION_CATEGORY.GENERAL_NEWS,
     });
   }
 

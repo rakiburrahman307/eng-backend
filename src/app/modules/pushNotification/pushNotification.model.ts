@@ -1,5 +1,6 @@
 import { Schema, model } from "mongoose";
 import { INotification } from "./pushNotification.interface";
+import { NOTIFICATION_CATEGORY } from "../notification/notification.interface";
 
 const pushNotificationSchema = new Schema<INotification>(
   {
@@ -21,6 +22,11 @@ const pushNotificationSchema = new Schema<INotification>(
     targetRole: {
       type: String,
       default: "ALL", // "ALL" | "PLAYER" | "PARENT" | "REFEREE" | "COACH"
+    },
+    category: {
+      type: String,
+      enum: Object.values(NOTIFICATION_CATEGORY),
+      default: NOTIFICATION_CATEGORY.GENERAL_NEWS,
     },
     isRead: {
       type: Boolean,

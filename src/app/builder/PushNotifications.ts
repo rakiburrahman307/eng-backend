@@ -1,15 +1,16 @@
 import colors from 'colors';
 import mongoose from 'mongoose';
 import firebaseAdmin from '../../firebase/firebase';
-import { sendNotification } from '../../helpers/notificationsHelper';
+import { getNotificationCategory, sendNotification } from '../../helpers/notificationsHelper';
 import { logger } from '../../shared/logger';
 import { User } from '../modules/user/user.model';
-import { NOTIFICATION_TYPE } from '../modules/notification/notification.interface';
+import { NOTIFICATION_CATEGORY, NOTIFICATION_TYPE } from '../modules/notification/notification.interface';
 
 export interface INotificationPayload {
      title: string;
      body: string;
      type?: string;
+     category?: NOTIFICATION_CATEGORY | string;
      data?: Record<string, string>;
      receiverRole?: string;
      reference?: string;
@@ -85,6 +86,7 @@ export class NotificationHelper {
                const allFailedTokens: string[] = [];
                let totalSuccess = 0;
                let totalFailure = 0;
+               const resolvedCategory = getNotificationCategory(payload.type, payload.category);
 
                for (const chunk of tokenChunks) {
                     const message: any = {
@@ -93,7 +95,11 @@ export class NotificationHelper {
                               title: payload.title,
                               body: payload.body,
                          },
-                         data: payload.data || {},
+                         data: {
+                              category: String(resolvedCategory),
+                              notificationCategory: String(resolvedCategory),
+                              ...(payload.data || {}),
+                         },
                          android: {
                               priority: 'high',
                               notification: {
@@ -177,12 +183,15 @@ export class NotificationHelper {
                     mappedType = payload.type as NOTIFICATION_TYPE;
                }
 
+               const resolvedCategory = getNotificationCategory(payload.type, payload.category);
+
                const notificationTasks = userIds.map((userId) => {
                     const notificationData = {
                          receiver: userId.toString(),
                          title: payload.title,
                          message: payload.body,
                          type: mappedType,
+                         category: resolvedCategory,
                          metadata: {
                               reference: payload.reference || null,
                               referenceModel: payload.referenceModel || null,
