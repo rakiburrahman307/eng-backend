@@ -70,16 +70,70 @@ const getTeamDashboardFromDB = async (teamId: string, userId?: string) => {
     .populate("homeTeam awayTeam", "teamName shortName teamLogo");
 
   // 🏁 RECENT MATCHES
-  const recentMatches = await Match.find({
+  const rawRecentMatches = await Match.find({
     $or: [{ homeTeam: teamObjectId }, { awayTeam: teamObjectId }],
     status: "finished",
   })
-    .sort({ matchDate: -1 })
+    .sort({ matchDate: -1, createdAt: -1 })
     .limit(5)
-    .populate("homeTeam awayTeam", "teamName shortName teamLogo");
+    .populate("homeTeam awayTeam", "teamName shortName teamLogo")
+    .populate("league", "leagueName name")
+    .lean();
+
+  let won = 0;
+  let drawn = 0;
+  let lost = 0;
+
+  const form: string[] = (rawRecentMatches || []).map((m: any) => {
+    const isHome = m.homeTeam?._id?.toString() === teamObjectId.toString();
+    const teamGoals = isHome ? (Number(m.homeScore) || 0) : (Number(m.awayScore) || 0);
+    const oppGoals = isHome ? (Number(m.awayScore) || 0) : (Number(m.homeScore) || 0);
+    if (teamGoals > oppGoals) {
+      won++;
+      return "W";
+    }
+    if (teamGoals < oppGoals) {
+      lost++;
+      return "L";
+    }
+    drawn++;
+    return "D";
+  }).reverse(); // chronological order: e.g. ['W', 'D', 'L', 'W', 'W']
+
+  const formString = form.length > 0 ? form.join(" - ") : "N/A";
+
+  const recentMatches = (rawRecentMatches || []).map((m: any) => ({
+    _id: m._id,
+    matchDate: m.matchDate,
+    homeScore: Number(m.homeScore) || 0,
+    awayScore: Number(m.awayScore) || 0,
+    status: m.status,
+    homeTeam: m.homeTeam
+      ? {
+          _id: m.homeTeam._id,
+          teamName: m.homeTeam.teamName,
+          shortName: m.homeTeam.shortName,
+          teamLogo: m.homeTeam.teamLogo,
+        }
+      : null,
+    awayTeam: m.awayTeam
+      ? {
+          _id: m.awayTeam._id,
+          teamName: m.awayTeam.teamName,
+          shortName: m.awayTeam.shortName,
+          teamLogo: m.awayTeam.teamLogo,
+        }
+      : null,
+    league: m.league
+      ? {
+          _id: m.league._id,
+          leagueName: m.league.leagueName || m.league.name,
+        }
+      : null,
+  }));
 
   // 📊 MATCH RESULTS
-  const matchIds = recentMatches.map((m) => m._id);
+  const matchIds = rawRecentMatches.map((m: any) => m._id);
 
   const matchResults = await MatchResult.find({
     match: { $in: matchIds },
@@ -97,6 +151,16 @@ const getTeamDashboardFromDB = async (teamId: string, userId?: string) => {
     TeamSubscription.countDocuments({ team: teamObjectId, isBellActive: true }),
   ]);
 
+  const teamForm = {
+    title: "Team Form",
+    form,
+    formString,
+    won,
+    drawn,
+    lost,
+    total: form.length,
+  };
+
   return {
     team,
     coin: team?.coin ?? 0,
@@ -105,6 +169,13 @@ const getTeamDashboardFromDB = async (teamId: string, userId?: string) => {
     players,
     upcomingMatches,
     recentMatches,
+    form,
+    formString,
+    won,
+    drawn,
+    lost,
+    totalFormMatches: form.length,
+    teamForm,
     matchResults,
     isSubscribed: !!subDoc?.isBellActive,
     subscriberCount,
