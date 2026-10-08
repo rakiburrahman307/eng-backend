@@ -310,16 +310,91 @@ const getSingleTeamFromDB = async (id: string) => {
       .lean(),
   ]);
 
+  let won = 0;
+  let drawn = 0;
+  let lost = 0;
+
   const form: string[] = (finishedMatches || []).map((m: any) => {
     const isHome = m.homeTeam?._id?.toString() === teamObjectId.toString();
     const teamGoals = isHome ? (Number(m.homeScore) || 0) : (Number(m.awayScore) || 0);
     const oppGoals = isHome ? (Number(m.awayScore) || 0) : (Number(m.homeScore) || 0);
-    if (teamGoals > oppGoals) return "W";
-    if (teamGoals < oppGoals) return "L";
+    if (teamGoals > oppGoals) {
+      won++;
+      return "W";
+    }
+    if (teamGoals < oppGoals) {
+      lost++;
+      return "L";
+    }
+    drawn++;
     return "D";
   }).reverse(); // chronological order: e.g. ['W', 'D', 'L', 'W', 'W']
 
   const formString = form.length > 0 ? form.join(" - ") : "N/A";
+
+  // Clean lightweight recent matches summary (removes bloated internal matchReview, timers, etc.)
+  const cleanRecentMatches = (finishedMatches || []).map((m: any) => ({
+    _id: m._id,
+    matchDate: m.matchDate,
+    homeScore: Number(m.homeScore) || 0,
+    awayScore: Number(m.awayScore) || 0,
+    status: m.status,
+    homeTeam: m.homeTeam
+      ? {
+          _id: m.homeTeam._id,
+          teamName: m.homeTeam.teamName,
+          shortName: m.homeTeam.shortName,
+          teamLogo: m.homeTeam.teamLogo,
+        }
+      : null,
+    awayTeam: m.awayTeam
+      ? {
+          _id: m.awayTeam._id,
+          teamName: m.awayTeam.teamName,
+          shortName: m.awayTeam.shortName,
+          teamLogo: m.awayTeam.teamLogo,
+        }
+      : null,
+    league: m.league
+      ? {
+          _id: m.league._id,
+          leagueName: m.league.leagueName || m.league.name,
+        }
+      : null,
+  }));
+
+  // Clean lightweight upcoming fixture summary
+  const upcomingObj = upcomingMatch as any;
+  const cleanUpcomingFixture = upcomingObj
+    ? {
+        _id: upcomingObj._id,
+        matchDate: upcomingObj.matchDate,
+        venueName: upcomingObj.venueName || null,
+        status: upcomingObj.status,
+        homeTeam: upcomingObj.homeTeam
+          ? {
+              _id: upcomingObj.homeTeam._id,
+              teamName: upcomingObj.homeTeam.teamName,
+              shortName: upcomingObj.homeTeam.shortName,
+              teamLogo: upcomingObj.homeTeam.teamLogo,
+            }
+          : null,
+        awayTeam: upcomingObj.awayTeam
+          ? {
+              _id: upcomingObj.awayTeam._id,
+              teamName: upcomingObj.awayTeam.teamName,
+              shortName: upcomingObj.awayTeam.shortName,
+              teamLogo: upcomingObj.awayTeam.teamLogo,
+            }
+          : null,
+        league: upcomingObj.league
+          ? {
+              _id: upcomingObj.league._id,
+              leagueName: upcomingObj.league.leagueName || upcomingObj.league.name,
+            }
+          : null,
+      }
+    : null;
 
   return {
     ...team.toObject(),
@@ -333,8 +408,12 @@ const getSingleTeamFromDB = async (id: string) => {
     totalManagers: managers.length,
     form,
     formString,
-    recentMatches: finishedMatches,
-    upcomingFixture: upcomingMatch,
+    won,
+    drawn,
+    lost,
+    totalFormMatches: form.length,
+    recentMatches: cleanRecentMatches,
+    upcomingFixture: cleanUpcomingFixture,
   };
 };
 

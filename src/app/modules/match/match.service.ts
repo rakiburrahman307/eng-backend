@@ -1107,6 +1107,101 @@ const getMatchesByRefereeFromDB = async (
   };
 };
 
+// Helper to fetch recent 5 finished matches and calculate team form (W/D/L)
+const getTeamRecentFormAndMatches = async (
+  teamId: string | mongoose.Types.ObjectId,
+  excludeMatchId?: string | mongoose.Types.ObjectId,
+) => {
+  if (!teamId) {
+    return { form: [], formString: "N/A", won: 0, drawn: 0, lost: 0, total: 0, recentMatches: [] };
+  }
+
+  const teamObjectId =
+    typeof teamId === "string" ? new mongoose.Types.ObjectId(teamId) : teamId;
+
+  const matchFilter: any = {
+    $or: [{ homeTeam: teamObjectId }, { awayTeam: teamObjectId }],
+    status: "finished",
+  };
+
+  if (excludeMatchId && mongoose.Types.ObjectId.isValid(excludeMatchId as string)) {
+    matchFilter._id = { $ne: new mongoose.Types.ObjectId(excludeMatchId as string) };
+  }
+
+  const finishedMatches = await Match.find(matchFilter)
+    .sort({ matchDate: -1, createdAt: -1 })
+    .limit(5)
+    .populate("homeTeam", "teamName teamLogo shortName")
+    .populate("awayTeam", "teamName teamLogo shortName")
+    .populate("league", "leagueName name")
+    .lean();
+
+  let won = 0;
+  let drawn = 0;
+  let lost = 0;
+
+  const form: string[] = (finishedMatches || [])
+    .map((m: any) => {
+      const isHome = m.homeTeam?._id?.toString() === teamObjectId.toString();
+      const teamGoals = isHome ? Number(m.homeScore) || 0 : Number(m.awayScore) || 0;
+      const oppGoals = isHome ? Number(m.awayScore) || 0 : Number(m.homeScore) || 0;
+      if (teamGoals > oppGoals) {
+        won++;
+        return "W";
+      }
+      if (teamGoals < oppGoals) {
+        lost++;
+        return "L";
+      }
+      drawn++;
+      return "D";
+    })
+    .reverse(); // Chronological order: e.g. ['W', 'D', 'L', 'W', 'W']
+
+  const formString = form.length > 0 ? form.join(" - ") : "N/A";
+
+  // Clean lightweight recent matches summary (removes bloated internal matchReview, timers, etc.)
+  const cleanRecentMatches = (finishedMatches || []).map((m: any) => ({
+    _id: m._id,
+    matchDate: m.matchDate,
+    homeScore: Number(m.homeScore) || 0,
+    awayScore: Number(m.awayScore) || 0,
+    status: m.status,
+    homeTeam: m.homeTeam
+      ? {
+          _id: m.homeTeam._id,
+          teamName: m.homeTeam.teamName,
+          shortName: m.homeTeam.shortName,
+          teamLogo: m.homeTeam.teamLogo,
+        }
+      : null,
+    awayTeam: m.awayTeam
+      ? {
+          _id: m.awayTeam._id,
+          teamName: m.awayTeam.teamName,
+          shortName: m.awayTeam.shortName,
+          teamLogo: m.awayTeam.teamLogo,
+        }
+      : null,
+    league: m.league
+      ? {
+          _id: m.league._id,
+          leagueName: m.league.leagueName || m.league.name,
+        }
+      : null,
+  }));
+
+  return {
+    form,
+    formString,
+    won,
+    drawn,
+    lost,
+    total: form.length,
+    recentMatches: cleanRecentMatches,
+  };
+};
+
 // SINGLE
 const getSingleMatchFromDB = async (id: string) => {
   const match = await Match.findById(id)
@@ -1127,29 +1222,41 @@ const getSingleMatchFromDB = async (id: string) => {
   // Use the existing formatMatchVenue helper to ensure all dynamic fields (venueName, liveSeconds, etc.) are correctly formatted
   const baseMatch = await formatMatchVenue(match);
 
-  // Fetch match events, referee report, and managers for home and away teams in parallel
-  const [matchEvents, evaluation, homeManagerDoc, awayManagerDoc] =
-    await Promise.all([
-      MatchResult.find({ match: id })
-        .populate("player", "firstName lastName profile")
-        .populate("eventMeta.assist", "firstName lastName"),
-      MatchEvaluation.findOne({ match: id }).populate(
-        "manOfTheMatch",
-        "firstName lastName profile",
-      ),
-      match.homeTeam?._id
-        ? ManagerTeam.findOne({ team: match.homeTeam._id }).populate(
-            "manager",
-            "firstName lastName userName profile",
-          )
-        : Promise.resolve(null),
-      match.awayTeam?._id
-        ? ManagerTeam.findOne({ team: match.awayTeam._id }).populate(
-            "manager",
-            "firstName lastName userName profile",
-          )
-        : Promise.resolve(null),
-    ]);
+  // Fetch match events, referee report, managers, and recent matches/form for home and away teams in parallel
+  const [
+    matchEvents,
+    evaluation,
+    homeManagerDoc,
+    awayManagerDoc,
+    homeFormAndMatches,
+    awayFormAndMatches,
+  ] = await Promise.all([
+    MatchResult.find({ match: id })
+      .populate("player", "firstName lastName profile")
+      .populate("eventMeta.assist", "firstName lastName"),
+    MatchEvaluation.findOne({ match: id }).populate(
+      "manOfTheMatch",
+      "firstName lastName profile",
+    ),
+    match.homeTeam?._id
+      ? ManagerTeam.findOne({ team: match.homeTeam._id }).populate(
+          "manager",
+          "firstName lastName userName profile",
+        )
+      : Promise.resolve(null),
+    match.awayTeam?._id
+      ? ManagerTeam.findOne({ team: match.awayTeam._id }).populate(
+          "manager",
+          "firstName lastName userName profile",
+        )
+      : Promise.resolve(null),
+    match.homeTeam?._id
+      ? getTeamRecentFormAndMatches(match.homeTeam._id, id)
+      : Promise.resolve({ form: [], formString: "N/A", won: 0, drawn: 0, lost: 0, total: 0, recentMatches: [] }),
+    match.awayTeam?._id
+      ? getTeamRecentFormAndMatches(match.awayTeam._id, id)
+      : Promise.resolve({ form: [], formString: "N/A", won: 0, drawn: 0, lost: 0, total: 0, recentMatches: [] }),
+  ]);
 
   // Format Goals
   const goals = matchEvents
@@ -1227,6 +1334,65 @@ const getSingleMatchFromDB = async (id: string) => {
         }
       : null;
 
+  // Construct structured Team Form comparison object matching the mobile UI card
+  const leagueTitle =
+    baseMatch.league?.leagueName ||
+    (baseMatch.matchType === "cup"
+      ? "Cup Match"
+      : baseMatch.matchType === "friendly"
+      ? "Friendly Match"
+      : "League Match");
+
+  const homeTeamFormSummary = {
+    _id: baseMatch.homeTeam?._id || null,
+    teamName: baseMatch.homeTeam?.teamName || "",
+    shortName: baseMatch.homeTeam?.shortName || "",
+    teamLogo: baseMatch.homeTeam?.teamLogo || "",
+    form: homeFormAndMatches?.form || [],
+    formString: homeFormAndMatches?.formString || "N/A",
+    won: homeFormAndMatches?.won || 0,
+    drawn: homeFormAndMatches?.drawn || 0,
+    lost: homeFormAndMatches?.lost || 0,
+    total: homeFormAndMatches?.total || 0,
+  };
+
+  const awayTeamFormSummary = {
+    _id: baseMatch.awayTeam?._id || null,
+    teamName: baseMatch.awayTeam?.teamName || "",
+    shortName: baseMatch.awayTeam?.shortName || "",
+    teamLogo: baseMatch.awayTeam?.teamLogo || "",
+    form: awayFormAndMatches?.form || [],
+    formString: awayFormAndMatches?.formString || "N/A",
+    won: awayFormAndMatches?.won || 0,
+    drawn: awayFormAndMatches?.drawn || 0,
+    lost: awayFormAndMatches?.lost || 0,
+    total: awayFormAndMatches?.total || 0,
+  };
+
+  const teamForm = {
+    title: "Team Form",
+    leagueName: leagueTitle,
+    homeTeam: homeTeamFormSummary,
+    awayTeam: awayTeamFormSummary,
+    comparison: [
+      {
+        label: "Won",
+        home: homeTeamFormSummary.won,
+        away: awayTeamFormSummary.won,
+      },
+      {
+        label: "Drawn",
+        home: homeTeamFormSummary.drawn,
+        away: awayTeamFormSummary.drawn,
+      },
+      {
+        label: "Lost",
+        home: homeTeamFormSummary.lost,
+        away: awayTeamFormSummary.lost,
+      },
+    ],
+  };
+
   // Construct final response data matching the exact requested JSON structure
   return {
     _id: baseMatch._id,
@@ -1273,6 +1439,13 @@ const getSingleMatchFromDB = async (id: string) => {
                   profile: (homeManagerDoc.manager as any).profile || null,
                 }
               : null,
+          form: homeFormAndMatches?.form || [],
+          formString: homeFormAndMatches?.formString || "N/A",
+          won: homeFormAndMatches?.won || 0,
+          drawn: homeFormAndMatches?.drawn || 0,
+          lost: homeFormAndMatches?.lost || 0,
+          total: homeFormAndMatches?.total || 0,
+          recentMatches: homeFormAndMatches?.recentMatches || [],
         }
       : null,
     awayTeam: baseMatch.awayTeam
@@ -1291,8 +1464,20 @@ const getSingleMatchFromDB = async (id: string) => {
                   profile: (awayManagerDoc.manager as any).profile || null,
                 }
               : null,
+          form: awayFormAndMatches?.form || [],
+          formString: awayFormAndMatches?.formString || "N/A",
+          won: awayFormAndMatches?.won || 0,
+          drawn: awayFormAndMatches?.drawn || 0,
+          lost: awayFormAndMatches?.lost || 0,
+          total: awayFormAndMatches?.total || 0,
+          recentMatches: awayFormAndMatches?.recentMatches || [],
         }
       : null,
+    teamForm,
+    homeTeamRecentMatches: homeFormAndMatches?.recentMatches || [],
+    awayTeamRecentMatches: awayFormAndMatches?.recentMatches || [],
+    homeTeamForm: homeFormAndMatches?.form || [],
+    awayTeamForm: awayFormAndMatches?.form || [],
     goals,
     cards,
     refereeReport,
