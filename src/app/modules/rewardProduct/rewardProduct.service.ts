@@ -356,14 +356,18 @@ const redeemCoffeeRewardInDB = async (
   // 💰 ADD (+) COINS & UPDATE MARKET VALUE FOR THE PLAYER THROUGH LEDGER
   if (awardPoints > 0) {
     try {
-      await recordCoinTransaction({
+      const { user: updatedUser } = await recordCoinTransaction({
         userId: finalPlayerId,
         amount: awardPoints,
-        category: COIN_TRANSACTION_CATEGORY.PRODUCT_PURCHASE,
-        title: "Reward Point Earned",
+        category: COIN_TRANSACTION_CATEGORY.COFFEE_REWARD,
+        title: "Coffee Reward Earned",
         description: `Earned ${awardPoints.toLocaleString()} ENG Coins for redeeming "${rewardProduct.brand || rewardProduct.title}"`,
         referenceId: rewardProduct._id.toString(),
       });
+      if (updatedUser) {
+        user.engCoine = updatedUser.engCoine;
+        user.marketValue = updatedUser.marketValue;
+      }
     } catch (e) {
       console.error("Failed to record coin transaction for reward product:", e);
       const pe = await PlayerEconomy.findOne();
